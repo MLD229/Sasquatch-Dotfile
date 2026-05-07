@@ -1,0 +1,4 @@
+/* themes/gtk/gtk-3.0/gtk.css */
+* { -gtk-icon-style: symbolic; }
+window, .background { background: rgba(15,15,25,0.92); }
+headerbar { background: rgba(15,15,25,0.85); border-bottom: 1px solid rgba(136,170,238,0.2); }

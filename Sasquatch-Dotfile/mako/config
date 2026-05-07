@@ -1,0 +1,35 @@
+# mako/config
+sort=-time
+layer=overlay
+background-color=#0f0f19cc
+text-color=#cdd6f4
+width=340
+height=120
+border-size=1
+border-color=#88aaee44
+border-radius=12
+padding=12
+margin=10
+icons=1
+icon-size=32
+max-icon-size=32
+
+font=JetBrains Mono 12
+format=<b>%s</b>\n%b
+
+default-timeout=4000
+ignore-timeout=0
+
+[urgency=low]
+background-color=#0f0f19bb
+border-color=#6c708644
+text-color=#a6adc8
+
+[urgency=normal]
+background-color=#0f0f19cc
+border-color=#88aaee44
+
+[urgency=high]
+background-color=#0f0f19cc
+border-color=#f38ba8aa
+text-color=#f38ba8

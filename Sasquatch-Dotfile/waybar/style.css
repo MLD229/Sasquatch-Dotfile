@@ -1,0 +1,186 @@
+/* waybar/style.css */
+
+* {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    border: none;
+    border-radius: 0;
+    min-height: 0;
+}
+
+window#waybar {
+    background: alpha(@background, 0.75);
+    color: @foreground;
+    border-radius: 14px;
+    border: 1px solid alpha(@color4, 0.25);
+    box-shadow: 0 4px 24px alpha(@background, 0.6);
+}
+
+/* Tooltip */
+tooltip {
+    background: alpha(@background, 0.95);
+    border: 1px solid alpha(@color4, 0.3);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: @foreground;
+    font-size: 12px;
+}
+tooltip label {
+    color: @foreground;
+}
+
+/* Workspaces */
+#workspaces {
+    margin: 0 6px;
+    padding: 0 4px;
+}
+
+#workspaces button {
+    padding: 0 7px;
+    color: @color8;
+    background: transparent;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    min-width: 24px;
+}
+
+#workspaces button.active {
+    color: @color4;
+    background: alpha(@color4, 0.15);
+    font-weight: 600;
+    box-shadow: inset 0 -2px 0 @color4;
+}
+
+#workspaces button.occupied {
+    color: @foreground;
+}
+
+#workspaces button.urgent {
+    color: @color1;
+    background: alpha(@color1, 0.2);
+}
+
+#workspaces button:hover {
+    color: @foreground;
+    background: alpha(@foreground, 0.08);
+    box-shadow: inset 0 -2px 0 alpha(@color4, 0.5);
+}
+
+/* MPRIS */
+#mpris:hover {
+    color: @foreground;
+    background: alpha(@color2, 0.2);
+}
+
+#mpris.paused {
+    color: @color8;
+    background: alpha(@color8, 0.08);
+}
+
+#mpris.stopped {
+    color: alpha(@foreground, 0.4);
+    background: transparent;
+}
+
+/* Clock */
+#clock {
+    color: @foreground;
+    font-weight: 600;
+    padding: 0 14px;
+}
+
+/* Modules */
+#cpu, #memory, #network, #battery, #custom-gpu {
+    padding: 0 10px;
+    color: @color8;
+    transition: color 0.2s;
+}
+
+#cpu:hover, #memory:hover, #network:hover, #battery:hover {
+    color: @color4;
+}
+
+/* Batterie */
+#battery.warning  { color: @color3; }
+#battery.critical { color: @color1; }
+#battery.charging { color: @color2; }
+
+/* Réseau */
+#network.disconnected { color: alpha(@foreground, 0.4); }
+#network.wifi,
+#network.ethernet { color: @color6; }
+
+/* Bluetooth */
+#bluetooth {
+    padding: 0 10px;
+    color: @color4;
+}
+
+#bluetooth:hover {
+    color: @foreground;
+    background: alpha(@color4, 0.12);
+    border-radius: 8px;
+}
+
+#bluetooth.disabled,
+#bluetooth.off {
+    color: alpha(@foreground, 0.4);
+}
+
+/* Clipboard */
+#custom-clipboard {
+    padding: 0 10px;
+    color: @color5;
+}
+
+#custom-clipboard:hover {
+    color: @foreground;
+    background: alpha(@color5, 0.12);
+    border-radius: 8px;
+}
+
+/* Separators */
+#custom-dot {
+    color: alpha(@color4, 0.25);
+    padding: 0 2px;
+    font-size: 7px;
+}
+
+/* Tray */
+#tray {
+    padding: 0 10px;
+}
+
+#tray > .needs-attention {
+    background-color: alpha(@color1, 0.2);
+    border-radius: 8px;
+}
+
+/* Media */
+#custom-media {
+    padding: 0 10px;
+    border-radius: 20px;
+    background: alpha(@foreground, 0.05);
+    border: 1px solid alpha(@foreground, 0.08);
+}
+
+#custom-media:hover {
+    background: alpha(@foreground, 0.1);
+}
+
+#custom-media.playing {
+    color: @color5;
+    border-color: alpha(@color5, 0.35);
+}
+
+#custom-media.paused {
+    color: @color8;
+    background: transparent;
+}
+
+#custom-media.stopped {
+    color: alpha(@foreground, 0.4);
+    background: transparent;
+    border: none;
+}

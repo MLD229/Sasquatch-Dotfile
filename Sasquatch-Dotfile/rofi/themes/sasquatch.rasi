@@ -1,0 +1,133 @@
+/* ── Global ─────────────────────────────────────────── */
+* {
+    font:             "JetBrainsMono Nerd Font 11";
+    background-color: transparent;
+    text-color:       @fg;
+    border:           0px;
+    margin:           0px;
+    padding:          0px;
+    spacing:          0px;
+}
+
+/* ── Window ─────────────────────────────────────────── */
+window {
+    width:            620px;
+    location:         center;
+    anchor:           center;
+    background-color: @bg-window;
+    border-radius:    20px;
+    border:           1px;
+    border-color:     @border;
+    padding:          12px;
+}
+
+/* ── Main Box ───────────────────────────────────────── */
+mainbox {
+    background-color: transparent;
+    spacing:          10px;
+    children:         [ inputbar, listview ];
+}
+
+/* ── Input Bar ──────────────────────────────────────── */
+inputbar {
+    background-color: @bg-input;
+    border-radius:    14px;
+    padding:          10px 14px;
+    spacing:          8px;
+    children:         [ prompt, textbox-prompt-colon, entry ];
+}
+
+prompt {
+    background-color: transparent;
+    text-color:       @accent;
+    font:             "JetBrainsMono Nerd Font Bold 11";
+}
+
+textbox-prompt-colon {
+    background-color: transparent;
+    text-color:       @accent-dim;
+    str:              "›";
+    expand:           false;
+    margin:           0px 4px 0px 0px;
+}
+
+entry {
+    background-color: transparent;
+    text-color:       @fg;
+}
+
+/* ── List View ──────────────────────────────────────── */
+listview {
+    background-color: transparent;
+    columns:          1;
+    lines:            8;
+    spacing:          4px;
+    scrollbar:        false;
+    dynamic:          true;
+}
+
+/* ── List Element ───────────────────────────────────── */
+element {
+    background-color: transparent;
+    border-radius:    12px;
+    padding:          8px 12px;
+    spacing:          10px;
+    orientation:      horizontal;
+    children:         [ element-icon, element-text ];
+}
+
+element normal.normal,
+element alternate.normal {
+    text-color: @fg;
+}
+
+element selected.normal {
+    background-color: @bg-selected;
+    text-color:       @fg-selected;
+}
+
+element normal.urgent,
+element alternate.urgent {
+    text-color: @urgent;
+}
+
+element selected.urgent {
+    background-color: @urgent-bg;
+    text-color:       @fg-selected;
+}
+
+element normal.active,
+element alternate.active {
+    text-color: @accent;
+}
+
+element selected.active {
+    background-color: @bg-selected;
+    text-color:       @fg-selected;
+}
+
+/* ── Icon ───────────────────────────────────────────── */
+element-icon {
+    background-color: transparent;
+    size:             24px;
+}
+
+/* ── Text ───────────────────────────────────────────── */
+element-text {
+    background-color: transparent;
+    vertical-align:   0.5;
+    horizontal-align: 0.0;
+}
+
+/* ── Message ────────────────────────────────────────── */
+message {
+    background-color: @bg-input;
+    border-radius:    12px;
+    padding:          8px 12px;
+    margin:           4px 0px 0px 0px;
+}
+
+textbox {
+    background-color: transparent;
+    text-color:       @fg-dim;
+}

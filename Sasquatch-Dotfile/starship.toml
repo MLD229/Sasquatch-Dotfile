@@ -1,0 +1,51 @@
+# starship.toml
+
+format = """
+[╭─](bold #88aaee)\
+$os\
+$directory\
+$git_branch\
+$git_status\
+$python$rust$nodejs\
+$line_break\
+[╰─](bold #88aaee)\
+$character"""
+
+[os]
+disabled = false
+style = "bold #aa88ff"
+
+[os.symbols]
+Arch = " "
+
+[directory]
+style = "bold #88aaee"
+truncation_length = 3
+truncate_to_repo = true
+format = "[ $path]($style)[$read_only]($read_only_style) "
+
+[git_branch]
+symbol = " "
+style = "bold #a6e3a1"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "bold #f38ba8"
+format = "[$all_status$ahead_behind]($style) "
+
+[python]
+symbol = " "
+style = "bold #f9e2af"
+format = "[$symbol$version]($style) "
+
+[rust]
+symbol = " "
+style = "bold #f38ba8"
+
+[nodejs]
+symbol = " "
+style = "bold #a6e3a1"
+
+[character]
+success_symbol = "[❯](bold #a6e3a1)"
+error_symbol   = "[❯](bold #f38ba8)"

@@ -1,0 +1,11 @@
+# themes/qt/kdeglobals
+[General]
+ColorScheme=CatppuccinMochaBlue
+font=JetBrains Mono,11,-1,5,50,0,0,0,0,0
+
+[Icons]
+Theme=Papirus-Dark
+
+[KDE]
+LookAndFeelPackage=com.github.catppuccin.mocha.blue
+widgetStyle=kvantum-dark

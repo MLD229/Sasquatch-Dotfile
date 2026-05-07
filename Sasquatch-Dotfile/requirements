@@ -1,0 +1,20 @@
+sudo pacman -S hyprland hyprlock hypridle hyprpaper \
+xdg-desktop-portal-hyprland \
+waybar mako \
+kitty fish starship fastfetch \
+ttf-jetbrains-mono-nerd \
+noto-fonts noto-fonts-emoji ttf-font-awesome \
+brightnessctl playerctl \
+pipewire wireplumber \
+networkmanager bluez bluez-utils blueman \
+polkit-gnome wl-clipboard \
+grim slurp \
+nautilus file-roller pavucontrol \
+papirus-icon-theme kvantum \
+eza bat \
+nvidia-utils \
+rofi-wayland
+
+
+yay -S cliphist waypaper catppuccin-gtk-theme-mocha \
+bibata-cursor-theme kvantum-theme-catppuccin-git
