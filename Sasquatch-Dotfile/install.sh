@@ -114,6 +114,28 @@ link() {
     success "Lié : $dst"
 }
 
+# ─── Configuration fermeture du capot ───────────────────────
+
+header "Configuration du lid switch"
+
+sudo sed -i \
+    -e 's/^#HandleLidSwitch=.*/HandleLidSwitch=ignore/' \
+    -e 's/^#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/' \
+    -e 's/^#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=ignore/' \
+    /etc/systemd/logind.conf
+
+# Ajoute les lignes si elles n'existent pas
+grep -q "^HandleLidSwitch=" /etc/systemd/logind.conf || \
+    echo "HandleLidSwitch=ignore" | sudo tee -a /etc/systemd/logind.conf
+
+grep -q "^HandleLidSwitchExternalPower=" /etc/systemd/logind.conf || \
+    echo "HandleLidSwitchExternalPower=ignore" | sudo tee -a /etc/systemd/logind.conf
+
+grep -q "^HandleLidSwitchDocked=" /etc/systemd/logind.conf || \
+    echo "HandleLidSwitchDocked=ignore" | sudo tee -a /etc/systemd/logind.conf
+
+sudo systemctl restart systemd-logind
+
 # ─── Symlinks ──────────────────────────
 header "Création des symlinks"
 
