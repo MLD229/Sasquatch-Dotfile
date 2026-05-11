@@ -38,19 +38,42 @@ fi
 header "Installation des dépendances"
 
 PKGS=(
-    hyprland hyprpaper hyprlock hypridle
-    ttf-jetbrains-mono-nerd       # requis par waybar/style.css
-    waypaper                      # GUI wallpaper manager
-    waybar wofi mako
-    kitty fish starship fastfetch
-    xdg-user-dirs xdg-utils
-    pipewire wireplumber          # audio
-    polkit-gnome                  # authentification
-    qt5-wayland qt6-wayland       # support Qt Wayland
-    noto-fonts noto-fonts-emoji   # polices de base
+    ttf-jetbrains-mono-nerd
+    waypaper
+
+    waybar
+    rofi
+    mako
+
+    hyprland
+    hyprpaper
+    hyprlock
+    hypridle
+
+    kitty
+    fish
+    starship
+    fastfetch
+
+    xdg-user-dirs
+    xdg-utils
+
+    pipewire
+    wireplumber
+
+    polkit-gnome
+
+    qt5-wayland
+    qt6-wayland
+
+    noto-fonts
+    noto-fonts-emoji
+
+    os-prober
 )
 
 missing=()
+
 for pkg in "${PKGS[@]}"; do
     if ! yay -Qi "$pkg" &>/dev/null; then
         missing+=("$pkg")
