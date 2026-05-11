@@ -114,27 +114,24 @@ link() {
     success "Lié : $dst"
 }
 
-# ─── Configuration fermeture du capot ───────────────────────
+# ─── Lock à la fermeture du capot ───────────────────────
 
-header "Configuration du lid switch"
+header "Configuration lid switch lock"
 
 sudo sed -i \
-    -e 's/^#HandleLidSwitch=.*/HandleLidSwitch=ignore/' \
-    -e 's/^#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/' \
-    -e 's/^#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=ignore/' \
+    -e 's/^#HandleLidSwitch=.*/HandleLidSwitch=lock/' \
+    -e 's/^#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=lock/' \
+    -e 's/^#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=lock/' \
     /etc/systemd/logind.conf
 
-# Ajoute les lignes si elles n'existent pas
 grep -q "^HandleLidSwitch=" /etc/systemd/logind.conf || \
-    echo "HandleLidSwitch=ignore" | sudo tee -a /etc/systemd/logind.conf
+    echo "HandleLidSwitch=lock" | sudo tee -a /etc/systemd/logind.conf
 
 grep -q "^HandleLidSwitchExternalPower=" /etc/systemd/logind.conf || \
-    echo "HandleLidSwitchExternalPower=ignore" | sudo tee -a /etc/systemd/logind.conf
+    echo "HandleLidSwitchExternalPower=lock" | sudo tee -a /etc/systemd/logind.conf
 
 grep -q "^HandleLidSwitchDocked=" /etc/systemd/logind.conf || \
-    echo "HandleLidSwitchDocked=ignore" | sudo tee -a /etc/systemd/logind.conf
-
-sudo systemctl restart systemd-logind
+    echo "HandleLidSwitchDocked=lock" | sudo tee -a /etc/systemd/logind.conf
 
 # ─── Symlinks ──────────────────────────
 header "Création des symlinks"
