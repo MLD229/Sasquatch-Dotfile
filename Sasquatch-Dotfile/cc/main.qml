@@ -29,6 +29,7 @@ FloatingWindow {
 
     // ---------- state ----------
     property bool serverOk: true
+    property bool everShown: false
     property var stats: ({})
     property var music: ({playing: false, paused: false, title: null, artist: null, volume: 0, elapsed: 0, duration: 0})
     property var vizVals: []
@@ -69,7 +70,10 @@ FloatingWindow {
     }
 
     onVisibleChanged: {
-        if (!visible) quit();
+        if (visible) everShown = true;
+        // Quit only after the window was actually shown once (avoids the
+        // initial invisible->visible transition killing the server at startup).
+        if (everShown && !visible) quit();
     }
 
     Shortcut {

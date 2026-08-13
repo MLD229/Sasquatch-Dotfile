@@ -11,8 +11,22 @@ is_alive() {
     [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null
 }
 
+# Robust window detection: parse hyprctl JSON with python (grep fails on empty/errored output).
+window_open() {
+    python3 - "$WIN_TITLE" <<'EOF'
+import json, subprocess, sys
+title = sys.argv[1]
+try:
+    out = subprocess.run(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=3)
+    data = json.loads(out.stdout)
+    sys.exit(0 if any(title in (c.get("title") or "") for c in data) else 1)
+except Exception:
+    sys.exit(1)
+EOF
+}
+
 # Toggle OFF: if the CC window is already open, close it.
-if hyprctl clients -j 2>/dev/null | grep -q "\"$WIN_TITLE\""; then
+if window_open; then
     hyprctl dispatch closewindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
     exit 0
 fi
