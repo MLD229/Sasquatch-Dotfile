@@ -126,6 +126,14 @@ PKGS=(
     fcitx5-gtk
     fcitx5-qt
     noto-fonts-cjk
+
+    # Control Center (Super+G, cc/) — UI Quickshell + backend python
+    quickshell
+    cava                    # égaliseur synchronisé (fifo raw)
+    alsa-utils              # arecord (micro, Music Finder)
+    songrec                 # reconnaissance Shazam (Music Finder)
+    tesseract               # OCR écran (cc/ocr.sh)
+    tesseract-data-fra      # langue française pour tesseract
 )
 
 missing=()
@@ -206,6 +214,18 @@ grep -q "^HandleLidSwitchExternalPower=" "$LOGIND" || \
 grep -q "^HandleLidSwitchDocked=" "$LOGIND" || \
     echo "HandleLidSwitchDocked=lock" | sudo tee -a "$LOGIND"
 
+# ─── Services systemd ──────────────────────
+header "Activation des services systemd"
+
+for svc in iwd systemd-networkd bluetooth; do
+    if systemctl is-enabled "$svc" &>/dev/null; then
+        success "$svc déjà activé"
+    else
+        info "Activation de $svc…"
+        sudo systemctl enable --now "$svc" && success "$svc activé" || warning "Échec activation $svc (ignore)"
+    fi
+done
+
 # ─── Symlinks ──────────────────────────
 header "Création des symlinks"
 
@@ -219,6 +239,7 @@ link "$DOTDIR/fish"                     "$CONFIG/fish"
 link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
 link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
 link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
+link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
 link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
 link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"

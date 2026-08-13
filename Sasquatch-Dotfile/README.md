@@ -131,6 +131,14 @@ Sasquatch-Dotfile/
 ├── waybar/
 │   ├── config
 │   └── style.css
+├── cc/                          ← Control Center (SUPER+G, Quickshell)
+│   ├── cc.sh                    ← launcher toggle (serveur backend + fenêtre QS)
+│   ├── server.py                ← backend stdlib : métriques, MPD, cava, Shazam
+│   ├── main.qml                 ← UI single-file "Sasquatch CC" (dashboard complet)
+│   ├── ocr.sh                   ← OCR écran → traduction / recherche d'images
+│   ├── cava.conf                ← égaliseur (fifo raw, sortie audio)
+│   └── qml/
+│       └── Palette.qml          ← couleurs (retinté par theme-apply, non lu par main.qml)
 ├── starship.toml
 ├── .gitignore
 ├── install.sh
@@ -148,7 +156,7 @@ bordures Hyprland, hyprlock, mako et rofi.
   clair, accent = couleur vive du fond, accent2 = complémentaire.
 - `scripts/theme-apply.sh` orchestre + relance waybar (verrou `flock`).
 - Les zones retintées sont délimitées par des markers `SASQUATCH-PALETTE-BEGIN/END`
-  dans 6 fichiers (waybar, kitty, hypr/general.conf, hyprlock, mako, rofi).
+  dans 7 fichiers (waybar, kitty, hypr/general.conf, hyprlock, mako, rofi, cc/qml/Palette.qml).
 - **Hook automatique** : dans `~/.config/waypaper/config.ini` (fichier runtime,
   non versionné — à configurer après install) :
   `post_command = ~/.config/scripts/theme-apply.sh $wallpaper`
@@ -177,3 +185,29 @@ L'IME est intégré au dotfile (dossier `fcitx5/`, symlinké par install.sh) :
 
 Les notifications volume/luminosité utilisent le replace-id de mako : maintenir
 la touche (auto-répétition) met à jour UNE seule notification, sans empilement.
+
+---
+
+## 🎛️ Control Center (SUPER+G)
+
+Dashboard **Quickshell** (`cc/`) — UI native Qt Quick + backend Python stdlib :
+
+- **Performance** temps réel : CPU (jauge + cœurs), RAM, GPU/VRAM, températures,
+  réseau, uptime, refresh rate — graphiques 1 s.
+- **Now Playing** (MPD) : pochette (`albumart`), titre/artiste/album, timeline
+  cliquable (seek), contrôles ⏮ ▶ ⏭, volume, et **égaliseur animé synchronisé**
+  sur la sortie audio réelle (cava → fifo → `/api/viz`).
+- **Music Finder** 🎤 : écoute le micro 6 s (arecord) → reconnaissance Shazam
+  (`songrec`) → titre/artiste/album/pochette + liens Shazam & YouTube.
+- **Screenshot** : zone / plein écran / fenêtre (grim + slurp), copié + sauvegardé.
+- Fermeture : `Escape`, bouton ✕, ou re-appui `SUPER+G` (toggle).
+
+Architecture : `cc.sh` lance le backend `server.py` (port 8765, localhost), puis la
+fenêtre `cc/qml/main.qml` (titre `Sasquatch CC` → windowrule float + border 0 +
+`move 0 0` pour couvrir tout l'écran malgré la zone réservée de waybar). À la
+fermeture, le serveur est arrêté automatiquement. La palette Catppuccin est en
+dur dans main.qml (le thème dynamique via `cc/qml/Palette.qml` n'est pas suivi
+pour l'instant ; le fichier est gardé car theme-apply.py continue de l'écrire).
+Les captures masquent le CC pendant grim/slurp puis le restaurent.
+
+Dépendances : `quickshell`, `cava`, `alsa-utils`, `songrec` (inclus dans install.sh).

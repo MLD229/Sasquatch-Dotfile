@@ -30,14 +30,18 @@ FloatingWindow {
     // ---------- state ----------
     property bool serverOk: true
     property bool everShown: false
+    // true while the panel is hidden for a screenshot; prevents quit() during the hide.
+    property bool screenshotHide: false
+    // true while a screenshot request is in flight; blocks double-click.
+    property bool shotBusy: false
     property var stats: ({})
     property var music: ({playing: false, paused: false, title: null, artist: null, volume: 0, elapsed: 0, duration: 0})
     property var vizVals: []
 
     // ---------- API helper (XHR, inline) ----------
-    function api(method, path, body, cb) {
+    function api(method, path, body, cb, timeoutMs) {
         var xhr = new XMLHttpRequest();
-        xhr.timeout = 3000;
+        xhr.timeout = timeoutMs || 3000;
         xhr.onreadystatechange = function() {
             if (xhr.readyState === XMLHttpRequest.DONE) {
                 if (xhr.status >= 200 && xhr.status < 300) {
@@ -69,15 +73,33 @@ FloatingWindow {
         Qt.quit();
     }
 
+    // Hide the panel, take a screenshot, then restore. The panel must not
+    // appear in the capture, so we unmap (visible=false) BEFORE asking the
+    // server, and only restore once the capture completed (server responds
+    // after grim/slurp finishes, with a long timeout for interactive area/window).
+    function takeScreenshot(mode) {
+        if (shotBusy) return;  // block double-click while a capture is in flight
+        shotBusy = true;
+        screenshotHide = true;
+        visible = false;
+        root.api("POST", "/api/screenshot?mode=" + mode, null, function(res) {
+            shotBusy = false;
+            screenshotHide = false;
+            visible = true;
+        }, 120000);
+    }
+
     onVisibleChanged: {
         if (visible) everShown = true;
         // Quit only after the window was actually shown once (avoids the
         // initial invisible->visible transition killing the server at startup).
-        if (everShown && !visible) quit();
+        if (everShown && !visible && !screenshotHide) quit();
     }
 
     Shortcut {
         sequence: "Escape"
+        // Don't steal Escape while typing in the image-search field.
+        enabled: !imgQuery.activeFocus
         onActivated: root.quit()
     }
 
@@ -382,7 +404,11 @@ FloatingWindow {
                         Image {
                             anchors.fill: parent
                             fillMode: Image.PreserveAspectCrop
-                            source: (root.music && root.music.title) ? "http://127.0.0.1:8765/albumart?t=" + Date.now() : ""
+                            // Stable cache-buster keyed on the track itself, NOT
+                            // Date.now(): music is re-polled every second, so a
+                            // time-based URL would re-download the full artwork
+                            // once per second.
+                            source: (root.music && root.music.title) ? "http://127.0.0.1:8765/albumart?t=" + (root.music.file || root.music.title) : ""
                             cache: false
                             asynchronous: true
                         }
@@ -556,7 +582,7 @@ FloatingWindow {
                                         id: shotMa
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        onClicked: root.api("POST", "/api/screenshot?mode=" + modelData.mode, null, function() {})
+                                        onClicked: root.takeScreenshot(modelData.mode)
                                     }
                                 }
                             }
@@ -593,8 +619,11 @@ FloatingWindow {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: {
+                                    if (findLabel.busy) return;  // block re-click while recording
                                     findLabel.busy = true;
                                     findLabel.resultText = "";
+                                    // Finder takes >=6s (arecord) + up to 15s (songrec):
+                                    // the default 3s XHR timeout would kill it — use 25s.
                                     root.api("POST", "/api/music/finder", null, function(res) {
                                         findLabel.busy = false;
                                         if (res && res.recognized) {
@@ -602,7 +631,7 @@ FloatingWindow {
                                         } else {
                                             findLabel.resultText = (res && res.error) ? res.error : "non reconnu";
                                         }
-                                    });
+                                    }, 25000);
                                 }
                             }
                         }
@@ -641,6 +670,8 @@ FloatingWindow {
                                 color: root.cText
                                 font.pixelSize: 11
                                 background: Rectangle { radius: 8; color: Qt.rgba(1,1,1,0.08) }
+                                // Enter triggers the search (mirrors the 🔍 button)
+                                Keys.onReturnPressed: root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function() {})
                             }
                             Rectangle {
                                 width: 30; height: 26; radius: 8
@@ -692,7 +723,7 @@ FloatingWindow {
             // ---------- FOOTER ----------
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: "Serveur prêt ✓"; font.pixelSize: 10; color: root.cGood }
+                Text { text: root.serverOk ? "Serveur prêt ✓" : "Serveur injoignable ✗"; font.pixelSize: 10; color: root.serverOk ? root.cGood : root.cHot }
                 Item { Layout.fillWidth: true }
                 Text { text: "Échap / ✕ / clic dehors pour fermer"; font.pixelSize: 10; color: root.cTextDim }
             }

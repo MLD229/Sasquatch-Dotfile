@@ -41,11 +41,18 @@ if ! is_alive; then
 fi
 
 # Wait for the server to answer (max ~6s).
+server_up=0
 for i in $(seq 1 30); do
     if curl -s -o /dev/null -m 1 "http://127.0.0.1:8765/api/stats"; then
+        server_up=1
         break
     fi
     sleep 0.2
 done
+
+if [ "$server_up" -ne 1 ]; then
+    notify-send "Sasquatch CC" "Serveur injoignable (port 8765) — CC non lancé" -t 3000
+    exit 1
+fi
 
 quickshell -p "$SCRIPT_DIR/main.qml"

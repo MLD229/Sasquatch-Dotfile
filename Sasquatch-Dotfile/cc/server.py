@@ -5,6 +5,7 @@ import json
 import os
 import re
 import signal
+import shutil
 import socket
 import struct
 import subprocess
@@ -289,6 +290,9 @@ class Viz:
                         time.sleep(0.02)
                         continue
                     if not chunk:
+                        # EOF: writer (cava) closed — drop any partial frame so a
+                        # restart cannot leave us permanently misaligned.
+                        buf = b""
                         time.sleep(0.05)
                         continue
                     buf += chunk
@@ -436,9 +440,12 @@ def mpd_albumart(uri):
 def do_screenshot(mode):
     path = os.path.expanduser("~/.config/scripts/screenshot.sh")
     try:
-        subprocess.Popen(["bash", path, mode], start_new_session=True,
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return True
+        # Synchronous: the UI hides itself until the capture completes, so we
+        # must not return before grim/slurp finishes (or is cancelled by the
+        # user). Timeout guards against a hung slurp/notification daemon.
+        rc = subprocess.run(["bash", path, mode], timeout=120,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
+        return rc == 0
     except Exception:
         return False
 
@@ -481,17 +488,25 @@ def do_imgsearch(q):
 
 
 def do_finder():
-    wav = "/tmp/sasquatch-finder.wav"
+    # Check songrec FIRST: without it, recording 6s just to fail is wasted.
+    if shutil.which("songrec") is None:
+        return {"ok": False, "recognized": False, "error": "songrec requis (pacman -S songrec)"}
+    wav = "/tmp/sasquatch-finder-%d.wav" % os.getpid()
     try:
-        subprocess.run(["arecord", "-f", "cd", "-t", "wav", "-d", "6", "-q", wav],
+        subprocess.run(["arecord", "-D", "default", "-f", "cd", "-t", "wav", "-d", "6", "-q", wav],
                         timeout=10, capture_output=True)
     except Exception as e:
         return {"ok": False, "recognized": False, "error": "arecord: %s" % e}
+    # A valid WAV is at least the 44-byte RIFF header; anything less means the
+    # mic produced no audio (muted/broken device) — fail early with a clear message.
+    try:
+        if os.path.getsize(wav) <= 44:
+            return {"ok": False, "recognized": False, "error": "micro: aucun son capté"}
+    except OSError:
+        return {"ok": False, "recognized": False, "error": "arecord: fichier absent"}
     try:
         out = subprocess.run(["songrec", "recognize", "-f", wav], capture_output=True,
                               text=True, timeout=15)
-    except FileNotFoundError:
-        return {"ok": False, "recognized": False, "error": "songrec requis"}
     except Exception as e:
         return {"ok": False, "recognized": False, "error": str(e)}
     finally:
@@ -527,6 +542,20 @@ def do_finder():
 
 metrics = Metrics()
 viz = Viz()
+
+
+def _safe_int(v, default=0):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _not_found(self):
+    self.send_response(404)
+    self.send_header("Content-Type", "text/plain")
+    self.send_header("Content-Length", "0")
+    self.end_headers()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -584,8 +613,7 @@ class Handler(BaseHTTPRequestHandler):
             st = mpd_status()
             data = mpd_albumart(st.get("file"))
             if not data:
-                self.send_response(404)
-                self.end_headers()
+                _not_found(self)
                 return
             ctype = "image/jpeg" if data[:3] == b"\xff\xd8\xff" else "image/png"
             self.send_response(200)
@@ -595,8 +623,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
 
-        self.send_response(404)
-        self.end_headers()
+        _not_found(self)
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -613,11 +640,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": mpd_simple_command("previous")})
             return
         if path == "/api/music/volume":
-            v = max(0, min(100, int(body.get("v", 0))))
+            v = max(0, min(100, _safe_int(body.get("v", 0))))
             self._json({"ok": mpd_simple_command("setvol %d" % v)})
             return
         if path == "/api/music/seek":
-            pos = int(body.get("pos", 0))
+            pos = _safe_int(body.get("pos", 0))
             self._json({"ok": mpd_simple_command("seekcur %d" % pos)})
             return
         if path == "/api/music/finder":
@@ -643,6 +670,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
             metrics.stop()
             viz.stop()
+            _stop_cava()
 
             def _shutdown():
                 time.sleep(0.3)
@@ -651,19 +679,58 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=_shutdown, daemon=True).start()
             return
 
-        self.send_response(404)
-        self.end_headers()
+        _not_found(self)
 
 
 def _handle_sig(signum, frame):
     metrics.stop()
     viz.stop()
+    _stop_cava()
     os._exit(0)
+
+
+# ==================== CAVA (equalizer backend) ====================
+
+_cava_proc = None
+CAVA_CFG = os.path.join(SCRIPT_DIR, "cava.conf")
+
+
+def _start_cava():
+    """Create the fifo and spawn cava so /api/viz has real data.
+    Viz._loop already polls for the fifo, so it will start reading as soon
+    as the fifo exists. cava is spawned detached so the server never blocks."""
+    global _cava_proc
+    try:
+        if not os.path.exists(CAVA_FIFO):
+            os.mkfifo(CAVA_FIFO)
+        _cava_proc = subprocess.Popen(
+            ["cava", "-p", CAVA_CFG],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _stop_cava():
+    global _cava_proc
+    if _cava_proc is not None:
+        try:
+            _cava_proc.terminate()
+        except Exception:
+            pass
+        _cava_proc = None
+    try:
+        os.unlink(CAVA_FIFO)
+    except Exception:
+        pass
 
 
 def main():
     signal.signal(signal.SIGTERM, _handle_sig)
     signal.signal(signal.SIGINT, _handle_sig)
+    _start_cava()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     httpd.serve_forever()
 
