@@ -1,20 +1,79 @@
-sudo pacman -S hyprland hyprlock hypridle hyprpaper \
-xdg-desktop-portal-hyprland \
-waybar mako \
-kitty fish starship fastfetch \
-ttf-jetbrains-mono-nerd \
-noto-fonts noto-fonts-emoji ttf-font-awesome \
-brightnessctl playerctl \
-pipewire wireplumber \
-networkmanager bluez bluez-utils blueman \
-polkit-gnome wl-clipboard \
-grim slurp \
-nautilus file-roller pavucontrol \
-papirus-icon-theme kvantum \
-eza bat \
-nvidia-utils \
-rofi-wayland
+# Sasquatch-Dotfile — dépendances (pacman + AUR via yay)
+# Source de vérité : install.sh (PKGS) — garder les deux synchronisés
+#
+# Thème / polices
+ttf-jetbrains-mono-nerd
+noto-fonts
+noto-fonts-emoji
+noto-fonts-cjk
+papirus-icon-theme
+bibata-cursor-theme
+catppuccin-gtk-theme-mocha
+qt5ct
+kvantum
+waypaper
+python-pillow
 
+# Outils de base
+eza
+bat
+neovim
+dolphin
+rofi
+mako
+kitty
+fish
+starship
+fastfetch
 
-yay -S cliphist waypaper catppuccin-gtk-theme-mocha \
-bibata-cursor-theme kvantum-theme-catppuccin-git
+# Hyprland
+hyprland
+hyprpaper
+hyprlock
+hypridle
+xdg-desktop-portal-hyprland
+waybar
+polkit-gnome
+qt5-wayland
+qt6-wayland
+
+# IME japonais (fcitx5 + mozc) — bascule Ctrl+Shift+1
+fcitx5
+fcitx5-mozc
+fcitx5-configtool
+fcitx5-gtk
+fcitx5-qt
+
+# Son
+pipewire
+pipewire-pulse
+wireplumber
+pavucontrol
+playerctl
+
+# Luminosité / volume
+brightnessctl
+
+# Presse-papier (clipboard.sh, SUPER+V) + captures
+cliphist
+wl-clipboard
+grim
+slurp
+libnotify
+
+# Calculatrice (calc.sh, SUPER+C)
+libqalculate
+
+# Réseau / BT
+iwd
+bluez
+bluez-utils
+blueman
+
+# Navigateurs
+brave
+firefox
+
+# Divers
+xdg-user-dirs
+xdg-utils

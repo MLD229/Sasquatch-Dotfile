@@ -1,7 +1,29 @@
 /* waybar/style.css */
 
+/* ── Palette dynamique (wallpaper) ─────────────── */
+/* === SASQUATCH-PALETTE-BEGIN === */
+@define-color background #151514;
+@define-color foreground #d1d1d0;
+@define-color color0 #45475a;
+@define-color color1 #f38ba8;
+@define-color color2 #a6e3a1;
+@define-color color3 #f9e2af;
+@define-color color4 #c27848;
+@define-color color5 #b0c248;
+@define-color color6 #89dceb;
+@define-color color7 #bac2de;
+@define-color color8 #7c7c7b;
+@define-color color9 #f38ba8;
+@define-color color10 #a6e3a1;
+@define-color color11 #f9e2af;
+@define-color color12 #c27848;
+@define-color color13 #b0c248;
+@define-color color14 #89dceb;
+@define-color color15 #a6adc8;
+/* === SASQUATCH-PALETTE-END === */
+
 * {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
     font-size: 13px;
     border: none;
     border-radius: 0;
@@ -147,6 +169,35 @@ tooltip label {
     font-size: 7px;
 }
 
+/* Volume */
+#pulseaudio {
+    padding: 0 10px;
+    color: @color6;
+    transition: all 0.3s ease;
+}
+#pulseaudio:hover {
+    color: @foreground;
+    background: alpha(@color6, 0.12);
+    border-radius: 8px;
+}
+#pulseaudio.muted {
+    color: @color8;
+}
+#pulseaudio.warning { color: @color3; }
+#pulseaudio.critical { color: @color1; }
+
+/* Luminosité */
+#custom-brightness {
+    padding: 0 10px;
+    color: @color3;
+    transition: all 0.3s ease;
+}
+#custom-brightness:hover {
+    color: @foreground;
+    background: alpha(@color3, 0.12);
+    border-radius: 8px;
+}
+
 /* Tray */
 #tray {
     padding: 0 10px;
@@ -157,30 +208,10 @@ tooltip label {
     border-radius: 8px;
 }
 
-/* Media */
-#custom-media {
+/* MPRIS (module natif, remplace l'ancien custom/media) */
+#mpris {
     padding: 0 10px;
     border-radius: 20px;
     background: alpha(@foreground, 0.05);
     border: 1px solid alpha(@foreground, 0.08);
-}
-
-#custom-media:hover {
-    background: alpha(@foreground, 0.1);
-}
-
-#custom-media.playing {
-    color: @color5;
-    border-color: alpha(@color5, 0.35);
-}
-
-#custom-media.paused {
-    color: @color8;
-    background: transparent;
-}
-
-#custom-media.stopped {
-    color: alpha(@foreground, 0.4);
-    background: transparent;
-    border: none;
 }

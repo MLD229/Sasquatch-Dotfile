@@ -20,7 +20,7 @@ rofi/
 | Paquet | Rôle |
 |--------|------|
 | `rofi` ≥ 1.7 | le lanceur |
-| `picom` (glx backend) | blur réel via `transparency = "real"` |
+| `hyprland` (blur via decoration.conf) | blur réel via `transparency = "real"` |
 | `Papirus-Dark` | thème d'icônes (changeable dans launcher.sh) |
 | `JetBrainsMono Nerd Font` | police avec glyphs |
 
@@ -66,7 +66,7 @@ accent:      rgba(130, 140, 200, 100%); /* couleur d'accent */
 ```
 
 > **Note blur** : la transparence réelle (`transparency = "real"`) nécessite  
-> un compositor actif avec blur (ex: picom `--blur-method dual_kawase`).
+> Hyprland (Wayland) : le blur est géré par `hyprland` (decoration.conf) — pas besoin de compositor X11.
 
 ---
 

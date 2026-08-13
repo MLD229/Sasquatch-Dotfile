@@ -1,0 +1,82 @@
+[Hotkey]
+# Énumérer lorsque une touche modificatrice ou de commutation est pressée
+EnumerateWithTriggerKeys=True
+# Énumérer les méthodes de saisie vers l'avant
+EnumerateForwardKeys=
+# Énumérer les méthodes de saisie vers l'arrière
+EnumerateBackwardKeys=
+# Passer la première méthode de saisie lors de l'énumération
+EnumerateSkipFirst=False
+# Limite de temps en millisecondes pour déclencher une touche de modification de raccourci clavier
+ModifierOnlyKeyTimeout=250
+
+[Hotkey/TriggerKeys]
+0=Control+exclam
+1=Zenkaku_Hankaku
+2=Hangul
+
+[Hotkey/ActivateKeys]
+0=Hangul_Hanja
+
+[Hotkey/DeactivateKeys]
+0=Hangul_Romaja
+
+[Hotkey/AltTriggerKeys]
+0=Shift_L
+
+[Hotkey/EnumerateGroupForwardKeys]
+0=Super+space
+
+[Hotkey/EnumerateGroupBackwardKeys]
+0=Shift+Super+space
+
+[Hotkey/PrevPage]
+0=Up
+
+[Hotkey/NextPage]
+0=Down
+
+[Hotkey/PrevCandidate]
+0=Shift+Tab
+
+[Hotkey/NextCandidate]
+0=Tab
+
+[Hotkey/TogglePreedit]
+0=Control+Alt+P
+
+[Behavior]
+# Activate input method by default
+ActiveByDefault=False
+# Remise à zéro de l'état lors de la prise de focus
+resetStateWhenFocusIn=No
+# Partager l'état de la saisie
+ShareInputState=No
+# Afficher la pré-édition dans l'application
+PreeditEnabledByDefault=True
+# Afficher les informations sur la méthode de saisie lors du changement de méthode de saisie
+ShowInputMethodInformation=True
+# Afficher les informations sur la méthode de saisie lors du changement de focus
+showInputMethodInformationWhenFocusIn=False
+# Afficher des informations compactes sur la méthode de saisie
+CompactInputMethodInformation=True
+# Afficher les informations de la première méthode de saisie
+ShowFirstInputMethodInformation=True
+# Default Candidates per page
+DefaultPageSize=5
+# Surcharger l'option XKB
+OverrideXkbOption=False
+# Options XKB personnalisées
+CustomXkbOption=
+# Force Enabled Addons
+EnabledAddons=
+# Force Disabled Addons
+DisabledAddons=
+# Preload input method to be used by default
+PreloadInputMethod=True
+# Permettre la méthode de saisie dans un champs de mot de passe
+AllowInputMethodForPassword=False
+# Afficher le texte de pré-édition lors de la frappe d'un mot de passe
+ShowPreeditForPassword=False
+# Intervalle de sauvegarde des données utilisateur en minute
+AutoSavePeriod=30

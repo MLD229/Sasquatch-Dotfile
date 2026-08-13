@@ -1,17 +1,18 @@
-# mako/config
+# mako/config — palette dynamique (généré par theme-apply.py)
+# === SASQUATCH-PALETTE-BEGIN ===
+# mako/config — palette dynamique (généré par theme-apply.py)
 sort=-time
 layer=overlay
-background-color=#0f0f19cc
-text-color=#cdd6f4
+background-color=#151514cc
+text-color=#d1d1d0
 width=340
 height=120
 border-size=1
-border-color=#88aaee44
+border-color=#c2784844
 border-radius=12
 padding=12
 margin=10
 icons=1
-icon-size=32
 max-icon-size=32
 
 font=JetBrains Mono 12
@@ -21,15 +22,16 @@ default-timeout=4000
 ignore-timeout=0
 
 [urgency=low]
-background-color=#0f0f19bb
+background-color=#151514bb
 border-color=#6c708644
-text-color=#a6adc8
+text-color=#7c7c7b
 
 [urgency=normal]
-background-color=#0f0f19cc
-border-color=#88aaee44
+background-color=#151514cc
+border-color=#c2784844
 
 [urgency=high]
-background-color=#0f0f19cc
+background-color=#151514cc
 border-color=#f38ba8aa
 text-color=#f38ba8
+# === SASQUATCH-PALETTE-END ===

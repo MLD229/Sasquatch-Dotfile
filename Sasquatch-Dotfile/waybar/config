@@ -10,7 +10,7 @@
     "modules-left": [
         "hyprland/workspaces",
         "custom/separator",
-        "custom/media"
+        "mpris"
     ],
     "modules-center": [
         "clock"
@@ -26,7 +26,11 @@
         "network",
         "custom/dot",
         "battery",
-        "custom/separator",
+        "custom/dot",
+        "pulseaudio",
+        "custom/dot",
+        "custom/brightness",
+        "custom/dot",
         "custom/clipboard",
         "custom/dot",
         "bluetooth",
@@ -34,23 +38,8 @@
         "tray"
     ],
 
-    // ── Workspaces ───────────────────────────────────────────────────────────
     "hyprland/workspaces": {
-        "format": "{icon}",
-        "format-icons": {
-            "1":  "󰎤",
-            "2":  "󰎧",
-            "3":  "󰎪",
-            "4":  "󰎭",
-            "5":  "󰎱",
-            "6":  "󰎴",
-            "7":  "󰎷",
-            "8":  "󰎺",
-            "9":  "󰎽",
-            "10": "󰎠",
-            "active":  "",
-            "default": ""
-        },
+        "format": "{id}",
         "persistent-workspaces": {
             "*": 10
         },
@@ -88,48 +77,24 @@
         }
     },
 
-    // ── Lecteur média enrichi ────────────────────────────────────────────────
-    // Dépendances : playerctl, python3, wpctl, rofi (pour le popup interactif)
-    //
-    // Comportement :
-    //   Clic gauche   → popup rofi (play/pause, prev, next, shuffle…) + notify avec pochette
-    //   Clic droit    → piste suivante
-    //   Clic milieu   → piste précédente
-    //   Scroll haut   → volume +5%
-    //   Scroll bas    → volume -5%
-    //
-    // Scripts requis dans ~/.config/waybar/scripts/ :
-    //   mediaplayer.py   → lit les métadonnées MPRIS et renvoie du JSON
-    //   media-popup.sh   → affiche le popup rofi + notification avec pochette
-    "custom/media": {
-        "exec": "~/.config/waybar/scripts/mediaplayer.py",
-        "exec-if": "playerctl status 2>/dev/null",
-        "return-type": "json",
+    "mpris": {
+        "format": "{player_icon} {artist} — {title}",
         "interval": 2,
-        "format": "{}",
-        "on-click":        "~/.config/waybar/scripts/media-popup.sh",
-        "on-click-right":  "playerctl next",
-        "on-click-middle": "playerctl previous",
-        "on-scroll-up":    "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
-        "on-scroll-down":  "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
         "max-length": 40,
         "tooltip": true
     },
 
-    // ── Horloge ──────────────────────────────────────────────────────────────
     "clock": {
         "format": "󰥔  {:%H:%M   %d %b}",
         "tooltip-format": "<big>{:%Y %B}</big>\n<tt>{calendar}</tt>"
     },
 
-    // ── CPU ──────────────────────────────────────────────────────────────────
     "cpu": {
         "interval": 2,
         "format": "󰻠  {usage}%",
         "tooltip-format": "CPU: {usage}%\nCœurs: {load}"
     },
 
-    // ── GPU (nvidia-smi) ─────────────────────────────────────────────────────
     "custom/gpu": {
         "exec": "nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits | awk -F', ' '{printf \"%s%% %s°C\", $1, $2}'",
         "format": "󰾲  {}",
@@ -137,14 +102,12 @@
         "tooltip": false
     },
 
-    // ── RAM ──────────────────────────────────────────────────────────────────
     "memory": {
         "interval": 2,
         "format": "󰍛  {percentage}%",
         "tooltip-format": "RAM: {used:.1f} Go / {total:.1f} Go\nSwap: {swapUsed:.1f} Go / {swapTotal:.1f} Go"
     },
 
-    // ── Réseau ───────────────────────────────────────────────────────────────
     "network": {
         "format-wifi":        "󰤨  {signalStrength}%",
         "format-disconnected": "󰤭  Off",
@@ -152,7 +115,6 @@
         "tooltip-format":     "󰤨  {essid}\n󰩟  {ipaddr}/{cidr}\n󰕒  ↑{bandwidthUpBytes}  ↓{bandwidthDownBytes}"
     },
 
-    // ── Batterie ─────────────────────────────────────────────────────────────
     "battery": {
         "interval": 30,
         "format": "{icon}  {capacity}%",
@@ -165,9 +127,28 @@
         "tooltip-format": "Batterie: {capacity}%\nTemps restant: {time}"
     },
 
-    // ── Bluetooth ─────────────────────────────────────────────────────────────
-    // Clic gauche → ouvre Blueman
-    // Clic droit  → coupe le Bluetooth
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "format-muted": "󰝟 {volume}%",
+        "format-icons": {
+            "default": ["󰕿", "󰖀", "󰕾"]
+        },
+        "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+        "on-click-right": "pavucontrol",
+        "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
+        "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
+        "tooltip": false
+    },
+
+    "custom/brightness": {
+        "exec": "brightnessctl -m | awk -F, '{print $4}' | tr -d '%'",
+        "format": "󰃟 {}%",
+        "interval": 2,
+        "on-scroll-up": "brightnessctl set 5%+",
+        "on-scroll-down": "brightnessctl set 5%-",
+        "tooltip": false
+    },
+
     "bluetooth": {
         "format":                                     "󰂯",
         "format-disabled":                            "󰂲",
@@ -182,26 +163,19 @@
         "on-click-right": "bluetoothctl power off"
     },
 
-    // ── Presse-papier (cliphist + wofi) ───────────────────────────────────────
-    // Dépendances : cliphist, wofi, wl-copy
-    // Clic gauche  → sélecteur de presse-papier
-    // Clic droit   → vide l'historique
-    // Clic milieu  → copie le dernier élément
     "custom/clipboard": {
         "format": "󰅍",
         "tooltip": true,
         "tooltip-format": "Presse-papier\nClic gauche  → sélectionner\nClic droit   → vider l'historique\nClic milieu  → dernier élément",
-        "on-click":        "cliphist list | wofi --dmenu --prompt='  Presse-papier' --style=$HOME/.config/wofi/style.css | cliphist decode | wl-copy",
+        "on-click":        "cliphist list | rofi -dmenu -p 'Presse-papier' -theme ~/.config/rofi/themes/sasquatch.rasi | cliphist decode | wl-copy",
         "on-click-right":  "cliphist wipe && notify-send '󰅍 Presse-papier' 'Historique vidé'",
         "on-click-middle": "cliphist list | head -1 | cliphist decode | wl-copy && notify-send '󰅍 Presse-papier' 'Dernier élément copié'"
     },
 
-    // ── Tray ──────────────────────────────────────────────────────────────────
     "tray": {
         "spacing": 8
     },
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     "custom/dot": {
         "format": "●",
         "tooltip": false
@@ -210,15 +184,4 @@
         "format": "  ",
         "tooltip": false
     }
-}
-
-
-
-"custom/media": {
-    "exec": "python3 /home/momo/.config/waybar/scripts/mediaplayer.py",
-    "return-type": "json",
-    "interval": 2,
-    "on-click": "playerctl play-pause",
-    "on-click-right": "playerctl next",
-    "on-click-middle": "playerctl previous"
 }

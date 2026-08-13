@@ -3,7 +3,10 @@
 # ─────────────────────────────────────────
 #   Sasquatch-Dotfile — install.sh
 #   Adapté pour une fresh install Hyprland
+#   v1.1 — symlinks corrigés (scripts/, rofi, set-wall)
 # ─────────────────────────────────────────
+
+set -uo pipefail
 
 DOTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="$HOME/.config"
@@ -26,7 +29,12 @@ header "Vérification de yay"
 if ! command -v yay &>/dev/null; then
     info "yay non trouvé — installation..."
     sudo pacman -S --needed git base-devel
-    git clone https://aur.archlinux.org/yay.git /tmp/yay
+    if [ -d /tmp/yay/.git ]; then
+        info "/tmp/yay existe déjà — mise à jour..."
+        git -C /tmp/yay pull --ff-only
+    else
+        git clone https://aur.archlinux.org/yay.git /tmp/yay
+    fi
     cd /tmp/yay && makepkg -si --noconfirm
     cd "$DOTDIR"
     success "yay installé"
@@ -40,6 +48,48 @@ header "Installation des dépendances"
 PKGS=(
     ttf-jetbrains-mono-nerd
     waypaper
+
+    eza
+    bat
+    brightnessctl
+    playerctl
+    libqalculate       # calculatrice rofi (calc.sh, SUPER+C)
+    python-pillow
+
+    # Presse-papier (clipboard.sh, SUPER+V) + captures (grim/slurp)
+    cliphist
+    wl-clipboard
+    grim
+    slurp
+    libnotify
+
+    # Réseau / BT
+    iwd
+    bluez
+    bluez-utils
+    blueman
+    dolphin
+
+    # Son (module pulseaudio waybar + pavucontrol)
+    pipewire-pulse
+    pavucontrol
+
+    # Icônes / curseurs / thèmes (rofi + env.conf)
+    papirus-icon-theme
+    bibata-cursor-theme
+    catppuccin-gtk-theme-mocha
+    qt5ct
+    kvantum
+
+    # Portail XDG (partage d'écran, dialogues)
+    xdg-desktop-portal-hyprland
+
+    # Éditeur par défaut (config.fish EDITOR)
+    neovim
+
+    # Navigateurs (bind SUPER+W = brave ; windowrules firefox)
+    brave
+    firefox
 
     waybar
     rofi
@@ -69,7 +119,13 @@ PKGS=(
     noto-fonts
     noto-fonts-emoji
 
-    os-prober
+    # IME japonais (fcitx5 + mozc) — bascule Ctrl+Shift+1
+    fcitx5
+    fcitx5-mozc
+    fcitx5-configtool
+    fcitx5-gtk
+    fcitx5-qt
+    noto-fonts-cjk
 )
 
 missing=()
@@ -86,7 +142,10 @@ if [ ${#missing[@]} -gt 0 ]; then
     warning "Paquets manquants : ${missing[*]}"
     read -rp "  Installer maintenant ? [Y/n] " confirm
     if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
-        yay -S --needed --noconfirm "${missing[@]}"
+        yay -S --needed --noconfirm "${missing[@]}" || {
+            error "Échec de l'installation des paquets — corrige puis relance."
+            exit 1
+        }
     fi
 fi
 
@@ -98,9 +157,16 @@ xdg-user-dirs-update
 success "Dossiers XDG créés"
 
 # ─── Fonction symlink ───────────────────
+# Vérifie que la source EXISTE avant de créer le lien
+# (évite les liens morts silencieux, cf. audit bug #9)
 link() {
     local src="$1"
     local dst="$2"
+
+    if [ ! -e "$src" ]; then
+        warning "Source absente, lien ignoré : $src"
+        return 1
+    fi
 
     mkdir -p "$(dirname "$dst")"
 
@@ -118,20 +184,27 @@ link() {
 
 header "Configuration lid switch lock"
 
+# Backup avant modification (audit bug #27)
+LOGIND=/etc/systemd/logind.conf
+if [ ! -f "${LOGIND}.bak-sasquatch" ]; then
+    sudo cp "$LOGIND" "${LOGIND}.bak-sasquatch"
+    info "Backup créé : ${LOGIND}.bak-sasquatch"
+fi
+
 sudo sed -i \
     -e 's/^#HandleLidSwitch=.*/HandleLidSwitch=lock/' \
     -e 's/^#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=lock/' \
     -e 's/^#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=lock/' \
-    /etc/systemd/logind.conf
+    "$LOGIND"
 
-grep -q "^HandleLidSwitch=" /etc/systemd/logind.conf || \
-    echo "HandleLidSwitch=lock" | sudo tee -a /etc/systemd/logind.conf
+grep -q "^HandleLidSwitch=" "$LOGIND" || \
+    echo "HandleLidSwitch=lock" | sudo tee -a "$LOGIND"
 
-grep -q "^HandleLidSwitchExternalPower=" /etc/systemd/logind.conf || \
-    echo "HandleLidSwitchExternalPower=lock" | sudo tee -a /etc/systemd/logind.conf
+grep -q "^HandleLidSwitchExternalPower=" "$LOGIND" || \
+    echo "HandleLidSwitchExternalPower=lock" | sudo tee -a "$LOGIND"
 
-grep -q "^HandleLidSwitchDocked=" /etc/systemd/logind.conf || \
-    echo "HandleLidSwitchDocked=lock" | sudo tee -a /etc/systemd/logind.conf
+grep -q "^HandleLidSwitchDocked=" "$LOGIND" || \
+    echo "HandleLidSwitchDocked=lock" | sudo tee -a "$LOGIND"
 
 # ─── Symlinks ──────────────────────────
 header "Création des symlinks"
@@ -141,19 +214,23 @@ link "$DOTDIR/waybar"                   "$CONFIG/waybar"
 link "$DOTDIR/rofi"                     "$CONFIG/rofi"
 link "$DOTDIR/mako"                     "$CONFIG/mako"
 link "$DOTDIR/kitty"                    "$CONFIG/kitty"
+link "$DOTDIR/fcitx5"                   "$CONFIG/fcitx5"   # IME japonais (config+profile+conf)
 link "$DOTDIR/fish"                     "$CONFIG/fish"
 link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
 link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
+link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
 link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
 link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"
-link "$DOTDIR/themes/icons"             "$HOME/.local/share/icons/sasquatch"
-link "$DOTDIR/themes/cursors"           "$HOME/.local/share/icons/cursors-sasquatch"
+# themes/icons et themes/cursors retirés : absents du repo (bug #9)
+# Icônes/curseurs gérés par les paquets : papirus-icon-theme, bibata-cursor-theme
 
 # ─── Scripts exécutables ───────────────
 header "Permissions des scripts"
 chmod +x "$DOTDIR"/scripts/*.sh
 chmod +x "$DOTDIR"/hypr/scripts/*.sh
+chmod +x "$DOTDIR"/rofi/scripts/*.sh      # ← ajouté (bug #31)
+chmod +x "$DOTDIR"/set-wall.sh            # ← ajouté (bug #31)
 success "Scripts rendus exécutables"
 
 # ─── Fish comme shell par défaut ───────

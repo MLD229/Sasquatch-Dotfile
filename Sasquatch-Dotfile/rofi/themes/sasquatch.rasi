@@ -1,8 +1,9 @@
+@import "colors.rasi"
 /* ── Global ─────────────────────────────────────────── */
 * {
     font:             "JetBrainsMono Nerd Font 11";
     background-color: transparent;
-    text-color:       @fg;
+    text-color:       var(fg);
     border:           0px;
     margin:           0px;
     padding:          0px;
@@ -14,10 +15,10 @@ window {
     width:            620px;
     location:         center;
     anchor:           center;
-    background-color: @bg-window;
+    background-color: var(bg-window);
     border-radius:    20px;
     border:           1px;
-    border-color:     @border;
+    border-color:     var(border);
     padding:          12px;
 }
 
@@ -30,7 +31,7 @@ mainbox {
 
 /* ── Input Bar ──────────────────────────────────────── */
 inputbar {
-    background-color: @bg-input;
+    background-color: var(bg-input);
     border-radius:    14px;
     padding:          10px 14px;
     spacing:          8px;
@@ -39,13 +40,13 @@ inputbar {
 
 prompt {
     background-color: transparent;
-    text-color:       @accent;
+    text-color:       var(accent);
     font:             "JetBrainsMono Nerd Font Bold 11";
 }
 
 textbox-prompt-colon {
     background-color: transparent;
-    text-color:       @accent-dim;
+    text-color:       var(accent-dim);
     str:              "›";
     expand:           false;
     margin:           0px 4px 0px 0px;
@@ -53,7 +54,7 @@ textbox-prompt-colon {
 
 entry {
     background-color: transparent;
-    text-color:       @fg;
+    text-color:       var(fg);
 }
 
 /* ── List View ──────────────────────────────────────── */
@@ -78,32 +79,32 @@ element {
 
 element normal.normal,
 element alternate.normal {
-    text-color: @fg;
+    text-color: var(fg);
 }
 
 element selected.normal {
-    background-color: @bg-selected;
-    text-color:       @fg-selected;
+    background-color: var(bg-selected);
+    text-color:       var(fg-selected);
 }
 
 element normal.urgent,
 element alternate.urgent {
-    text-color: @urgent;
+    text-color: var(urgent);
 }
 
 element selected.urgent {
-    background-color: @urgent-bg;
-    text-color:       @fg-selected;
+    background-color: var(urgent-bg);
+    text-color:       var(fg-selected);
 }
 
 element normal.active,
 element alternate.active {
-    text-color: @accent;
+    text-color: var(accent);
 }
 
 element selected.active {
-    background-color: @bg-selected;
-    text-color:       @fg-selected;
+    background-color: var(bg-selected);
+    text-color:       var(fg-selected);
 }
 
 /* ── Icon ───────────────────────────────────────────── */
@@ -121,7 +122,7 @@ element-text {
 
 /* ── Message ────────────────────────────────────────── */
 message {
-    background-color: @bg-input;
+    background-color: var(bg-input);
     border-radius:    12px;
     padding:          8px 12px;
     margin:           4px 0px 0px 0px;
@@ -129,5 +130,5 @@ message {
 
 textbox {
     background-color: transparent;
-    text-color:       @fg-dim;
+    text-color:       var(fg-dim);
 }

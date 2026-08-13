@@ -1,21 +1,26 @@
 #!/bin/bash
-# scripts/bluetooth.sh
+# scripts/wifi.sh — WiFi via iwd (iwctl) + systemd-networkd
+
+DEV="wlan0"
 
 case $1 in
     toggle)
-        if bluetoothctl show | grep -q "Powered: yes"; then
-            bluetoothctl power off
-            notify-send "Bluetooth" "Désactivé" -i bluetooth-disabled -t 2000
+        if iwctl device "$DEV" show | grep -q "Powered on"; then
+            iwctl device "$DEV" set-property Powered off
+            notify-send "WiFi" "Désactivé" -i network-wireless-off -t 2000
         else
-            bluetoothctl power on
-            notify-send "Bluetooth" "Activé" -i bluetooth -t 2000
+            iwctl device "$DEV" set-property Powered on
+            notify-send "WiFi" "Activé" -i network-wireless -t 2000
         fi
     ;;
     status)
-        DEV=$(bluetoothctl info | grep "Name" | cut -d: -f2 | xargs)
-        notify-send "Bluetooth" "${DEV:-Aucun appareil connecté}" -t 2000
+        SSID=$(iwctl station "$DEV" show 2>/dev/null | grep "Connected network" | awk '{print $NF}')
+        notify-send "WiFi" "${SSID:-Aucun réseau connecté}" -t 2000
     ;;
     menu)
-        blueman-manager &
+        kitty --title "iwctl" -e iwctl &
+    ;;
+    *)
+        echo "Usage: $0 {toggle|status|menu}" >&2
     ;;
 esac

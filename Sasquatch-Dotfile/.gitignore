@@ -1,0 +1,6 @@
+# Sasquatch-Dotfile — fichiers spécifiques à la machine / artefacts
+fish/fish_variables
+__pycache__/
+*.pyc
+# fcitx5 : cache des layouts généré au runtime
+fcitx5/conf/cached_layouts
