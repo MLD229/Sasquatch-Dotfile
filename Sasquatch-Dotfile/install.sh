@@ -196,6 +196,12 @@ link() {
 
     mkdir -p "$(dirname "$dst")"
 
+    # Déjà lié vers la même source ? Rien à faire (idempotent, sans prompt).
+    if [ -L "$dst" ] && [ "$(readlink -f "$dst")" = "$(readlink -f "$src")" ]; then
+        success "Déjà lié : $dst"
+        return
+    fi
+
     if [ -e "$dst" ] || [ -L "$dst" ]; then
         read -rp "  ⚠ '$dst' existe déjà. Écraser ? [y/N] " confirm
         [[ "$confirm" =~ ^[Yy]$ ]] || { warning "Ignoré : $dst"; return; }
@@ -298,7 +304,7 @@ link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
 link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
 link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
 link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
-link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifos CC (Visualizer + CC Capture)
+link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifo CC Capture (finder)
 link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
 link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"

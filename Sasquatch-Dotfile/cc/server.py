@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from config import HOST, PORT
 from metrics import Metrics
 from viz import Viz
-from mpd import (mpd_status, mpd_simple_command, mpd_toggle, mpd_albumart,
+from mpd import (mpd_status, mpd_albumart,
                  notify_track_change, video_id_from_file, yt_thumbnail)
 from player import (now_playing as player_now_playing, toggle as player_toggle,
                     next_track as player_next, prev_track as player_prev,
@@ -219,10 +219,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/music/stop":
             self._json({"ok": player_stop()})
-            return
-        if path == "/api/music/volume":
-            v = max(0, min(100, _safe_int(body.get("v", 0))))
-            self._json({"ok": mpd_simple_command("setvol %d" % v)})
             return
         if path == "/api/system/volume":
             # Le slider du CC pilote le volume SYSTÈME (wpctl) : la barre

@@ -35,6 +35,7 @@ ttf-jetbrains-mono-nerd \
 noto-fonts noto-fonts-emoji noto-fonts-cjk \
 brightnessctl playerctl \
 pipewire pipewire-pulse wireplumber \
+qt5-wayland qt6-wayland libnotify \
 iwd bluez bluez-utils blueman \
 polkit-gnome wl-clipboard cliphist \
 grim slurp \
@@ -45,6 +46,7 @@ catppuccin-gtk-theme-mocha bibata-cursor-theme \
 python-pillow \
 eza bat neovim \
 nvidia-utils \
+libva-nvidia-driver \
 fcitx5 fcitx5-mozc fcitx5-configtool fcitx5-gtk fcitx5-qt \
 libqalculate \
 mpd cava alsa-utils songrec quickshell curl ffmpeg \
