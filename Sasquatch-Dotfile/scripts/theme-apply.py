@@ -24,6 +24,9 @@ import sys
 from PIL import Image
 
 CONFIG = os.path.expanduser("~/.config")
+# Runtime dir (0700, tmpfs) pour lock/cache : plus sûr que /tmp (mono-user OK
+# mais pas de collision ni d'attaque symlink ; nettoie tout seul au reboot).
+RUNDIR = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
 
 CSS_BEGIN = "/* === SASQUATCH-PALETTE-BEGIN === */\n"
 CSS_END = "/* === SASQUATCH-PALETTE-END === */\n"
@@ -37,7 +40,8 @@ FILES = {
     "hyprlock": f"{CONFIG}/hypr/hyprlock.conf",
     "mako": f"{CONFIG}/mako/config",
     "rofi": f"{CONFIG}/rofi/themes/colors.rasi",
-    "kitty_cache": "/tmp/sasquatch-palette-kitty.conf",
+    "cc": f"{CONFIG}/cc/qml/Palette.qml",
+    "kitty_cache": f"{RUNDIR}/sasquatch-palette-kitty.conf",
 }
 
 # Palette par défaut (Catppuccin Mocha-like) — utilisée si extraction impossible
@@ -206,7 +210,6 @@ def b_hyprlock(p):
 
 def b_mako(p):
     return "\n".join([
-        "# mako/config — palette dynamique (généré par theme-apply.py)",
         "sort=-time",
         "layer=overlay",
         "background-color=%scc" % p["BG"],
@@ -247,7 +250,6 @@ def b_rofi(p):
         r, g, b = int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16)
         return "rgba(%d, %d, %d, %s)" % (r, g, b, a)
     return "\n".join([
-        "/* Sasquatch · Palette de couleurs dynamique (généré par theme-apply.py) */",
         "* {",
         "    /* ── Backgrounds ────────────────────────────────── */",
         "    bg-window:   %s;" % dec(p["BG"], "0.85"),
@@ -270,17 +272,54 @@ def b_rofi(p):
         "}",
     ])
 
+def b_cc(p):
+    """Palette du Control Center (Quickshell) — cc/qml/Palette.qml."""
+    return "\n".join([
+        '    readonly property color bg: "%s"' % p["BG"],
+        '    readonly property color bgSolid: "%s"' % p["BG"],
+        '    readonly property color card: "%s"' % p["BG_ALT"],
+        '    readonly property color cardSolid: "%s"' % p["BG_ALT"],
+        '    readonly property color text: "%s"' % p["FG"],
+        '    readonly property color textDim: "%s"' % p["FG_DIM"],
+        '    readonly property color accent: "%s"' % p["ACCENT"],
+        '    readonly property color accent2: "#44%s"' % p["ACCENT"][1:],
+        '    readonly property color overlay: "#99021933"',
+        '    readonly property color good: "%s"' % p["GREEN"],
+        '    readonly property color warn: "%s"' % p["YELLOW"],
+        '    readonly property color hot: "%s"' % p["RED"],
+    ])
+
 # ─────────────────────────── patching ───────────────────────────
 
+HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+def _clean_palette(p):
+    """Garantit des valeurs hex valides — toute valeur invalide retombe sur le défaut."""
+    out = dict(p)
+    for k, v in p.items():
+        if not HEX_RE.match(v):
+            print("⚠ valeur invalide %s=%s — défaut utilisé" % (k, v), file=sys.stderr)
+            out[k] = DEFAULTS.get(k, "#000000")
+    return out
+
 def replace_block(path, begin, end, new):
+    """Remplace le bloc marqué. Retourne :
+    - True  : bloc écrit
+    - None  : contenu déjà identique (skip — rien à faire)
+    - False : marqueurs absents (warning)
+    """
     with open(path, encoding="utf-8") as f:
         content = f.read()
     pat = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.S)
-    if not pat.search(content):
+    m = pat.search(content)
+    if not m:
         print("⚠ marqueurs absents: %s" % path, file=sys.stderr)
         return False
+    replacement = begin + new.rstrip() + "\n" + end
+    if content[m.start():m.end()] == replacement:
+        return None
     with open(path, "w", encoding="utf-8") as f:
-        f.write(pat.sub(lambda m: begin + new.rstrip() + "\n" + end, content))
+        f.write(pat.sub(lambda _: replacement, content))
     return True
 
 def main():
@@ -294,22 +333,72 @@ def main():
             print("⚠ extraction échouée (%s) — palette par défaut" % e, file=sys.stderr)
     elif path:
         print("⚠ fichier introuvable: %s — palette par défaut" % path, file=sys.stderr)
+    p = _clean_palette(p)
 
     if "--print-palette" in sys.argv:
         for k in ("BG", "BG_ALT", "FG", "FG_DIM", "ACCENT", "ACCENT2", "RED", "GREEN", "YELLOW", "CYAN"):
             print("%s=%s" % (k, p[k]))
         return 0
 
-    ok = True
-    ok &= replace_block(FILES["waybar"], CSS_BEGIN, CSS_END, b_waybar(p))
-    ok &= replace_block(FILES["kitty"], CMT_BEGIN, CMT_END, b_kitty(p))
-    ok &= replace_block(FILES["hypr"], CMT_BEGIN, CMT_END, b_hypr(p))
-    ok &= replace_block(FILES["hyprlock"], CMT_BEGIN, CMT_END, b_hyprlock(p))
-    ok &= replace_block(FILES["mako"], CMT_BEGIN, CMT_END, b_mako(p))
-    ok &= replace_block(FILES["rofi"], CSS_BEGIN, CSS_END, b_rofi(p))
+    blocks = (
+        ("waybar", FILES["waybar"], CSS_BEGIN, CSS_END, b_waybar(p)),
+        ("kitty", FILES["kitty"], CMT_BEGIN, CMT_END, b_kitty(p)),
+        ("hypr", FILES["hypr"], CMT_BEGIN, CMT_END, b_hypr(p)),
+        ("hyprlock", FILES["hyprlock"], CMT_BEGIN, CMT_END, b_hyprlock(p)),
+        ("mako", FILES["mako"], CMT_BEGIN, CMT_END, b_mako(p)),
+        ("rofi", FILES["rofi"], CSS_BEGIN, CSS_END, b_rofi(p)),
+        ("cc", FILES["cc"], CSS_BEGIN, CSS_END, b_cc(p)),
+    )
 
-    with open(FILES["kitty_cache"], "w", encoding="utf-8") as f:
-        f.write(b_kitty(p) + "\n")
+    # ── Atomicité ──────────────────────────────────────────────
+    # Pré-vérifier que TOUS les fichiers cibles existent (et contiennent bien
+    # les marqueurs BEGIN/END) AVANT d'écrire quoi que ce soit : sinon un
+    # dossier/symlink manquant — ou un fichier sans marqueurs (édition manuelle,
+    # fichier local non-commité) — faisait écrire les 6 autres puis sortir en 1
+    # → moitié de la palette appliquée (état incohérent).
+    #
+    # Cas particulier cc/qml/Palette.qml : ce fichier est GITIGNORÉ (régénéré à
+    # chaque apply) → sur un clone frais il n'existe pas encore. Le créer avec
+    # les marqueurs + palette courante avant la pré-vérif (fallback runtime
+    # déjà géré par cc/palette.py).
+    cc_path = FILES["cc"]
+    if not os.path.isfile(cc_path):
+        os.makedirs(os.path.dirname(cc_path), exist_ok=True)
+        with open(cc_path, "w", encoding="utf-8") as f:
+            f.write(CSS_BEGIN + b_cc(p).rstrip() + "\n" + CSS_END)
+        print("✔ Palette.qml créé (premier apply)", file=sys.stderr)
+
+    problems = []
+    for name, fpath, begin, end, _new in blocks:
+        if not os.path.isfile(fpath):
+            problems.append("%s (absent)" % fpath)
+            continue
+        try:
+            with open(fpath, encoding="utf-8") as f:
+                content = f.read()
+        except OSError as e:
+            problems.append("%s (illisible: %s)" % (fpath, e))
+            continue
+        if begin not in content or end not in content:
+            problems.append("%s (marqueurs %s manquants)" % (fpath, begin.strip()))
+    if problems:
+        for p in problems:
+            print("⚠ fichier cible: %s" % p, file=sys.stderr)
+        return 1
+
+    ok = True
+    changed = False
+    for name, fpath, begin, end, new in blocks:
+        r = replace_block(fpath, begin, end, new)
+        if r is False:
+            ok = False
+        elif r is True:
+            changed = True
+
+    # Cache kitty : ne réécrire que si la palette a réellement changé.
+    if changed:
+        with open(FILES["kitty_cache"], "w", encoding="utf-8") as f:
+            f.write(b_kitty(p) + "\n")
 
     print("Thème appliqué: BG=%s FG=%s ACCENT=%s ACCENT2=%s" % (p["BG"], p["FG"], p["ACCENT"], p["ACCENT2"]))
     return 0 if ok else 1

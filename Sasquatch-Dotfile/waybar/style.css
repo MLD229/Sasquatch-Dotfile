@@ -2,22 +2,22 @@
 
 /* ── Palette dynamique (wallpaper) ─────────────── */
 /* === SASQUATCH-PALETTE-BEGIN === */
-@define-color background #151514;
-@define-color foreground #d1d1d0;
+@define-color background #201012;
+@define-color foreground #e0cacc;
 @define-color color0 #45475a;
 @define-color color1 #f38ba8;
 @define-color color2 #a6e3a1;
 @define-color color3 #f9e2af;
-@define-color color4 #c27848;
-@define-color color5 #b0c248;
+@define-color color4 #bf616a;
+@define-color color5 #2b333f;
 @define-color color6 #89dceb;
 @define-color color7 #bac2de;
-@define-color color8 #7c7c7b;
+@define-color color8 #897678;
 @define-color color9 #f38ba8;
 @define-color color10 #a6e3a1;
 @define-color color11 #f9e2af;
-@define-color color12 #c27848;
-@define-color color13 #b0c248;
+@define-color color12 #bf616a;
+@define-color color13 #2b333f;
 @define-color color14 #89dceb;
 @define-color color15 #a6adc8;
 /* === SASQUATCH-PALETTE-END === */
@@ -214,4 +214,13 @@ tooltip label {
     border-radius: 20px;
     background: alpha(@foreground, 0.05);
     border: 1px solid alpha(@foreground, 0.08);
+}
+
+/* Fastview : module invisible (lance le daemon d'aperçu des workspaces) */
+#custom-fastview {
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    font-size: 0;
+    color: transparent;
 }

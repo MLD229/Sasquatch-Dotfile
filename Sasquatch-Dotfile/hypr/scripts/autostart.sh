@@ -2,7 +2,9 @@
 # autostart.sh
 
 # ── Wallpaper ────────────────────────────────
-waypaper --restore &
+# wallpaper.sh tue les hyprpaper orphelins (bug : orphelin d'une session passée
+# → waypaper ne le remplace pas → fond noir) puis lance waypaper --restore.
+~/.config/hypr/scripts/wallpaper.sh
 
 # ── Bar ──────────────────────────────────────
 # waybar est lancé par theme-apply.sh (le thème doit être prêt avant la barre)
@@ -18,6 +20,11 @@ fcitx5 -d &
 
 # ── Idle / Lock ──────────────────────────────
 hypridle &
+
+# ── Lecteur MPD (CC musique + finder) ────────
+# Service user normalement activé par install.sh ; ce start est un filet de
+# sécurité (sans effet si déjà lancé).
+systemctl --user start mpd 2>/dev/null &
 
 # ── Presse-papier ────────────────────────────
 wl-paste --type text --watch cliphist store &

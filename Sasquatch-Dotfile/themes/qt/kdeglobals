@@ -137,7 +137,9 @@ ColorSchemeHash=9d38eb71ded8ff549da26d57d7cbab9164da243a
 font=JetBrains Mono,11,-1,5,50,0,0,0,0,0
 
 [Icons]
-Theme=Sours-Full-Color
+# Papirus-Dark (installé via papirus-icon-theme) — Sours-Full-Color était un
+# thème local non portable (absent /usr/share + listes) → fallback Qt sinon.
+Theme=Papirus-Dark
 
 [KDE]
 LookAndFeelPackage=org.kde.breezedark.desktop

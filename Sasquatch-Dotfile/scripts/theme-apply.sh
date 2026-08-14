@@ -5,30 +5,58 @@
 # Hook : post_command de waypaper (remplace $wallpaper) + appel direct au login.
 set -u
 
-# Verrou : une seule application à la fois (login + post_command peuvent se chevaucher)
-exec 9>/tmp/sasquatch-theme.lock
-flock -n 9 || exit 0
+# Verrou : sérialise les applys (login + post_command + switch rapide se chevauchent).
+# On ATTEND (flock -w) au lieu de sortir : si momo switch deux wallpapers vite,
+# le second attend que le premier finisse puis applique le sien — avec l'ancien
+# `flock -n || exit 0` le dernier choix était PERDU (jamais appliqué).
+RUNDIR="${XDG_RUNTIME_DIR:-/tmp}"
+exec 9>"$RUNDIR/sasquatch-theme.lock"
+if ! flock -w 20 9; then
+    # Un apply bloqué ne doit pas avaler silencieusement le nouveau wallpaper.
+    notify-send "Thème" "⚠ Apply ignoré (verrou occupé >20 s)" -t 3000 2>/dev/null 9>&-
+    exit 0
+fi
 
 REPO="${HOME}/.config"
 SCRIPT_DIR="$REPO/scripts"
 
 WALL="${1:-}"
 if [ -z "$WALL" ] || [ ! -f "$WALL" ]; then
-    RAW=$(grep -m1 '^wallpaper' "$HOME/.config/waypaper/config.ini" 2>/dev/null | sed 's/^[^=]*= *//')
+    # Strippe un éventuel préfixe moniteur (façon waypaper) : "eDP-1:~/..." → "~/..."
+    RAW=$(grep -m1 '^wallpaper' "$HOME/.config/waypaper/config.ini" 2>/dev/null | sed 's/^[^=]*= *//; s/^[^:~]*://')
     case "$RAW" in
         "~"*) WALL="$HOME${RAW#\~}" ;;
         *)    WALL="$RAW" ;;
     esac
 fi
 
-if [ ! -f "$WALL" ]; then
-    echo "theme-apply: wallpaper introuvable ($WALL)" >&2
-    exit 1
+# Skip si la palette n'a pas changé ET que waybar tourne déjà (même wallpaper
+# appliqué précédemment — évite pkill+relance waybar à chaque login).
+# Le fichier $RUNDIR/sasquatch-theme-last est écrit après chaque apply réussi.
+# NB : skip keyé sur le chemin, pas le contenu (ré-export du même nom = skip —
+# edge case accepté).
+LAST="$RUNDIR/sasquatch-theme-last"
+if [ -f "$WALL" ] && [ "$WALL" = "$(cat "$LAST" 2>/dev/null)" ] && pgrep -x waybar >/dev/null 2>&1; then
+    echo "theme-apply: inchangé ($WALL)"
+    exit 0
 fi
 
-if ! python3 "$SCRIPT_DIR/theme-apply.py" "$WALL"; then
-    notify-send "Thème" "Échec de l'application de la palette" -t 2000 2>/dev/null
-    exit 1
+# Palette : theme-apply.py ne sort >0 que si un fichier cible est illisible ou
+# absent (atomicité) — sinon il applique toujours quelque chose, y compris la
+# palette par défaut quand l'extraction échoue.
+# Ne JAMAIS sortir avant les rechargements : waybar est lancé ICI au login.
+if [ -f "$WALL" ]; then
+    if ! python3 "$SCRIPT_DIR/theme-apply.py" "$WALL"; then
+        notify-send "Thème" "⚠ Palette non appliquée (fichier cible absent ?)" -t 3000 2>/dev/null 9>&-
+        MSG="Échec palette"
+    else
+        echo "$WALL" > "$LAST"
+        MSG="Palette appliquée — $(basename "$WALL")"
+    fi
+else
+    echo "theme-apply: wallpaper introuvable ($WALL) — palette par défaut" >&2
+    python3 "$SCRIPT_DIR/theme-apply.py" 2>/dev/null
+    MSG="Palette par défaut (wallpaper introuvable)"
 fi
 
 # ── Rechargements ──────────────────────────────
@@ -47,11 +75,11 @@ if command -v makoctl >/dev/null 2>&1; then
 fi
 
 # Kitty (instances en cours)
-KITTYC=/tmp/sasquatch-palette-kitty.conf
+KITTYC="$RUNDIR/sasquatch-palette-kitty.conf"
 if [ -f "$KITTYC" ] && command -v kitty >/dev/null 2>&1; then
     kitty @ set-colors -a "$KITTYC" >/dev/null 2>&1
 fi
 
-notify-send -h string:x-canonical-private-synchronous:theme "Thème" "Palette appliquée — $(basename "$WALL")" -t 1500 2>/dev/null 9>&-
+notify-send -h string:x-canonical-private-synchronous:theme "Thème" "$MSG" -t 1500 2>/dev/null 9>&-
 echo "theme-apply: OK ($WALL)"
 exit 0

@@ -1,13 +1,18 @@
 // fastfetch/config.jsonc
 {
     "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+    // Logo = IMAGE officielle Arch (bannière 600×199) rendue via le protocole
+    // graphique kitty (24×8 cellules). Une image ne se « replie » jamais comme
+    // un logo ASCII → AUCUN chevauchement de caractères quand la fenêtre
+    // change de taille (kitty reflow le texte proprement AUTOUR).
+    // Pour revenir au logo ASCII compact : type "small" + retirer
+    // source/width/height/preserveAspectRatio.
     "logo": {
-        "type": "auto",
-        "source": "arch",
-        "color": {
-            "1": "blue",
-            "2": "cyan"
-        },
+        "type": "kitty",
+        "source": "~/.config/fastfetch/arch.png",
+        "width": 24,
+        "height": 8,
+        "preserveAspectRatio": true,
         "padding": {
             "top": 1,
             "left": 1,
@@ -27,64 +32,68 @@
         "separator",
         {
             "type": "os",
-            "key": "󰣇  OS",
+            "key": "󰣇 OS",
             "keyColor": "blue"
         },
         {
             "type": "kernel",
-            "key": "  Kernel",
+            "key": " Kernel",
             "keyColor": "blue"
         },
         {
             "type": "wm",
-            "key": "  WM",
+            "key": " WM",
             "keyColor": "blue"
         },
         {
             "type": "shell",
-            "key": "  Shell",
+            "key": " Shell",
             "keyColor": "blue"
         },
         {
             "type": "terminal",
-            "key": "  Terminal",
+            "key": " Terminal",
             "keyColor": "blue"
         },
         "separator",
         {
+            // {name} = modèle court (sans fréquence) → moins large → tient
+            // dans une fenêtre étroite sans wrapper.
             "type": "cpu",
-            "key": "󰻠  CPU",
-            "keyColor": "cyan"
+            "key": "󰻠 CPU",
+            "keyColor": "cyan",
+            "format": "{name}"
         },
         {
             "type": "gpu",
-            "key": "󰾲  GPU",
-            "keyColor": "cyan"
+            "key": "󰾲 GPU",
+            "keyColor": "cyan",
+            "format": "{name}"
         },
         {
             "type": "memory",
-            "key": "󰍛  RAM",
+            "key": "󰍛 RAM",
             "keyColor": "cyan"
         },
         {
             "type": "disk",
-            "key": "󰋊  Disk",
+            "key": "󰋊 Disk",
             "keyColor": "cyan"
         },
         {
             "type": "battery",
-            "key": "󰁹  Battery",
+            "key": "󰁹 Battery",
             "keyColor": "cyan"
         },
         "separator",
         {
             "type": "uptime",
-            "key": "󰥔  Uptime",
+            "key": "󰥔 Uptime",
             "keyColor": "magenta"
         },
         {
             "type": "packages",
-            "key": "󰏗  Packages",
+            "key": "󰏗 Packages",
             "keyColor": "magenta"
         },
         "separator",

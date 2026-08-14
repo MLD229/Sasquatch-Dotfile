@@ -1,11 +1,18 @@
-// Sasquatch Control Center - main UI (single-file Quickshell QML)
-// Everything (palette, helpers, all blocks) lives inline in this file by design.
+// Sasquatch Control Center - main UI
+// Point d'entrée : fenêtre, palette, état, API, voile et panneau.
+// Les composants visuels réutilisables vivent dans qml/ (Gauge, IconButton,
+// Tile, Sparkline) — le backend HTTP est server.py (modules Python dans cc/).
+//
+// NOTE thème dynamique : la palette est pollée via /api/palette (relue depuis
+// qml/Palette.qml, régénéré par theme-apply.py à chaque changement de
+// wallpaper) — le CC suit donc le thème au lieu de rester figé.
 
 import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
+import "qml"
 
 FloatingWindow {
     id: root
@@ -15,28 +22,37 @@ FloatingWindow {
     visible: true
     color: "transparent"
 
-    // ---------- Palette (Catppuccin Mocha glassmorphism) ----------
-    readonly property color cBg: "#1e1e2e"
-    readonly property color cBgSolid: "#181825"
-    readonly property color cOverlay: "#000000"
-    readonly property color cText: "#cdd6f4"
-    readonly property color cTextDim: "#a6adc8"
-    readonly property color cAccent: "#89b4fa"
-    readonly property color cAccent2: "#94e2d5"
-    readonly property color cGood: "#a6e3a1"
-    readonly property color cWarn: "#f9e2af"
-    readonly property color cHot: "#f38ba8"
+    // ---------- Palette (dynamique : /api/palette ← qml/Palette.qml) ----------
+    // Valeurs de secours Catppuccin Mocha tant que /api/palette n'a pas répondu.
+    property color cBg: "#1e1e2e"
+    property color cBgSolid: "#181825"
+    property color cCard: "#181825"
+    property color cCardSolid: "#181825"
+    property color cOverlay: "#000000"
+    property color cText: "#cdd6f4"
+    property color cTextDim: "#a6adc8"
+    property color cAccent: "#89b4fa"
+    property color cAccent2: "#94e2d5"
+    property color cGood: "#a6e3a1"
+    property color cWarn: "#f9e2af"
+    property color cHot: "#f38ba8"
 
     // ---------- state ----------
     property bool serverOk: true
     property bool everShown: false
-    // true while the panel is hidden for a screenshot; prevents quit() during the hide.
-    property bool screenshotHide: false
+    // true while the panel is hidden for a screenshot / OCR selection;
+    // prevents quit() during the hide.
+    property bool suppressQuit: false
     // true while a screenshot request is in flight; blocks double-click.
     property bool shotBusy: false
     property var stats: ({})
     property var music: ({playing: false, paused: false, title: null, artist: null, volume: 0, elapsed: 0, duration: 0})
+    property var sysVol: ({volume: 0, muted: false})
+    property var sysBright: ({brightness: 0})
     property var vizVals: []
+    // Sidebar volume/luminosité (colonne à côté du panel)
+    property int sidebarW: 110
+    property int ccH: Math.min(780, root.height - 40)
 
     // ---------- API helper (XHR, inline) ----------
     function api(method, path, body, cb, timeoutMs) {
@@ -80,11 +96,11 @@ FloatingWindow {
     function takeScreenshot(mode) {
         if (shotBusy) return;  // block double-click while a capture is in flight
         shotBusy = true;
-        screenshotHide = true;
+        suppressQuit = true;
         visible = false;
         root.api("POST", "/api/screenshot?mode=" + mode, null, function(res) {
             shotBusy = false;
-            screenshotHide = false;
+            suppressQuit = false;
             visible = true;
         }, 120000);
     }
@@ -93,7 +109,7 @@ FloatingWindow {
         if (visible) everShown = true;
         // Quit only after the window was actually shown once (avoids the
         // initial invisible->visible transition killing the server at startup).
-        if (everShown && !visible && !screenshotHide) quit();
+        if (everShown && !visible && !suppressQuit) quit();
     }
 
     Shortcut {
@@ -113,11 +129,42 @@ FloatingWindow {
             });
         }
     }
+    // Palette dynamique : suit theme-apply (relue toutes les 2 s). Le CC se
+    // retinte en direct quand momo change de wallpaper.
+    Timer {
+        interval: 2000; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: {
+            root.api("GET", "/api/palette", null, function(p) {
+                if (!p) return;
+                root.cBg = p.bg;
+                root.cBgSolid = p.bgSolid;
+                root.cCard = p.card;
+                root.cCardSolid = p.cardSolid;
+                root.cText = p.text;
+                root.cTextDim = p.textDim;
+                root.cAccent = p.accent;
+                root.cAccent2 = p.accent2;
+                root.cOverlay = p.overlay;
+                root.cGood = p.good;
+                root.cWarn = p.warn;
+                root.cHot = p.hot;
+            });
+        }
+    }
     Timer {
         interval: 1000; running: true; repeat: true; triggeredOnStart: true
         onTriggered: {
             root.api("GET", "/api/music/status", null, function(res) {
                 if (res) root.music = res;
+            });
+            // Volume système (wpctl) : la barre reflète le vrai volume audible,
+            // pas le volume MPD (indépendant, souvent figé à 0).
+            root.api("GET", "/api/system/volume", null, function(res) {
+                if (res) root.sysVol = res;
+            });
+            // Luminosité (brightnessctl) : sidebar du CC.
+            root.api("GET", "/api/system/brightness", null, function(res) {
+                if (res) root.sysBright = res;
             });
         }
     }
@@ -134,28 +181,33 @@ FloatingWindow {
         onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "hh:mm")
     }
 
-    // ---------- veil ----------
+    // ---------- veil (léger : le verre doit laisser voir le desktop flouté) ----------
     Rectangle {
         id: veil
         anchors.fill: parent
         color: root.cOverlay
-        opacity: 0.55
+        opacity: 0.3
         MouseArea {
             anchors.fill: parent
             onClicked: root.quit()
         }
     }
 
-    // ---------- panel ----------
-    Rectangle {
-        id: panel
-        width: Math.min(1000, parent.width - 40)
-        height: Math.min(780, parent.height - 40)
+    // ---------- CC : panel + sidebar (volume/luminosité) ----------
+    RowLayout {
+        id: ccRow
         anchors.centerIn: parent
-        radius: 22
-        color: Qt.rgba(30/255, 30/255, 46/255, 0.92)
-        border.width: 1
-        border.color: Qt.rgba(137/255, 180/255, 250/255, 0.25)
+        spacing: 14
+
+        // ---------- panel (verre dépoli : translucide + blur Hyprland derrière) ----------
+        Rectangle {
+            id: panel
+            Layout.preferredWidth: Math.min(1000, root.width - 40 - root.sidebarW - 14)
+            Layout.preferredHeight: root.ccH
+            radius: 22
+            color: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.42)
+            border.width: 1
+            border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.4)
 
         opacity: 0
         scale: 0.98
@@ -206,175 +258,72 @@ FloatingWindow {
                     font.bold: true
                     color: root.cText
                 }
-                Rectangle {
-                    width: 30; height: 30; radius: 15
-                    color: closeMa.containsMouse ? Qt.rgba(1,1,1,0.12) : Qt.rgba(1,1,1,0.06)
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    Text { anchors.centerIn: parent; text: "✕"; color: root.cText; font.pixelSize: 14 }
-                    MouseArea {
-                        id: closeMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: root.quit()
-                    }
+                IconButton {
+                    width: 30; height: 30
+                    glyph: "✕"
+                    fontSize: 14
+                    glyphColor: root.cText
+                    onClicked: root.quit()
                 }
             }
 
             // ---------- RANGÉE 1: PERFORMANCE ----------
-            Rectangle {
+            Tile {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 220
-                radius: 16
-                color: Qt.rgba(1,1,1,0.05)
-                border.width: 1
-                border.color: Qt.rgba(1,1,1,0.06)
+                Layout.minimumHeight: 150
+                Layout.fillHeight: true
+                title: "PERFORMANCE"
+                contentMargins: 14
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 8
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 18
 
-                    Text { text: "PERFORMANCE"; font.pixelSize: 11; font.bold: true; color: root.cTextDim }
+                    Gauge {
+                        pct: root.stats && root.stats.cpu ? root.stats.cpu : 0
+                        strokeColor: root.cAccent
+                        label: "CPU"
+                    }
+                    Gauge {
+                        pct: root.stats && root.stats.ram ? root.stats.ram.pct : 0
+                        strokeColor: root.cAccent2
+                        label: "RAM"
+                    }
+                    Gauge {
+                        pct: root.stats && root.stats.gpu ? root.stats.gpu.util : 0
+                        strokeColor: root.cWarn
+                        label: "GPU"
+                        showPct: !!(root.stats && root.stats.gpu)
+                    }
 
-                    RowLayout {
+                    ColumnLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        spacing: 18
+                        spacing: 6
 
-                        ColumnLayout {
-                            spacing: 4
-                            Layout.alignment: Qt.AlignHCenter
-                            Canvas {
-                                id: cpuGauge
-                                width: 90; height: 90
-                                property real pct: root.stats && root.stats.cpu ? root.stats.cpu : 0
-                                onPctChanged: requestPaint()
-                                onPaint: {
-                                    var ctx = getContext("2d");
-                                    ctx.reset();
-                                    var cx = width/2, cy = height/2, r = width/2 - 8;
-                                    ctx.lineWidth = 8;
-                                    ctx.strokeStyle = Qt.rgba(1,1,1,0.1);
-                                    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
-                                    ctx.strokeStyle = root.cAccent;
-                                    ctx.beginPath();
-                                    var start = -Math.PI/2;
-                                    ctx.arc(cx, cy, r, start, start + (pct/100)*Math.PI*2);
-                                    ctx.stroke();
-                                    ctx.fillStyle = root.cText;
-                                    ctx.font = "bold 15px sans-serif";
-                                    ctx.textAlign = "center";
-                                    ctx.textBaseline = "middle";
-                                    ctx.fillText(Math.round(pct) + "%", cx, cy);
+                        Repeater {
+                            model: [
+                                {label: "VRAM", key: "vram", color: root.cAccent2},
+                                {label: "Temp CPU", key: "cpu_temp", color: root.cHot},
+                                {label: "Temp GPU", key: "gpu_temp", color: root.cWarn},
+                                {label: "Réseau", key: "down", color: root.cAccent}
+                            ]
+                            delegate: RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                Text {
+                                    text: modelData.label
+                                    font.pixelSize: 10
+                                    color: root.cTextDim
+                                    Layout.preferredWidth: 70
                                 }
-                            }
-                            Text { text: "CPU"; font.pixelSize: 10; color: root.cTextDim; Layout.alignment: Qt.AlignHCenter }
-                        }
-
-                        ColumnLayout {
-                            spacing: 4
-                            Layout.alignment: Qt.AlignHCenter
-                            Canvas {
-                                id: ramGauge
-                                width: 90; height: 90
-                                property real pct: root.stats && root.stats.ram ? root.stats.ram.pct : 0
-                                onPctChanged: requestPaint()
-                                onPaint: {
-                                    var ctx = getContext("2d");
-                                    ctx.reset();
-                                    var cx = width/2, cy = height/2, r = width/2 - 8;
-                                    ctx.lineWidth = 8;
-                                    ctx.strokeStyle = Qt.rgba(1,1,1,0.1);
-                                    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
-                                    ctx.strokeStyle = root.cAccent2;
-                                    ctx.beginPath();
-                                    var start = -Math.PI/2;
-                                    ctx.arc(cx, cy, r, start, start + (pct/100)*Math.PI*2);
-                                    ctx.stroke();
-                                    ctx.fillStyle = root.cText;
-                                    ctx.font = "bold 15px sans-serif";
-                                    ctx.textAlign = "center";
-                                    ctx.textBaseline = "middle";
-                                    ctx.fillText(Math.round(pct) + "%", cx, cy);
-                                }
-                            }
-                            Text { text: "RAM"; font.pixelSize: 10; color: root.cTextDim; Layout.alignment: Qt.AlignHCenter }
-                        }
-
-                        ColumnLayout {
-                            spacing: 4
-                            Layout.alignment: Qt.AlignHCenter
-                            Canvas {
-                                id: gpuGauge
-                                width: 90; height: 90
-                                property real pct: root.stats && root.stats.gpu ? root.stats.gpu.util : 0
-                                onPctChanged: requestPaint()
-                                onPaint: {
-                                    var ctx = getContext("2d");
-                                    ctx.reset();
-                                    var cx = width/2, cy = height/2, r = width/2 - 8;
-                                    ctx.lineWidth = 8;
-                                    ctx.strokeStyle = Qt.rgba(1,1,1,0.1);
-                                    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
-                                    ctx.strokeStyle = root.cWarn;
-                                    ctx.beginPath();
-                                    var start = -Math.PI/2;
-                                    ctx.arc(cx, cy, r, start, start + (pct/100)*Math.PI*2);
-                                    ctx.stroke();
-                                    ctx.fillStyle = root.cText;
-                                    ctx.font = "bold 15px sans-serif";
-                                    ctx.textAlign = "center";
-                                    ctx.textBaseline = "middle";
-                                    ctx.fillText((root.stats && root.stats.gpu) ? Math.round(pct) + "%" : "N/A", cx, cy);
-                                }
-                            }
-                            Text { text: "GPU"; font.pixelSize: 10; color: root.cTextDim; Layout.alignment: Qt.AlignHCenter }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            spacing: 6
-
-                            Repeater {
-                                model: [
-                                    {label: "VRAM", key: "vram", color: root.cAccent2},
-                                    {label: "Temp CPU", key: "cpu_temp", color: root.cHot},
-                                    {label: "Temp GPU", key: "gpu_temp", color: root.cWarn},
-                                    {label: "Réseau", key: "down", color: root.cAccent}
-                                ]
-                                delegate: RowLayout {
+                                Sparkline {
                                     Layout.fillWidth: true
-                                    spacing: 8
-                                    Text {
-                                        text: modelData.label
-                                        font.pixelSize: 10
-                                        color: root.cTextDim
-                                        Layout.preferredWidth: 70
-                                    }
-                                    Canvas {
-                                        id: spark
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: 24
-                                        property var hist: (root.stats && root.stats.history && root.stats.history[modelData.key]) ? root.stats.history[modelData.key] : []
-                                        onHistChanged: requestPaint()
-                                        onPaint: {
-                                            var ctx = getContext("2d");
-                                            ctx.reset();
-                                            var h = hist;
-                                            if (!h || h.length < 2) return;
-                                            var maxV = Math.max.apply(null, h.concat([1]));
-                                            ctx.strokeStyle = modelData.color;
-                                            ctx.lineWidth = 2;
-                                            ctx.beginPath();
-                                            for (var i = 0; i < h.length; i++) {
-                                                var x = (i / (h.length - 1)) * width;
-                                                var y = height - (h[i] / maxV) * height;
-                                                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-                                            }
-                                            ctx.stroke();
-                                        }
-                                    }
+                                    Layout.preferredHeight: 24
+                                    hist: (root.stats && root.stats.history && root.stats.history[modelData.key]) ? root.stats.history[modelData.key] : []
+                                    lineColor: modelData.color
                                 }
                             }
                         }
@@ -383,17 +332,16 @@ FloatingWindow {
             }
 
             // ---------- RANGÉE 2: MUSIQUE ----------
-            Rectangle {
+            Tile {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 150
-                radius: 16
-                color: Qt.rgba(1,1,1,0.05)
-                border.width: 1
-                border.color: Qt.rgba(1,1,1,0.06)
+                Layout.preferredHeight: 165
+                Layout.minimumHeight: 130
+                Layout.fillHeight: true
+                contentMargins: 14
 
                 RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 14
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     spacing: 14
 
                     Rectangle {
@@ -407,8 +355,9 @@ FloatingWindow {
                             // Stable cache-buster keyed on the track itself, NOT
                             // Date.now(): music is re-polled every second, so a
                             // time-based URL would re-download the full artwork
-                            // once per second.
-                            source: (root.music && root.music.title) ? "http://127.0.0.1:8765/albumart?t=" + (root.music.file || root.music.title) : ""
+                            // once per second. `art` est fourni par le serveur :
+                            // MPRIS (thumbnail navigateur/YouTube) ou MPD.
+                            source: (root.music && root.music.art) ? "http://127.0.0.1:8765" + root.music.art : ""
                             cache: false
                             asynchronous: true
                         }
@@ -416,7 +365,7 @@ FloatingWindow {
                             anchors.centerIn: parent
                             text: "🎵"
                             font.pixelSize: 28
-                            visible: !root.music || !root.music.title
+                            visible: !root.music || !root.music.art
                         }
                     }
 
@@ -437,6 +386,23 @@ FloatingWindow {
                             text: (root.music && root.music.artist) ? root.music.artist : ""
                             font.pixelSize: 11
                             color: root.cTextDim
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: (root.music && root.music.album) ? root.music.album : ""
+                            font.pixelSize: 10
+                            color: root.cTextDim
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        // Badge source : montre d'où vient la musique (navigateur
+                        // YouTube, MPD…).
+                        Text {
+                            text: (root.music && root.music.source === "mpris") ? ("via " + ((root.music.player) ? root.music.player : "navigateur")) : ""
+                            font.pixelSize: 10
+                            font.bold: true
+                            color: root.cAccent
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -472,38 +438,43 @@ FloatingWindow {
                             Layout.fillWidth: true
                             spacing: 10
 
-                            Rectangle {
-                                width: 32; height: 32; radius: 16
-                                color: prevMa.containsMouse ? Qt.rgba(1,1,1,0.12) : Qt.rgba(1,1,1,0.06)
-                                Behavior on color { ColorAnimation { duration: 120 } }
-                                Text { anchors.centerIn: parent; text: "⏮"; color: root.cText }
-                                MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true
-                                    onClicked: root.api("POST", "/api/music/prev", null, function() {}) }
+                            IconButton {
+                                width: 32; height: 32
+                                glyph: "⏮"
+                                glyphColor: root.cText
+                                onClicked: root.api("POST", "/api/music/prev", null, function() {})
                             }
-                            Rectangle {
-                                width: 36; height: 36; radius: 18
-                                color: playMa.containsMouse ? Qt.rgba(1,1,1,0.16) : Qt.rgba(1,1,1,0.09)
-                                Behavior on color { ColorAnimation { duration: 120 } }
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: (root.music && root.music.playing) ? "⏸" : "▶"
-                                    color: root.cText
-                                }
-                                MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true
-                                    onClicked: root.api("POST", "/api/music/toggle", null, function() {}) }
+                            IconButton {
+                                width: 36; height: 36
+                                glyph: (root.music && root.music.playing) ? "⏸" : "▶"
+                                baseColor: Qt.rgba(1,1,1,0.09)
+                                hoverColor: Qt.rgba(1,1,1,0.16)
+                                glyphColor: root.cText
+                                onClicked: root.api("POST", "/api/music/toggle", null, function() {})
                             }
-                            Rectangle {
-                                width: 32; height: 32; radius: 16
-                                color: nextMa.containsMouse ? Qt.rgba(1,1,1,0.12) : Qt.rgba(1,1,1,0.06)
-                                Behavior on color { ColorAnimation { duration: 120 } }
-                                Text { anchors.centerIn: parent; text: "⏭"; color: root.cText }
-                                MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true
-                                    onClicked: root.api("POST", "/api/music/next", null, function() {}) }
+                            IconButton {
+                                width: 32; height: 32
+                                glyph: "⏹"
+                                glyphColor: root.cText
+                                onClicked: root.api("POST", "/api/music/stop", null, function() {})
+                            }
+                            IconButton {
+                                width: 32; height: 32
+                                glyph: "⏭"
+                                glyphColor: root.cText
+                                onClicked: root.api("POST", "/api/music/next", null, function() {})
                             }
 
+                            IconButton {
+                                width: 26; height: 26
+                                glyph: (root.sysVol && root.sysVol.muted) ? "🔇" : "🔊"
+                                fontSize: 11
+                                glyphColor: root.cText
+                                onClicked: root.api("POST", "/api/system/volume", {mute: !(root.sysVol && root.sysVol.muted)}, function() {})
+                            }
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 90
                                 height: 8
                                 radius: 4
                                 color: Qt.rgba(1,1,1,0.1)
@@ -511,13 +482,13 @@ FloatingWindow {
                                     radius: 4
                                     color: root.cAccent2
                                     height: parent.height
-                                    width: parent.width * ((root.music && root.music.volume) ? root.music.volume/100 : 0)
+                                    width: parent.width * ((root.sysVol && root.sysVol.volume) ? root.sysVol.volume/100 : 0)
                                 }
                                 MouseArea {
                                     anchors.fill: parent
                                     onClicked: function(mouse) {
                                         var ratio = Math.max(0, Math.min(1, mouse.x / width));
-                                        root.api("POST", "/api/music/volume", {v: Math.round(ratio*100)}, function() {});
+                                        root.api("POST", "/api/system/volume", {v: Math.round(ratio*100)}, function() {});
                                     }
                                 }
                             }
@@ -525,17 +496,24 @@ FloatingWindow {
                             RowLayout {
                                 spacing: 2
                                 Layout.preferredWidth: 100
+                                Layout.preferredHeight: 30
+                                Layout.minimumHeight: 30
+                                Layout.maximumHeight: 30
+                                // Collé en bas de la rangée : les barres
+                                // poussent vers le haut comme un égaliseur.
+                                Layout.alignment: Qt.AlignBottom
                                 Repeater {
                                     model: 20
                                     delegate: Rectangle {
-                                        width: 3
-                                        height: {
+                                        Layout.preferredWidth: 3
+                                        Layout.preferredHeight: {
                                             var v = (root.vizVals && root.vizVals.length > index) ? root.vizVals[index] : 0;
                                             return Math.max(2, v * 30);
                                         }
                                         radius: 1
                                         color: root.cAccent
-                                        Behavior on height { NumberAnimation { duration: 80 } }
+                                        Layout.alignment: Qt.AlignBottom
+                                        Behavior on Layout.preferredHeight { NumberAnimation { duration: 80 } }
                                     }
                                 }
                             }
@@ -548,142 +526,117 @@ FloatingWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 110
+                Layout.minimumHeight: 85
+                Layout.fillHeight: true
                 spacing: 14
 
-                Rectangle {
+                Tile {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    radius: 16
-                    color: Qt.rgba(1,1,1,0.05)
-                    border.width: 1
-                    border.color: Qt.rgba(1,1,1,0.06)
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
+                    title: "📷 CAPTURE"
+                    RowLayout {
                         spacing: 8
-                        Text { text: "📷 CAPTURE"; font.pixelSize: 11; font.bold: true; color: root.cTextDim }
-                        RowLayout {
-                            spacing: 8
-                            Layout.fillWidth: true
-                            Repeater {
-                                model: [
-                                    {label: "Zone", mode: "area"},
-                                    {label: "Plein écran", mode: "full"},
-                                    {label: "Fenêtre", mode: "window"}
-                                ]
-                                delegate: Rectangle {
-                                    Layout.fillWidth: true
-                                    height: 30
-                                    radius: 8
-                                    color: shotMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
-                                    Behavior on color { ColorAnimation { duration: 120 } }
-                                    Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 10; color: root.cText }
-                                    MouseArea {
-                                        id: shotMa
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: root.takeScreenshot(modelData.mode)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    radius: 16
-                    color: Qt.rgba(1,1,1,0.05)
-                    border.width: 1
-                    border.color: Qt.rgba(1,1,1,0.06)
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
-                        Text { text: "🎤 RECONNAÎTRE"; font.pixelSize: 11; font.bold: true; color: root.cTextDim }
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 28
-                            radius: 8
-                            color: findMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            Text {
-                                anchors.centerIn: parent
-                                text: findLabel.busy ? "Écoute…" : "Identifier"
-                                font.pixelSize: 11
-                                color: root.cText
-                            }
-                            MouseArea {
-                                id: findMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    if (findLabel.busy) return;  // block re-click while recording
-                                    findLabel.busy = true;
-                                    findLabel.resultText = "";
-                                    // Finder takes >=6s (arecord) + up to 15s (songrec):
-                                    // the default 3s XHR timeout would kill it — use 25s.
-                                    root.api("POST", "/api/music/finder", null, function(res) {
-                                        findLabel.busy = false;
-                                        if (res && res.recognized) {
-                                            findLabel.resultText = res.title + (res.artist ? " — " + res.artist : "");
-                                        } else {
-                                            findLabel.resultText = (res && res.error) ? res.error : "non reconnu";
-                                        }
-                                    }, 25000);
-                                }
-                            }
-                        }
-                        Text {
-                            id: findLabel
-                            property bool busy: false
-                            property string resultText: ""
-                            text: resultText
-                            font.pixelSize: 10
-                            color: root.cTextDim
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    radius: 16
-                    color: Qt.rgba(1,1,1,0.05)
-                    border.width: 1
-                    border.color: Qt.rgba(1,1,1,0.06)
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
-                        Text { text: "🌐 RECHERCHE IMAGE"; font.pixelSize: 11; font.bold: true; color: root.cTextDim }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            TextField {
-                                id: imgQuery
+                        Layout.fillWidth: true
+                        Repeater {
+                            model: [
+                                {label: "Zone", mode: "area"},
+                                {label: "Plein écran", mode: "full"},
+                                {label: "Fenêtre", mode: "window"}
+                            ]
+                            delegate: Rectangle {
                                 Layout.fillWidth: true
-                                placeholderText: "mot-clé…"
-                                color: root.cText
-                                font.pixelSize: 11
-                                background: Rectangle { radius: 8; color: Qt.rgba(1,1,1,0.08) }
-                                // Enter triggers the search (mirrors the 🔍 button)
-                                Keys.onReturnPressed: root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function() {})
-                            }
-                            Rectangle {
-                                width: 30; height: 26; radius: 8
-                                color: imgMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
+                                height: 30
+                                radius: 8
+                                color: shotMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
                                 Behavior on color { ColorAnimation { duration: 120 } }
-                                Text { anchors.centerIn: parent; text: "🔍"; font.pixelSize: 12; color: root.cText }
+                                Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 10; color: root.cText }
                                 MouseArea {
-                                    id: imgMa
+                                    id: shotMa
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onClicked: root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function() {})
+                                    onClicked: root.takeScreenshot(modelData.mode)
                                 }
+                            }
+                        }
+                    }
+                }
+
+                Tile {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    title: "🎤 RECONNAÎTRE"
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 28
+                        radius: 8
+                        color: findMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Text {
+                            anchors.centerIn: parent
+                            text: findLabel.busy ? "Écoute…" : "Identifier"
+                            font.pixelSize: 11
+                            color: root.cText
+                        }
+                        MouseArea {
+                            id: findMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                if (findLabel.busy) return;  // block re-click while recording
+                                findLabel.busy = true;
+                                findLabel.resultText = "";
+                                // Finder : ~8s (enregistrement) + retry 15s si échec + songrec :
+                                // le timeout XHR par défaut (3s) le tuerait — 60s couvre le pire cas.
+                                root.api("POST", "/api/music/finder", null, function(res) {
+                                    findLabel.busy = false;
+                                    if (res && res.recognized) {
+                                        findLabel.resultText = res.title + (res.artist ? " — " + res.artist : "");
+                                    } else {
+                                        findLabel.resultText = (res && res.error) ? res.error : "non reconnu";
+                                    }
+                                }, 60000);
+                            }
+                        }
+                    }
+                    Text {
+                        id: findLabel
+                        property bool busy: false
+                        property string resultText: ""
+                        text: resultText
+                        font.pixelSize: 10
+                        color: root.cTextDim
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+
+                Tile {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    title: "🌐 RECHERCHE IMAGE"
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        TextField {
+                            id: imgQuery
+                            Layout.fillWidth: true
+                            placeholderText: "mot-clé…"
+                            color: root.cText
+                            font.pixelSize: 11
+                            background: Rectangle { radius: 8; color: Qt.rgba(1,1,1,0.08) }
+                            // Enter triggers the search (mirrors the 🔍 button)
+                            Keys.onReturnPressed: root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function() {})
+                        }
+                        Rectangle {
+                            width: 30; height: 26; radius: 8
+                            color: imgMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Text { anchors.centerIn: parent; text: "🔍"; font.pixelSize: 12; color: root.cText }
+                            MouseArea {
+                                id: imgMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function() {})
                             }
                         }
                     }
@@ -691,30 +644,96 @@ FloatingWindow {
             }
 
             // ---------- RANGÉE 4: TRADUCTION ----------
-            Rectangle {
+            Tile {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                radius: 16
-                color: Qt.rgba(1,1,1,0.05)
-                border.width: 1
-                border.color: Qt.rgba(1,1,1,0.06)
+                Layout.preferredHeight: 170
+                Layout.minimumHeight: 120
+                Layout.fillHeight: true
+                title: "🖼️ TRADUCTION"
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 6
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 12
-                    Text { text: "🖼️ TRADUCTION"; font.pixelSize: 11; font.bold: true; color: root.cTextDim }
-                    Item { Layout.fillWidth: true }
                     Rectangle {
-                        width: 200; height: 32; radius: 8
+                        Layout.fillWidth: true
+                        height: 32
+                        radius: 8
                         color: transMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
                         Behavior on color { ColorAnimation { duration: 120 } }
-                        Text { anchors.centerIn: parent; text: "Traduire depuis l'écran"; font.pixelSize: 11; color: root.cText }
+                        Text {
+                            anchors.centerIn: parent
+                            text: transOrig.busy ? "OCR + traduction…" : "Traduire depuis l'écran"
+                            font.pixelSize: 12
+                            color: root.cText
+                        }
                         MouseArea {
                             id: transMa
                             anchors.fill: parent
                             hoverEnabled: true
-                            onClicked: root.api("POST", "/api/translate", null, function() {})
+                            onClicked: {
+                                if (transOrig.busy) return;
+                                transOrig.busy = true;
+                                transOrig.detected = "";
+                                transOrig.translation = "";
+                                // Masque le CC pendant la sélection OCR (même
+                                // mécanisme que le screenshot) : le serveur ne
+                                // répond qu'une fois texte + traduction prêts
+                                // (max 120 s), puis le panneau remonte.
+                                root.suppressQuit = true;
+                                root.visible = false;
+                                root.api("POST", "/api/translate", null, function(res) {
+                                    transOrig.busy = false;
+                                    root.suppressQuit = false;
+                                    root.visible = true;
+                                    if (res && res.ok && res.translation) {
+                                        transOrig.detected = res.text || "";
+                                        transOrig.translation = res.translation;
+                                    } else {
+                                        transOrig.detected = "";
+                                        transOrig.translation = (res && res.error) ? "⚠ " + res.error : "⚠ échec";
+                                    }
+                                }, 120000);
+                            }
+                        }
+                    }
+
+                    // Texte détecté (original OCR)
+                    Text {
+                        id: transOrig
+                        property bool busy: false
+                        property string detected: ""
+                        property string translation: ""
+                        visible: detected !== ""
+                        text: "Détecté : " + detected
+                        font.pixelSize: 12
+                        color: root.cTextDim
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    // Traduction : zone COULISSABLE (scroll) + texte plus grand
+                    // — les longues traductions se font défiler au lieu de
+                    // déborder/être coupées.
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        TextArea {
+                            id: transResult
+                            text: transOrig.translation
+                            readOnly: true
+                            wrapMode: TextEdit.Wrap
+                            textFormat: TextEdit.PlainText
+                            font.pixelSize: 14
+                            color: root.cText
+                            selectByMouse: true
+                            background: Rectangle {
+                                color: Qt.rgba(1,1,1,0.05)
+                                radius: 8
+                            }
+                            padding: 8
                         }
                     }
                 }
@@ -726,6 +745,109 @@ FloatingWindow {
                 Text { text: root.serverOk ? "Serveur prêt ✓" : "Serveur injoignable ✗"; font.pixelSize: 10; color: root.serverOk ? root.cGood : root.cHot }
                 Item { Layout.fillWidth: true }
                 Text { text: "Échap / ✕ / clic dehors pour fermer"; font.pixelSize: 10; color: root.cTextDim }
+            }
+        }
+        }
+
+        // ---------- SIDEBAR : volume + luminosité (barres épaisses arrondies) ----------
+        Rectangle {
+            id: sidebar
+            Layout.preferredWidth: root.sidebarW
+            Layout.preferredHeight: root.ccH
+            radius: 22
+            color: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.42)
+            border.width: 1
+            border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.4)
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 14
+                spacing: 8
+
+                // ── Volume ──
+                Text {
+                    text: "🔊"
+                    font.pixelSize: 14
+                    color: root.cText
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                // Barre épaisse verticale, arrondie, remplie depuis le bas.
+                Rectangle {
+                    id: volBar
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 60
+                    radius: 12
+                    color: Qt.rgba(1,1,1,0.10)
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: 3
+                        radius: 10
+                        height: parent.height * ((root.sysVol && root.sysVol.volume) ? root.sysVol.volume/100 : 0)
+                        color: root.cAccent
+                        Behavior on height { NumberAnimation { duration: 120 } }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onPressed: volBar.setFromY(mouse.y)
+                        onPositionChanged: if (pressed) volBar.setFromY(mouse.y)
+                    }
+                    function setFromY(y) {
+                        var ratio = 1 - Math.max(0, Math.min(1, y / height));
+                        root.api("POST", "/api/system/volume", {v: Math.round(ratio*100)}, function() {});
+                    }
+                }
+                Text {
+                    text: (root.sysVol && root.sysVol.volume ? Math.round(root.sysVol.volume) : 0) + "%"
+                    font.pixelSize: 11
+                    color: root.cTextDim
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                Item { Layout.preferredHeight: 6 }  // espace entre les deux
+
+                // ── Luminosité ──
+                Text {
+                    text: "☀"
+                    font.pixelSize: 14
+                    color: root.cText
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Rectangle {
+                    id: brightBar
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 60
+                    radius: 12
+                    color: Qt.rgba(1,1,1,0.10)
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: 3
+                        radius: 10
+                        height: parent.height * ((root.sysBright && root.sysBright.brightness) ? root.sysBright.brightness/100 : 0)
+                        color: root.cWarn
+                        Behavior on height { NumberAnimation { duration: 120 } }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onPressed: brightBar.setFromY(mouse.y)
+                        onPositionChanged: if (pressed) brightBar.setFromY(mouse.y)
+                    }
+                    function setFromY(y) {
+                        var ratio = 1 - Math.max(0, Math.min(1, y / height));
+                        root.api("POST", "/api/system/brightness", {v: Math.round(ratio*100)}, function() {});
+                    }
+                }
+                Text {
+                    text: (root.sysBright && root.sysBright.brightness ? Math.round(root.sysBright.brightness) : 0) + "%"
+                    font.pixelSize: 11
+                    color: root.cTextDim
+                    Layout.alignment: Qt.AlignHCenter
+                }
             }
         }
     }

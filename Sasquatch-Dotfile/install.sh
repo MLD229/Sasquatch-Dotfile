@@ -5,6 +5,9 @@
 #   Adapté pour une fresh install Hyprland
 #   v1.1 — symlinks corrigés (scripts/, rofi, set-wall)
 # ─────────────────────────────────────────
+#   ⚠️ Quelques prompts interactifs (install paquets, écrasement
+#   symlinks, chsh) : répondre Y / Entrée pour laisser faire.
+# ─────────────────────────────────────────
 
 set -uo pipefail
 
@@ -28,14 +31,21 @@ header()  { echo -e "\n${BOLD}${BLUE}━━━ $1 ━━━${NC}"; }
 header "Vérification de yay"
 if ! command -v yay &>/dev/null; then
     info "yay non trouvé — installation..."
-    sudo pacman -S --needed git base-devel
+    sudo pacman -S --needed git base-devel || {
+        error "git/base-devel indisponibles (pacman en échec) — corrige puis relance."
+        exit 1
+    }
     if [ -d /tmp/yay/.git ]; then
         info "/tmp/yay existe déjà — mise à jour..."
-        git -C /tmp/yay pull --ff-only
-    else
-        git clone https://aur.archlinux.org/yay.git /tmp/yay
+        git -C /tmp/yay pull --ff-only || warning "Mise à jour yay impossible (build sur l'existant)"
+    elif ! git clone https://aur.archlinux.org/yay.git /tmp/yay; then
+        error "Échec du clone de yay — vérifie ta connexion puis relance."
+        exit 1
     fi
-    cd /tmp/yay && makepkg -si --noconfirm
+    cd /tmp/yay && makepkg -si --noconfirm || {
+        error "Échec du build/install de yay (makepkg) — corrige puis relance."
+        exit 1
+    }
     cd "$DOTDIR"
     success "yay installé"
 else
@@ -129,11 +139,18 @@ PKGS=(
 
     # Control Center (Super+G, cc/) — UI Quickshell + backend python
     quickshell
+    mpd                     # lecteur local + fifos (cava + finder) — REQUIS par le CC
     cava                    # égaliseur synchronisé (fifo raw)
     alsa-utils              # arecord (micro, Music Finder)
     songrec                 # reconnaissance Shazam (Music Finder)
     tesseract               # OCR écran (cc/ocr.sh)
     tesseract-data-fra      # langue française pour tesseract
+    curl                    # healthcheck serveur (cc/cc.sh)
+    nvidia-utils            # nvidia-smi (waybar GPU + metrics.py) — machine NVIDIA
+    nvidia-vaapi-driver     # décodage VA-API NVIDIA (env.conf LIBVA_DRIVER_NAME=nvidia)
+    ffmpeg                  # fallback finder (si pw-record absent)
+    python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
+    gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
 )
 
 missing=()
@@ -161,6 +178,7 @@ fi
 header "Initialisation des dossiers XDG"
 mkdir -p "$CONFIG"
 mkdir -p "$HOME/.local/share/icons"
+mkdir -p "$HOME/songs"                 # bibliothèque musicale (mpd.conf music_directory)
 xdg-user-dirs-update
 success "Dossiers XDG créés"
 
@@ -226,6 +244,46 @@ for svc in iwd systemd-networkd bluetooth; do
     fi
 done
 
+# Service USER mpd (lecteur du CC). Peut échouer hors session graphique
+# (pas de XDG_RUNTIME_DIR) — c'est le cas d'une fresh install en TTY :
+# on tente, sinon on prévient (autostart.sh le lancera au login).
+if systemctl --user enable --now mpd 2>/dev/null; then
+    success "mpd (service user) activé"
+else
+    warning "Service user mpd non activé (pas de session) — autostart.sh le lancera au login"
+fi
+
+# Services USER audio (PipeWire/WirePlumber) — SANS EUX : pas de son, wpctl/pactl
+# échouent (volume.sh, waybar pulseaudio, CC volume morts). Les sockets ne sont
+# pas activées par défaut sur une machine neuve → on les active explicitement.
+if systemctl --user enable --now pipewire.socket pipewire-pulse.socket wireplumber 2>/dev/null; then
+    success "Services user audio activés (pipewire/pulse/wireplumber)"
+else
+    warning "Services user audio non activés (pas de session graphique ?) — à activer au login"
+fi
+# ─── Hook thème dynamique (waypaper) ─────────
+# Le post_command applique la palette au changement de wallpaper. Sans lui,
+# seule l'appli au login joue (filet autostart.sh) — le thème ne suivrait plus
+# les changements de fond. Idempotent : ne touche pas une config existante
+# qui a déjà le hook (ex. config live de momo).
+header "Hook waypaper (thème dynamique)"
+WP_CFG="$CONFIG/waypaper/config.ini"
+WP_HOOK='post_command = ~/.config/scripts/theme-apply.sh $wallpaper'
+mkdir -p "$(dirname "$WP_CFG")"
+if [ ! -f "$WP_CFG" ]; then
+    printf '[settings]\n%s\n' "$WP_HOOK" > "$WP_CFG"
+    success "config.ini waypaper créé avec le hook thème"
+elif ! grep -q '^post_command' "$WP_CFG"; then
+    if grep -q '^\[settings\]' "$WP_CFG"; then
+        sed -i '/^\[settings\]/a post_command = ~/.config/scripts/theme-apply.sh $wallpaper' "$WP_CFG"
+    else
+        printf '\n[settings]\n%s\n' "$WP_HOOK" >> "$WP_CFG"
+    fi
+    success "Hook thème ajouté à waypaper"
+else
+    success "Hook thème déjà présent"
+fi
+
 # ─── Symlinks ──────────────────────────
 header "Création des symlinks"
 
@@ -240,6 +298,7 @@ link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
 link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
 link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
 link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
+link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifos CC (Visualizer + CC Capture)
 link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
 link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"
@@ -251,19 +310,20 @@ header "Permissions des scripts"
 chmod +x "$DOTDIR"/scripts/*.sh
 chmod +x "$DOTDIR"/hypr/scripts/*.sh
 chmod +x "$DOTDIR"/rofi/scripts/*.sh      # ← ajouté (bug #31)
+chmod +x "$DOTDIR"/cc/*.sh                # ← Control Center (cc.sh, ocr.sh)
 chmod +x "$DOTDIR"/set-wall.sh            # ← ajouté (bug #31)
 success "Scripts rendus exécutables"
 
 # ─── Fish comme shell par défaut ───────
 header "Shell par défaut"
-if [ "$SHELL" != "$(which fish)" ]; then
+if command -v fish >/dev/null 2>&1 && [ "$SHELL" != "$(command -v fish)" ]; then
     read -rp "  Définir Fish comme shell par défaut ? [Y/n] " confirm
     if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
-        chsh -s "$(which fish)"
-        success "Fish défini comme shell par défaut"
+        chsh -s "$(command -v fish)" && success "Fish défini comme shell par défaut" \
+            || warning "chsh a échoué (mot de passe ?) — à faire manuellement"
     fi
 else
-    success "Fish déjà défini"
+    success "Fish déjà défini (ou absent)"
 fi
 
 echo -e "\n${GREEN}${BOLD}━━━ Sasquatch-Dotfile installé avec succès ! ━━━${NC}"

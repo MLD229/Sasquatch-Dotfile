@@ -1,14 +1,12 @@
-# mako/config — palette dynamique (généré par theme-apply.py)
 # === SASQUATCH-PALETTE-BEGIN ===
-# mako/config — palette dynamique (généré par theme-apply.py)
 sort=-time
 layer=overlay
-background-color=#151514cc
-text-color=#d1d1d0
+background-color=#201012cc
+text-color=#e0cacc
 width=340
 height=120
 border-size=1
-border-color=#c2784844
+border-color=#bf616a44
 border-radius=12
 padding=12
 margin=10
@@ -22,16 +20,16 @@ default-timeout=4000
 ignore-timeout=0
 
 [urgency=low]
-background-color=#151514bb
+background-color=#201012bb
 border-color=#6c708644
-text-color=#7c7c7b
+text-color=#897678
 
 [urgency=normal]
-background-color=#151514cc
-border-color=#c2784844
+background-color=#201012cc
+border-color=#bf616a44
 
 [urgency=high]
-background-color=#151514cc
+background-color=#201012cc
 border-color=#f38ba8aa
 text-color=#f38ba8
 # === SASQUATCH-PALETTE-END ===

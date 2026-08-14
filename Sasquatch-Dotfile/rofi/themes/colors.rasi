@@ -1,24 +1,22 @@
-/* Sasquatch · Palette de couleurs dynamique (généré par theme-apply.py) */
 /* === SASQUATCH-PALETTE-BEGIN === */
-/* Sasquatch · Palette de couleurs dynamique (généré par theme-apply.py) */
 * {
     /* ── Backgrounds ────────────────────────────────── */
-    bg-window:   rgba(21, 21, 20, 0.85);
-    bg-input:    rgba(41, 32, 26, 0.80);
-    bg-selected: rgba(194, 120, 72, 0.25);
+    bg-window:   rgba(32, 16, 18, 0.85);
+    bg-input:    rgba(51, 25, 28, 0.80);
+    bg-selected: rgba(191, 97, 106, 0.25);
     urgent-bg:   rgba(243, 139, 168, 0.25);
 
     /* ── Foregrounds ────────────────────────────────── */
-    fg:          rgba(209, 209, 208, 1.0);
-    fg-dim:      rgba(124, 124, 123, 1.0);
+    fg:          rgba(224, 202, 204, 1.0);
+    fg-dim:      rgba(137, 118, 120, 1.0);
     fg-selected: rgba(255, 255, 255, 1.0);
 
     /* ── Accents ────────────────────────────────────── */
-    accent:      rgba(194, 120, 72, 1.0);
-    accent-dim:  rgba(194, 120, 72, 0.75);
+    accent:      rgba(191, 97, 106, 1.0);
+    accent-dim:  rgba(191, 97, 106, 0.75);
     urgent:      rgba(243, 139, 168, 1.0);
 
     /* ── Border ─────────────────────────────────────── */
-    border:      rgba(194, 120, 72, 0.50);
+    border:      rgba(191, 97, 106, 0.50);
 }
 /* === SASQUATCH-PALETTE-END === */

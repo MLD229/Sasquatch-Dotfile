@@ -8,6 +8,7 @@
     "margin-right": 12,
 
     "modules-left": [
+        "custom/fastview",
         "hyprland/workspaces",
         "custom/separator",
         "mpris"
@@ -75,6 +76,12 @@
             "class<blender>":       "󰂫  Blender",
             "class<libreoffice.*>": "󰈙  LibreOffice"
         }
+    },
+
+    "custom/fastview": {
+        "exec": "python3 ~/.config/waybar/scripts/fastview.py",
+        "format": "{}",
+        "tooltip": false
     },
 
     "mpris": {

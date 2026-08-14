@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 # fcitx5 : cache des layouts généré au runtime
 fcitx5/conf/cached_layouts
+# cc : palette générée par theme-apply.py à chaque changement de wallpaper
+cc/qml/Palette.qml

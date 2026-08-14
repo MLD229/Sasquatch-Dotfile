@@ -1,7 +1,9 @@
 #!/bin/bash
 # scripts/wifi.sh — WiFi via iwd (iwctl) + systemd-networkd
 
-DEV="wlan0"
+# Détection auto de l'interface sans fil (override via WIFI_DEV)
+DEV="${WIFI_DEV:-$(ls /sys/class/net 2>/dev/null | grep '^wl' | head -1)}"
+DEV="${DEV:-wlan0}"
 
 case $1 in
     toggle)
