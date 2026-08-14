@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Sasquatch Control Center - toggle launcher
+#
+# Le serveur backend est un service systemd user (sasquatch-cc.service) :
+# Restart=always + logs journald → plus de crash silencieux ni de cava
+# orphelin au relogin (le service n'a PAS de signature Hyprland, donc
+# cleanup-orphans.sh ne le tue plus). Ce script ne fait que toggler la
+# fenêtre Quickshell et garantir que le service est actif.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PIDFILE="/tmp/sasquatch-cc-server.pid"
-LOGFILE="/tmp/sasquatch-cc-server.log"
 WIN_TITLE="Sasquatch CC"
-
-is_alive() {
-    [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null
-}
 
 # Robust window detection: parse hyprctl JSON with python (grep fails on empty/errored output).
 window_open() {
@@ -34,13 +34,12 @@ fi
 # Clean up orphaned quickshell instances of this panel.
 pkill -f "quickshell.*cc/main.qml" >/dev/null 2>&1 || true
 
-# Start backend server if not already alive.
-if ! is_alive; then
-    nohup python3 "$SCRIPT_DIR/server.py" >"$LOGFILE" 2>&1 &
-    echo $! > "$PIDFILE"
+# Garantir le serveur backend (service systemd user, idempotent).
+if ! systemctl --user is-active --quiet sasquatch-cc; then
+    systemctl --user start sasquatch-cc
 fi
 
-# Wait for the server to answer (max ~6s).
+# Wait for the server to answer (max ~6s) — le service démarre en ~1s.
 server_up=0
 for i in $(seq 1 30); do
     if curl -s -o /dev/null -m 1 "http://127.0.0.1:8765/api/stats"; then
@@ -51,7 +50,7 @@ for i in $(seq 1 30); do
 done
 
 if [ "$server_up" -ne 1 ]; then
-    notify-send "Sasquatch CC" "Serveur injoignable (port 8765) — CC non lancé" -t 3000
+    notify-send "Sasquatch CC" "Serveur injoignable (port 8765) — logs : journalctl --user -u sasquatch-cc" -t 3000
     exit 1
 fi
 

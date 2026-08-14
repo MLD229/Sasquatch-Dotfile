@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Sasquatch CC Bridge",
+  "version": "1.0.0",
+  "description": "Pousse le now-playing du navigateur (YouTube, Spotify Web, Twitch…) vers le Sasquatch Control Center : titre, image, position synchronisée + contrôles play/pause/seek.",
+  "permissions": [],
+  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

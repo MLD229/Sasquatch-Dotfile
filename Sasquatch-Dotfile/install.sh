@@ -83,6 +83,7 @@ PKGS=(
     # Son (module pulseaudio waybar + pavucontrol)
     pipewire-pulse
     pavucontrol
+    mpv                     # lecteur par défaut audio/vidéo (mimeapps : mp3, mp4…)
 
     # Icônes / curseurs / thèmes (rofi + env.conf)
     papirus-icon-theme
@@ -96,9 +97,11 @@ PKGS=(
 
     # Éditeur par défaut (config.fish EDITOR)
     neovim
+    code                    # VS Code — lecteur code/txt (mimeapps, bind $mod+O)
 
     # Navigateurs (bind SUPER+W = brave ; windowrules firefox)
-    brave
+    # NOTE : le paquet AUR s'appelle brave-bin (pas "brave" — introuvable, cf. audit 2026-08-14)
+    brave-bin
     firefox
 
     waybar
@@ -267,6 +270,20 @@ if systemctl --user enable --now pipewire.socket pipewire-pulse.socket wireplumb
 else
     warning "Services user audio non activés (pas de session graphique ?) — à activer au login"
 fi
+
+# Service USER sasquatch-cc (backend du Control Center, port 8765).
+# Permanent + Restart=always → le serveur survit aux relogins (cleanup-orphans
+# ne le tue pas : pas de signature Hyprland) et un crash ne le tue plus en
+# silence. Idempotent : daemon-reload puis enable --now.
+SD_USER="$CONFIG/systemd/user"
+mkdir -p "$SD_USER"
+link "$DOTDIR/cc/sasquatch-cc.service" "$SD_USER/sasquatch-cc.service"
+systemctl --user daemon-reload 2>/dev/null || true
+if systemctl --user enable --now sasquatch-cc 2>/dev/null; then
+    success "sasquatch-cc (service user) activé"
+else
+    warning "Service user sasquatch-cc non activé (pas de session) — cc.sh le lancera au besoin"
+fi
 # ─── Hook thème dynamique (waypaper) ─────────
 # Le post_command applique la palette au changement de wallpaper. Sans lui,
 # seule l'appli au login joue (filet autostart.sh) — le thème ne suivrait plus
@@ -308,6 +325,7 @@ link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fi
 link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
 link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"
+link "$DOTDIR/mimeapps.list"            "$CONFIG/mimeapps.list"   # associations par défaut (code/mpv)
 # themes/icons et themes/cursors retirés : absents du repo (bug #9)
 # Icônes/curseurs gérés par les paquets : papirus-icon-theme, bibata-cursor-theme
 

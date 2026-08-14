@@ -16,20 +16,34 @@ import urllib.parse
 import urllib.request
 
 from mpd import mpd_status, mpd_simple_command, mpd_toggle
+from config import RUNTIME_DIR
+from web_bridge import web_status, push_command as web_push_command
 
 _SEP = "\x1f"
-_ART_CACHE_DIR = "/tmp"
+_ART_CACHE_DIR = RUNTIME_DIR
 
 # Récence de lecture : quand un lecteur (MPRIS ou MPD) est passé à « Playing ».
 # Le CC affiche « le dernier en général » : si YouTube joue en fond et momo
 # lance MPD après, MPD gagne (il a démarré plus récemment) — l'ancien code
 # donnait priorité fixe à MPRIS Playing, donc le web gagnait toujours.
-_playing_since = {"mpris": 0.0, "mpd": 0.0}
-_prev_playing = {"mpris": False, "mpd": False}
+_playing_since = {"mpd": 0.0, "web": 0.0}
+_prev_playing = {"mpd": False, "web": False}
+_init_done = False
+
+# Récence MPRIS PAR LECTEUR (nom playerctl) — pas un seul bucket "mpris"
+# global. Avec un bucket unique, si un lecteur joue déjà et qu'un DEUXIÈME
+# lecteur MPRIS démarre (ex. nouvel onglet YouTube pendant qu'un autre
+# tourne/est en pause), "mpris" était déjà True → aucune transition détectée
+# → le timestamp ne bougeait pas → le CC restait bloqué sur l'ancien lecteur
+# au lieu du dernier vraiment lancé. Ici chaque instance MPRIS (souvent
+# "chromium.instanceXXXX" par onglet) a son propre timestamp.
+_mpris_since = {}
+_mpris_prev_playing = {}
+_mpris_init_done = False
 
 # playerctl -a metadata --format : une ligne par lecteur, champs séparés par \x1f.
 _FIELDS = ("playerName", "status", "title", "artist", "album",
-           "mpris:artUrl", "mpris:length", "position")
+           "mpris:artUrl", "mpris:length", "position", "xesam:url")
 _FORMAT = _SEP.join("{{%s}}" % f for f in _FIELDS)
 
 
@@ -53,39 +67,97 @@ def _us_to_sec(v):
 
 
 def _mpris_players():
-    """Lecteurs MPRIS actifs (piste non vide), triés Playing > Paused."""
+    """Lecteurs MPRIS actifs (piste non vide), triés Playing > Paused.
+
+    NE PAS filtrer sur le titre : les fichiers locaux sans tags ID3 (ex.
+    mp3 yt-dlp « Titre [id].mp3 ») exposent un titre VIDE mais jouent —
+    les filtrer rend le lecteur invisible et le CC reste scotché sur MPD
+    (bug « il n'affiche qu'une musique »). Le fallback titre vient du
+    nom de fichier dans _mpris_to_status().
+    """
     out = _run_playerctl(["--no-messages", "--all-players", "metadata",
                           "--format", _FORMAT])
     players = []
     if out:
         for line in out.splitlines():
             parts = line.split(_SEP)
-            if len(parts) < 8:
+            if len(parts) < 9:
                 continue
-            name, status, title, artist, album, art, length, position = parts[:8]
-            if status == "Stopped" or not title:
+            name, status, title, artist, album, art, length, position, url = parts[:9]
+            if status == "Stopped":
                 continue
             players.append({
                 "name": name,
                 "status": status,
-                "title": title,
+                "title": title or None,
                 "artist": artist or None,
                 "album": album or None,
                 "art": art or None,
+                "url": url or None,
                 "duration": _us_to_sec(length),
                 "elapsed": _us_to_sec(position),
             })
-    players.sort(key=lambda p: 0 if p["status"] == "Playing" else 1)
+    _update_mpris_recency(players)
+    # Tri : Playing avant Paused, puis (parmi les Playing) le lecteur le plus
+    # RÉCEMMENT passé à Playing en premier. Sans le 2e critère, plusieurs
+    # lecteurs Playing simultanés restaient dans l'ordre renvoyé par
+    # playerctl (pas forcément le plus récent) → le CC affichait le mauvais.
+    players.sort(key=lambda p: (0 if p["status"] == "Playing" else 1,
+                                -_mpris_since.get(p["name"], 0.0)))
     return players
 
 
+def _update_mpris_recency(players):
+    """Met à jour _mpris_since par lecteur individuel (transition → Playing).
+
+    Comme _track_playing_since, on ignore les transitions du tout premier
+    appel (serveur qui démarre avec des lecteurs déjà actifs) pour ne pas
+    donner artificiellement le même timestamp "now" à tout le monde.
+    """
+    global _mpris_init_done
+    now = time.time()
+    seen = set()
+    for p in players:
+        name = p["name"]
+        seen.add(name)
+        playing = p["status"] == "Playing"
+        was = _mpris_prev_playing.get(name, False)
+        if _mpris_init_done and playing and not was:
+            _mpris_since[name] = now
+        _mpris_prev_playing[name] = playing
+    if not _mpris_init_done:
+        _mpris_init_done = True
+    # Nettoyage : lecteur fermé (onglet/appli quittée) → oublier son état,
+    # sinon la mémoire grossit indéfiniment sur une session longue.
+    for name in list(_mpris_prev_playing.keys()):
+        if name not in seen:
+            _mpris_prev_playing.pop(name, None)
+            _mpris_since.pop(name, None)
+
+
 def _mpris_to_status(p):
+    # Fallback titre : fichier local sans tags ID3 → nom de fichier (sans
+    # extension). Sans ça, l'UI affiche « Aucune musique en cours » alors
+    # que VLC/mpv joue un fichier (mp3 yt-dlp, flac, etc.). La source du
+    # nom = xesam:url (l'URL du fichier en lecture) — PAS mpris:artUrl,
+    # qui pointe vers le cache d'art du lecteur (ex. ~/.cache/vlc/art/…).
+    title = p["title"]
+    if not title:
+        url = p.get("url")
+        if url and url.startswith("file://"):
+            try:
+                path = urllib.parse.urlparse(url).path
+                # xesam:url est URL-encodé (espaces → %20, crochets → %5B…)
+                path = urllib.parse.unquote(path)
+                title = os.path.splitext(os.path.basename(path))[0]
+            except Exception:
+                pass
     return {
         "source": "mpris",
         "player": p["name"],
         "playing": p["status"] == "Playing",
         "paused": p["status"] == "Paused",
-        "title": p["title"],
+        "title": title,
         "artist": p["artist"],
         "album": p["album"],
         "file": None,
@@ -104,6 +176,93 @@ def _mpd_to_status(st):
     return st
 
 
+
+# ── Fallback PipeWire/PulseAudio : détecter l'audio « brut » (hors MPRIS) ──
+_PULSE_SKIP_APPS = {"libcanberra", "speech-dispatcher", "xdg-desktop-portal",
+                    "org.freedesktop.portal.Desktop", "pipewire", "pulseaudio",
+                    "event sounds"}
+
+def _pulse_streams():
+    """Streams audio ACTIFS vus par pactl (sink-inputs Corked: no).
+
+    Filet de sécurité : les apps sans MPRIS (mpv sans plugin, jeux, lecteurs
+    exotiques…) sont invisibles pour playerctl. Leur audio, lui, transite par
+    PipeWire → pactl les voit avec un nom. Corked: yes = stream en pause/idle
+    (piste finie, lecteur qui traîne ouvert) → ignoré.
+    """
+    if shutil.which("pactl") is None:
+        return []
+    try:
+        out = subprocess.run(["pactl", "list", "sink-inputs"], capture_output=True,
+                             text=True, timeout=2).stdout or ""
+    except Exception:
+        return []
+    streams = []
+    for block in out.split("Sink Input #")[1:]:
+        playing = None
+        app = ""
+        media = ""
+        num = 0
+        m = re.match(r"\s*(\d+)", block)
+        if m:
+            num = int(m.group(1))
+        for line in block.splitlines():
+            line = line.strip()
+            if line.startswith("Corked:"):
+                playing = line.split(":", 1)[1].strip().lower() == "no"
+            elif line.startswith("application.name"):
+                app = line.split("=", 1)[1].strip().strip('"')
+            elif line.startswith("media.name"):
+                media = line.split("=", 1)[1].strip().strip('"')
+        if not playing:
+            continue  # en pause / idle → pas d'audio audible
+        if app.lower() in _PULSE_SKIP_APPS:
+            continue
+        # media.name finit souvent par « - mpv » / « - vlc » / « - firefox »
+        title = media
+        for suffix in (" - " + app, " - firefox", " - vlc", " - mpv"):
+            if title.endswith(suffix):
+                title = title[: -len(suffix)]
+                break
+        streams.append({"app": app or "audio", "title": title or media, "num": num})
+    # Le numéro de sink-input est MONOTONIQUE (objet PipeWire) : le plus haut
+    # = le stream créé le plus récemment → le lecteur « sélectionné » en dernier.
+    streams.sort(key=lambda s: s["num"], reverse=True)
+    return streams
+
+_PULSE_MUSIC_DIRS = (os.path.expanduser("~/songs"), os.path.expanduser("~/Music"))
+_pulse_file_cache = {}
+
+
+def _resolve_local_file(title):
+    """Fichier local correspondant au titre d'un stream pulse (cache par titre).
+
+    pactl ne donne que le NOM de fichier (media.name sans chemin) → on cherche
+    dans les dossiers musique connus. Cache dict : la recherche scandir à
+    chaque poll serait inutile.
+    """
+    if title in _pulse_file_cache:
+        return _pulse_file_cache[title]
+    found = None
+    target = (title or "").lower()
+    if target:
+        for d in _PULSE_MUSIC_DIRS:
+            if not os.path.isdir(d):
+                continue
+            try:
+                with os.scandir(d) as it:
+                    for e in it:
+                        if e.is_file() and e.name.lower() == target:
+                            found = e.path
+                            break
+            except OSError:
+                continue
+            if found:
+                break
+    _pulse_file_cache[title] = found
+    return found
+
+
 def now_playing():
     """Statut unifié : le lecteur qui joue et a démarré le plus récemment.
 
@@ -114,29 +273,59 @@ def now_playing():
     mpris = _mpris_players()
     mpris_active = mpris[0] if mpris else None
     st = mpd_status()
-    _track_playing_since(mpris, st)
+    wst = web_status()
+    _track_playing_since(mpris, st, wst)
 
     mpris_playing = bool(mpris_active and mpris_active["status"] == "Playing")
     mpris_paused = bool(mpris_active and mpris_active["status"] == "Paused")
     mpd_playing = bool(st.get("playing"))
     mpd_paused = bool(st.get("paused") and st.get("title"))
+    # Le web_bridge (extension Chromium maison) n'est utile que quand le
+    # navigateur n'expose PAS MPRIS (sites sans MediaSession API). Brave
+    # moderne expose un MPRIS natif complet → si un lecteur MPRIS est actif,
+    # on IGNORE la source web pour éviter le doublon (même lecture affichée
+    # 2×, « via Brave » qui oscille avec « via YouTube »).
+    web_playing = bool(wst and not mpris_active and wst["playing"])
+    web_paused = bool(wst and not mpris_active and wst["paused"])
 
     # Le plus récemment activé parmi les lecteurs qui jouent VRAIMENT.
     cands = []
     if mpris_playing:
-        cands.append(("mpris", _playing_since["mpris"], _mpris_to_status(mpris_active)))
+        mpris_when = _mpris_since.get(mpris_active["name"], 0.0)
+        cands.append(("mpris", mpris_when, _mpris_to_status(mpris_active)))
     if mpd_playing:
         cands.append(("mpd", _playing_since["mpd"], _mpd_to_status(st)))
+    if web_playing and wst:
+        # La récence du web vient du POST (transition False→True dans le
+        # navigateur), pas du poll serveur — sinon au démarrage le web et
+        # MPRIS auraient tous les deux 0.0 et le tri stable donnerait mpris.
+        wsince = wst.get("playing_since") or 0.0
+        cands.append(("web", wsince, wst))
     if cands:
         cands.sort(key=lambda c: c[1], reverse=True)
         return cands[0][2]
 
+    # Filet de sécurité PipeWire : rien en MPRIS/MPD/web, mais un stream est
+    # AUDIBLE (mpv sans plugin, jeu, lecteur exotique…) → on l'affiche.
+    pulse = _pulse_streams()
+    if pulse:
+        p = pulse[0]
+        local = _resolve_local_file(p["title"])
+        art = ("/albumart?local=" + urllib.parse.quote(local)) if local else None
+        return {"source": "pulse", "player": p["app"], "playing": True,
+                "paused": False, "title": p["title"], "artist": None,
+                "album": None, "file": local, "volume": 0, "elapsed": 0,
+                "duration": 0, "art": art}
+
     # Rien ne joue : le lecteur en pause le plus récent.
     paused = []
     if mpris_paused:
-        paused.append(("mpris", _playing_since["mpris"], _mpris_to_status(mpris_active)))
+        mpris_when = _mpris_since.get(mpris_active["name"], 0.0)
+        paused.append(("mpris", mpris_when, _mpris_to_status(mpris_active)))
     if mpd_paused:
         paused.append(("mpd", _playing_since["mpd"], _mpd_to_status(st)))
+    if web_paused and wst:
+        paused.append(("web", wst.get("playing_since") or 0.0, wst))
     if paused:
         paused.sort(key=lambda c: c[1], reverse=True)
         return paused[0][2]
@@ -146,38 +335,79 @@ def now_playing():
             "volume": 0, "elapsed": 0, "duration": 0, "art": None}
 
 
-def _track_playing_since(mpris, st):
+def _track_playing_since(mpris, st, wst=None):
     """Met à jour _playing_since quand un lecteur passe à Playing
     (transition, pas à chaque poll — sinon la récence serait « toujours
-    maintenant » pour le lecteur qui joue en continu)."""
-    global _playing_since, _prev_playing
+    maintenant » pour le lecteur qui joue en continu).
+
+    Au PREMIER appel (serveur qui démarre alors que des sources jouent
+    déjà), on initialise _prev_playing SANS marquer de transition :
+    sinon toutes les sources actives auraient le même timestamp « now »
+    et la première de la liste (mpris) gagnerait toujours, même si c'est
+    le web/MPD qui a démarré en dernier.
+    """
+    global _playing_since, _prev_playing, _init_done
     now = time.time()
-    mpris_playing = any(p["status"] == "Playing" for p in mpris)
     mpd_playing = bool(st.get("playing"))
-    if mpris_playing and not _prev_playing["mpris"]:
-        _playing_since["mpris"] = now
+    web_playing = bool(wst and wst["playing"])
+
+    if not _init_done:
+        _prev_playing = {"mpd": mpd_playing, "web": web_playing}
+        _init_done = True
+        return
+
     if mpd_playing and not _prev_playing["mpd"]:
         _playing_since["mpd"] = now
-    _prev_playing = {"mpris": mpris_playing, "mpd": mpd_playing}
+    if web_playing and not _prev_playing["web"]:
+        _playing_since["web"] = now
+    _prev_playing = {"mpd": mpd_playing, "web": web_playing}
 
 
 def active_source():
     """(source, player_name) — même logique de récence que now_playing()."""
     mpris = _mpris_players()
     st = mpd_status()
-    _track_playing_since(mpris, st)
+    wst = web_status()
+    _track_playing_since(mpris, st, wst)
     mpris_playing = [p for p in mpris if p["status"] == "Playing"]
     mpd_playing = bool(st.get("playing"))
-    if mpris_playing and mpd_playing:
-        if _playing_since["mpd"] > _playing_since["mpris"]:
-            return "mpd", None
-        return "mpris", mpris_playing[0]["name"]
+    # Idem now_playing() : la source web est ignorée quand un MPRIS est actif
+    # (navigateur moderne = MPRIS natif → le web_bridge serait un doublon).
+    web_playing = bool(wst and not mpris and wst["playing"])
+    web_paused = bool(wst and not mpris and wst["paused"])
+
+    # Tous les lecteurs qui jouent, triés par récence.
+    playing = []
     if mpris_playing:
-        return "mpris", mpris_playing[0]["name"]
+        # mpris_playing[0] est déjà le plus récent (mpris trié par
+        # _mpris_players()) — on récupère SON timestamp individuel.
+        top = mpris_playing[0]
+        playing.append(("mpris", _mpris_since.get(top["name"], 0.0), top["name"]))
     if mpd_playing:
-        return "mpd", None
+        playing.append(("mpd", _playing_since["mpd"], None))
+    if web_playing and wst:
+        playing.append(("web", wst.get("playing_since") or 0.0,
+                        wst["player"] if wst else None))
+    if playing:
+        playing.sort(key=lambda c: c[1], reverse=True)
+        return playing[0][0], playing[0][2]
+
+    pulse = _pulse_streams()
+    if pulse:
+        return "pulse", pulse[0]["app"]
+
+    # Rien ne joue : lecteur en pause le plus récent.
+    paused = []
     if mpris:
-        return "mpris", mpris[0]["name"]
+        top = mpris[0]
+        paused.append(("mpris", _mpris_since.get(top["name"], 0.0), top["name"]))
+    if mpd_playing or (st.get("paused") and st.get("title")):
+        paused.append(("mpd", _playing_since["mpd"], None))
+    if web_paused and wst:
+        paused.append(("web", wst.get("playing_since") or 0.0, wst["player"]))
+    if paused:
+        paused.sort(key=lambda c: c[1], reverse=True)
+        return paused[0][0], paused[0][2]
     return "mpd", None
 
 
@@ -187,34 +417,57 @@ def _mpris_cmd(name, *args):
 
 def toggle():
     src, name = active_source()
+    if src == "web":
+        web_push_command({"type": "toggle"})
+        return True
     if src == "mpris":
         return _mpris_cmd(name, "play-pause")
+    if src == "pulse":
+        return False  # pas de contrôle sans MPRIS
     return mpd_toggle()
 
 
 def next_track():
     src, name = active_source()
+    if src == "web":
+        web_push_command({"type": "next"})
+        return True
     if src == "mpris":
         return _mpris_cmd(name, "next")
+    if src == "pulse":
+        return False
     return mpd_simple_command("next")
 
 
 def prev_track():
     src, name = active_source()
+    if src == "web":
+        web_push_command({"type": "prev"})
+        return True
     if src == "mpris":
         return _mpris_cmd(name, "previous")
+    if src == "pulse":
+        return False
     return mpd_simple_command("previous")
 
 
 def stop():
     src, name = active_source()
+    if src == "web":
+        web_push_command({"type": "stop"})
+        return True
     if src == "mpris":
         return _mpris_cmd(name, "stop")
+    if src == "pulse":
+        return False
     return mpd_simple_command("stop")
 
 
 def seek(pos):
     src, name = active_source()
+    if src == "web":
+        web_push_command({"type": "seek", "pos": int(pos)})
+        return True
     if src == "mpris":
         return _mpris_cmd(name, "position", str(int(pos)))
     return mpd_simple_command("seekcur %d" % int(pos))

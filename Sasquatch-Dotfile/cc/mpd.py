@@ -1,20 +1,56 @@
 """Client MPD minimal (stdlib socket) — status, commandes simples, albumart,
 notification au changement de piste (titre/artiste/album + pochette)."""
 
+import hashlib
 import os
 import re
 import socket
 import subprocess
 import urllib.request
 
-from config import MPD_HOST, MPD_PORT, ALBUMART_TMP
+from config import MPD_HOST, MPD_PORT, MPD_SOCKET, ALBUMART_TMP, RUNTIME_DIR
 
 # ── Pochettes YouTube (fichiers yt-dlp "Titre [VIDEOID].mp3") ─────────────
 # yt-dlp écrit "Titre [id].mp3" ou "Titre - id.mp3" ; la pochette n'est pas
 # embarquée → on la récupère depuis i.ytimg.com (cache disque, 1 dl max).
 _YT_BRACKET_RE = re.compile(r"\[([A-Za-z0-9_-]{11})\]", re.I)
 _YT_TAIL_RE = re.compile(r"(?:^|[\s\[\]\(\)\-_])([A-Za-z0-9_-]{11})\.(?:mp3|m4a|opus|ogg|flac|wav)$", re.I)
-_YT_CACHE_DIR = "/tmp"
+_YT_CACHE_DIR = RUNTIME_DIR
+
+
+_LOCAL_ART_CACHE = RUNTIME_DIR
+
+
+def local_albumart(file_):
+    """Pochette EMBARQUÉE d'un fichier local (ffmpeg, cache disque).
+
+    yt-dlp embarque souvent une PNG 1280×720 dans les mp3 → ffmpeg l'extrait.
+    Retourne bytes (jpeg/png) ou None. Fallback appelant : yt_thumbnail.
+    """
+    if not file_ or not os.path.isfile(file_):
+        return None
+    key = hashlib.sha1(file_.encode("utf-8", "replace")).hexdigest()[:12]
+    cache = os.path.join(_LOCAL_ART_CACHE, "sasquatch-art-%s.img" % key)
+    if os.path.isfile(cache) and os.path.getsize(cache) > 0:
+        try:
+            with open(cache, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    try:
+        out = subprocess.run(
+            ["ffmpeg", "-y", "-i", file_, "-map", "0:v:0", "-c:v", "copy",
+             "-f", "image2", cache],
+            capture_output=True, timeout=5)
+    except Exception:
+        return None
+    if out.returncode != 0 or not os.path.isfile(cache) or os.path.getsize(cache) == 0:
+        return None
+    try:
+        with open(cache, "rb") as f:
+            return f.read()
+    except Exception:
+        return None
 
 
 def video_id_from_file(file_):
@@ -53,7 +89,14 @@ def yt_thumbnail(video_id):
 
 
 def _mpd_socket():
-    s = socket.create_connection((MPD_HOST, MPD_PORT), timeout=2)
+    """Connexion MPD : socket unix PAR USER (mpd.conf bind_to_address),
+    fallback TCP 127.0.0.1:6600 pour les anciennes configs / tests."""
+    if os.path.exists(MPD_SOCKET):
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(2)
+        s.connect(MPD_SOCKET)
+    else:
+        s = socket.create_connection((MPD_HOST, MPD_PORT), timeout=2)
     f = s.makefile("rwb", buffering=0)
     line = f.readline()
     if not line.startswith(b"OK MPD"):

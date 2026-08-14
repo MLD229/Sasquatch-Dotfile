@@ -17,6 +17,13 @@ if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
 fi
 
 OUT="$(mktemp)"
+# Presse-papier vide → rien à afficher (rofi 2.0 sortirait aussitôt avec
+# stdin vide + -no-custom, on dirait « ça marche pas »). Message explicite.
+if ! cliphist list | grep -q .; then
+    notify-send "Presse-papier" "Historique vide — copie quelque chose d'abord" -t 2000
+    rm -f "$OUT"
+    exit 0
+fi
 cliphist list | rofi \
     -dmenu \
     -theme "$THEME" \

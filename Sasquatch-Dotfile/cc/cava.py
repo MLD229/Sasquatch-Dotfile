@@ -2,10 +2,12 @@
 arrêt propre à la fermeture. Viz (viz.py) lit la même fifo.
 
 Entrée audio : le monitor PipeWire, capturé par ffmpeg vers une FIFO
-(/tmp/sasquatch-audio.fifo), que cava lit. Ça capture TOUT le son qui sort
-(MPD, navigateur, lecteurs tiers) — la vieille FIFO MPD ne transportait que
-la musique MPD, donc l'égaliseur restait muet sur YouTube etc.
-Voir cava.conf.
+(par user, XDG_RUNTIME_DIR — cf. config.AUDIO_FIFO), que cava lit.
+Ça capture TOUT le son qui sort (MPD, navigateur, lecteurs tiers) —
+la vieille FIFO MPD ne transportait que la musique MPD, donc l'égaliseur
+restait muet sur YouTube etc.
+Le cava.conf utilisé est GÉNÉRÉ au runtime (chemins par user) — voir
+_write_cava_conf() ; cc/cava.conf dans le repo n'est qu'une référence.
 """
 
 import os
@@ -14,10 +16,35 @@ import subprocess
 import threading
 import time
 
-from config import CAVA_FIFO, SCRIPT_DIR
+from config import CAVA_FIFO, AUDIO_FIFO, RUNTIME_DIR
 
-CAVA_CFG = os.path.join(SCRIPT_DIR, "cava.conf")
-AUDIO_FIFO = "/tmp/sasquatch-audio.fifo"
+CAVA_CFG = os.path.join(RUNTIME_DIR, "sasquatch-cava.conf")
+
+# Template du conf runtime : les chemins fifo sont injectés par user.
+_CAVA_CONF_TEMPLATE = """\
+# Généré par cc/cava.py au démarrage — chemins PAR USER (XDG_RUNTIME_DIR)
+[general]
+bars = 20
+framerate = 30
+autosens = 1
+overshoot = 20
+sensitivity = 100
+format = 44100:16:2
+
+[input]
+method = fifo
+source = {audio}
+
+[output]
+method = raw
+raw_target = {cava}
+bit_format = 16bit
+"""
+
+
+def _write_cava_conf():
+    with open(CAVA_CFG, "w") as f:
+        f.write(_CAVA_CONF_TEMPLATE.format(audio=AUDIO_FIFO, cava=CAVA_FIFO))
 
 _cava_proc = None
 _ffmpeg_proc = None
@@ -81,6 +108,7 @@ def _start_cava():
         subprocess.run(["pkill", "-9", "-f", "cava -p"], capture_output=True, timeout=3)
         if not os.path.exists(CAVA_FIFO):
             os.mkfifo(CAVA_FIFO)
+        _write_cava_conf()  # chemins par user → jamais de collision entre users
         if _ffmpeg_proc is None or _ffmpeg_proc.poll() is not None:
             _start_ffmpeg()
         _cava_proc = subprocess.Popen(
@@ -91,6 +119,20 @@ def _start_cava():
         return True
     except Exception:
         return False
+
+
+def _cava_running():
+    """cava est-il lancé (et vivant) ?"""
+    return _cava_proc is not None and _cava_proc.poll() is None
+
+
+def _ensure_cava():
+    """Lance cava+ffmpeg si nécessaire (lazy : appelé par /api/viz quand le
+    CC est visible). Avec le serveur permanent (service systemd), cava ne
+    doit PAS tourner en continu quand le CC est fermé."""
+    if _cava_running():
+        return True
+    return _start_cava()
 
 
 def _stop_cava():
@@ -127,6 +169,28 @@ def _stop_cava():
         os.unlink(AUDIO_FIFO)
     except Exception:
         pass
+
+
+def _cava_idle_watchdog():
+    """Arrête cava/ffmpeg quand le CC ne poll plus /api/viz depuis un moment
+    (CC fermé). Boucle daemon, démarrée par server.py. Compense le serveur
+    PERMANENT : sans ça, cava + ffmpeg (capture monitor PipeWire) tourneraient
+    en continu, inutilement, même CC fermé."""
+    while True:
+        time.sleep(5)
+        # Mis à jour par le handler /api/viz (voir server.py). None = jamais pollé.
+        if _last_viz_poll is not None and time.time() - _last_viz_poll > 8:
+            if _cava_running() or _ffmpeg_proc is not None:
+                _stop_cava()
+
+
+_last_viz_poll = None
+
+
+def _touch_viz_poll():
+    """Appelé à chaque GET /api/viz — marque l'activité du visualiseur."""
+    global _last_viz_poll
+    _last_viz_poll = time.time()
 
 
 def _cava_watchdog():

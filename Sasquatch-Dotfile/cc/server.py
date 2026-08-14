@@ -24,18 +24,26 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from config import HOST, PORT
 from metrics import Metrics
 from viz import Viz
-from mpd import (mpd_status, mpd_albumart,
+from mpd import (mpd_status, mpd_albumart, local_albumart,
                  notify_track_change, video_id_from_file, yt_thumbnail)
 from player import (now_playing as player_now_playing, toggle as player_toggle,
                     next_track as player_next, prev_track as player_prev,
                     stop as player_stop, seek as player_seek, fetch_art)
+from web_bridge import handle_web_post as web_bridge_post
 from actions import do_screenshot, do_translate, do_imgsearch, do_finder
 from palette import read_palette
-from cava import _start_cava, _stop_cava, _cava_watchdog
+from cava import (_start_cava, _stop_cava, _cava_watchdog, _cava_idle_watchdog,
+                  _ensure_cava, _touch_viz_poll)
 
 # Instances partagées (créées au chargement, comme dans le single-file original).
 metrics = Metrics()
 viz = Viz()
+
+# Cache /api/music/status (500 ms) : le QML poll toutes les 1 s + la notif de
+# changement de piste → pas besoin de re-fork playerctl / rouvrir le socket MPD
+# à chaque requête. La position reste fluide (500 ms de latence max).
+_music_cache = {"at": 0.0, "st": None}
+_MUSIC_CACHE_MS = 0.5
 
 
 def _safe_int(v, default=0):
@@ -50,6 +58,15 @@ def _not_found(self):
     self.send_header("Content-Type", "text/plain")
     self.send_header("Content-Length", "0")
     self.end_headers()
+
+
+def _cc_cfg():
+    """Réglages CC depuis settings.json (panneau Settings, Super+I)."""
+    try:
+        with open(os.path.expanduser("~/.config/settings/settings.json"), encoding="utf-8") as f:
+            return json.load(f).get("cc", {}) or {}
+    except Exception:
+        return {}
 
 
 # ── Volume système (PipeWire via wpctl) ───────────────────────────────────
@@ -155,13 +172,27 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/viz":
+            # Lazy cava : le serveur est PERMANENT (service systemd) → cava/
+            # ffmpeg ne tournent que si le CC est visible et poll le viz.
+            _ensure_cava()
+            _touch_viz_poll()
             vals = viz.get()
             self._json({"vals": vals, "bars": len(vals)})
             return
 
         if path == "/api/music/status":
-            st = player_now_playing()  # MPRIS (navigateur…) + MPD unifiés
+            now = time.time()
+            cached = _music_cache
+            if cached["st"] is not None and now - cached["at"] < _MUSIC_CACHE_MS:
+                st = cached["st"]
+            else:
+                # MPRIS (navigateur…) + MPD unifiés
+                st = player_now_playing()
+                cached["at"] = now
+                cached["st"] = st
             notify_track_change(st)  # notif au changement de piste (≤1 s)
+            if not _cc_cfg().get("cover_art", True):
+                st["art"] = None  # réglage panneau Settings (Super+I)
             self._json(st)
             return
 
@@ -173,9 +204,22 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/albumart":
             qs = urllib.parse.parse_qs(parsed.query)
             art_url = (qs.get("url") or [None])[0]
+            local = (qs.get("local") or [None])[0]
             if art_url:
                 # Art MPRIS (navigateur/YouTube…) : thumbnail distante ou fichier.
                 data = fetch_art(art_url)
+            elif local:
+                # Audio local (fallback pulse, mpv/vlc sans MPRIS) : pochette
+                # embarquée (ffmpeg) sinon thumbnail YouTube si le nom porte un id.
+                rp = os.path.realpath(local)
+                allowed = [os.path.realpath(os.path.expanduser(d))
+                           for d in ("~/songs", "~/Music", "~/Téléchargements")]
+                if not any(rp.startswith(a + os.sep) for a in allowed):
+                    _not_found(self)
+                    return
+                data = local_albumart(rp)
+                if not data:
+                    data = yt_thumbnail(video_id_from_file(rp))
             else:
                 st = mpd_status()
                 data = mpd_albumart(st.get("file"))
@@ -238,6 +282,11 @@ class Handler(BaseHTTPRequestHandler):
             pos = _safe_int(body.get("pos", 0))
             self._json({"ok": player_seek(pos)})
             return
+        if path == "/api/music/web":
+            # Pont navigateur → CC : l'extension Chromium pousse le
+            # now-playing (titre, image, position) et reçoit les commandes.
+            self._json(web_bridge_post(body))
+            return
         if path == "/api/music/finder":
             self._json(do_finder())
             return
@@ -283,8 +332,14 @@ def _handle_sig(signum, frame):
 def main():
     signal.signal(signal.SIGTERM, _handle_sig)
     signal.signal(signal.SIGINT, _handle_sig)
-    _start_cava()
-    threading.Thread(target=_cava_watchdog, daemon=True).start()
+    # cava est LAZY (lancé par /api/viz quand le CC est visible) — le serveur
+    # étant permanent (service systemd), on ne le démarre plus ici. L'idle
+    # watchdog l'arrête quand le CC ferme. Le réglage panneau Settings
+    # (Super+I) cc.cava=False continue de forcer l'arrêt via _stop_cava()
+    # au prochain idle tick.
+    if not _cc_cfg().get("cava", True):
+        _stop_cava()
+    threading.Thread(target=_cava_idle_watchdog, daemon=True).start()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     httpd.serve_forever()
 

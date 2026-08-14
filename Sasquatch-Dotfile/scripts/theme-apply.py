@@ -10,6 +10,7 @@ délimités par les marqueurs SASQUATCH-PALETTE-BEGIN/END dans :
   - hypr/conf.d/general.conf  (col.active_border / col.inactive_border)
   - mako/config               (fichier entier)
   - rofi/themes/colors.rasi   (fichier entier)
+  - fastfetch/config.jsonc    (logo arch — couleurs du logo, bloc JSONC)
 Écrit aussi /tmp/sasquatch-palette-kitty.conf pour kitty @ set-colors.
 
 Usage:
@@ -17,6 +18,7 @@ Usage:
   theme-apply.py <wallpaper> --print-palette   # affiche key=value, n'applique pas
 """
 import colorsys
+import json
 import os
 import re
 import sys
@@ -40,6 +42,7 @@ FILES = {
     "hyprlock": f"{CONFIG}/hypr/hyprlock.conf",
     "mako": f"{CONFIG}/mako/config",
     "rofi": f"{CONFIG}/rofi/themes/colors.rasi",
+    "fastfetch": f"{CONFIG}/fastfetch/config.jsonc",
     "cc": f"{CONFIG}/cc/qml/Palette.qml",
     "kitty_cache": f"{RUNDIR}/sasquatch-palette-kitty.conf",
 }
@@ -55,6 +58,10 @@ DEFAULTS = {
 
 def _hx(c):
     return "#%02x%02x%02x" % tuple(max(0, min(255, int(v))) for v in c)
+
+def _rgb(h):
+    """#RRGGBB → (r, g, b)."""
+    return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
 
 def _lum(c):
     return (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255.0
@@ -163,11 +170,14 @@ def b_hypr(p):
         "    col.inactive_border = rgba(444444aa)",
     ])
 
-def b_hyprlock(p):
-    return "\n".join([
+def b_hyprlock(p, clock=None):
+    clock = clock or {}
+    hh = "%H:%M" if clock.get("lock_24h", True) else "%I:%M %p"
+    date_label = "" if clock.get("lock_date", True) else "# date masquée (réglage horloge)"
+    lines = [
         "label {",
         "    monitor =",
-        "    text = cmd[update:1000] echo \"$(date +'%H:%M')\"",
+        "    text = cmd[update:1000] date +%s" % hh,
         "    color = rgba(%sff)" % p["FG"][1:],
         "    font_size = 72",
         "    font_family = JetBrains Mono Bold",
@@ -175,17 +185,37 @@ def b_hyprlock(p):
         "    halign = center",
         "    valign = center",
         "}",
+    ]
+    if not date_label:  # lock_date=True → date_label="" → générer le label
+        lines += [
+            "",
+            "label {",
+            "    monitor =",
+            "    text = cmd[update:1000] date +'%A %d %B'",
+            "    color = rgba(%scc)" % p["FG_DIM"][1:],
+            "    font_size = 18",
+            "    font_family = JetBrains Mono",
+            "    position = 0, -110",
+            "    halign = center",
+            "    valign = center",
+            "}",
+        ]
+    else:
+        lines += ["", date_label]
+    lines += [
         "",
         "label {",
         "    monitor =",
-        "    text = cmd[update:1000] echo \"$(date +'%A %d %B')\"",
-        "    color = rgba(%scc)" % p["FG_DIM"][1:],
-        "    font_size = 18",
+        "    text = cmd[update:2000] ~/.config/hypr/scripts/lock-media.sh",
+        "    color = rgba(%scc)" % p["ACCENT"][1:],
+        "    font_size = 15",
         "    font_family = JetBrains Mono",
-        "    position = 0, -110",
+        "    position = 0, -145",
         "    halign = center",
         "    valign = center",
         "}",
+    ]
+    lines += [
         "",
         "input-field {",
         "    monitor =",
@@ -206,7 +236,8 @@ def b_hyprlock(p):
         "    halign = center",
         "    valign = center",
         "}",
-    ])
+    ]
+    return "\n".join(lines)
 
 def b_mako(p):
     return "\n".join([
@@ -272,6 +303,21 @@ def b_rofi(p):
         "}",
     ])
 
+def b_fastfetch(p):
+    """Logo Arch builtin — dégradé sur la teinte de l'accent.
+    Le logo arch natif est un dégradé (sombre → clair) ; on garde le style mais
+    avec les couleurs du thème. Format fastfetch : "color" = objet { "1".."6" }.
+    La dernière clé N'A PAS de virgule (dernière propriété de l'objet color)."""
+    accent = _rgb(p["ACCENT"])
+    steps = (0.35, 0.48, 0.60, 0.72, 0.85, 0.97)
+    cols = [_hx(_to_lum(accent, t)) for t in steps]
+    lines = ['    "color": {']
+    for i, c in enumerate(cols[:-1]):
+        lines.append('        "%d": "%s",' % (i + 1, c))
+    lines.append('        "6": "%s"' % cols[-1])
+    lines.append('    }')
+    return "\n".join(lines)
+
 def b_cc(p):
     """Palette du Control Center (Quickshell) — cc/qml/Palette.qml."""
     return "\n".join([
@@ -333,6 +379,26 @@ def main():
             print("⚠ extraction échouée (%s) — palette par défaut" % e, file=sys.stderr)
     elif path:
         print("⚠ fichier introuvable: %s — palette par défaut" % path, file=sys.stderr)
+
+    # ── Mode palette MANUEL (panneau Settings, Super+I) ────────────────
+    # settings.json → palette.mode == "manual" : on force ACCENT/ACCENT2
+    # choisis par l'utilisateur ; le reste (bg/fg) reste dérivé du wallpaper
+    # (ou des défauts si pas de wallpaper). Les valeurs invalides sont
+    # ignorées silencieusement (_clean_palette les rattraperait sinon).
+    try:
+        with open(os.path.expanduser("~/.config/settings/settings.json"), encoding="utf-8") as f:
+            _settings = json.load(f)
+    except Exception:
+        _settings = {}
+    pal = _settings.get("palette", {}) if isinstance(_settings, dict) else {}
+    if pal.get("mode") == "manual":
+        if HEX_RE.match(pal.get("accent", "")):
+            p["ACCENT"] = pal["accent"]
+        if HEX_RE.match(pal.get("accent2", "")):
+            p["ACCENT2"] = pal["accent2"]
+        print("◈ palette MANUELLE: ACCENT=%s ACCENT2=%s" % (p["ACCENT"], p["ACCENT2"]), file=sys.stderr)
+    _clock = _settings.get("clock", {}) if isinstance(_settings, dict) else {}
+
     p = _clean_palette(p)
 
     if "--print-palette" in sys.argv:
@@ -344,9 +410,10 @@ def main():
         ("waybar", FILES["waybar"], CSS_BEGIN, CSS_END, b_waybar(p)),
         ("kitty", FILES["kitty"], CMT_BEGIN, CMT_END, b_kitty(p)),
         ("hypr", FILES["hypr"], CMT_BEGIN, CMT_END, b_hypr(p)),
-        ("hyprlock", FILES["hyprlock"], CMT_BEGIN, CMT_END, b_hyprlock(p)),
+        ("hyprlock", FILES["hyprlock"], CMT_BEGIN, CMT_END, b_hyprlock(p, _clock)),
         ("mako", FILES["mako"], CMT_BEGIN, CMT_END, b_mako(p)),
         ("rofi", FILES["rofi"], CSS_BEGIN, CSS_END, b_rofi(p)),
+        ("fastfetch", FILES["fastfetch"], CSS_BEGIN, CSS_END, b_fastfetch(p)),
         ("cc", FILES["cc"], CSS_BEGIN, CSS_END, b_cc(p)),
     )
 

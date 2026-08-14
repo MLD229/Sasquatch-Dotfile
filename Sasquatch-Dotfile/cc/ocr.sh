@@ -26,7 +26,13 @@ if ! command -v tesseract >/dev/null 2>&1; then
     exit 1
 fi
 
-tesseract "$TMP_PNG" "$TMP_TXT" -l fra >/dev/null 2>&1
+# Langue OCR : réglage panneau Settings (Super+I) — settings.json cc.ocr_lang
+OCR_LANG="fra"
+if [[ -f "$HOME/.config/settings/settings.json" ]]; then
+    OCR_LANG="$(python3 -c 'import json,os;d=json.load(open(os.path.expanduser("~/.config/settings/settings.json")));print(d.get("cc",{}).get("ocr_lang","fra"))' 2>/dev/null || echo fra)"
+fi
+
+tesseract "$TMP_PNG" "$TMP_TXT" -l "$OCR_LANG" >/dev/null 2>&1
 
 # Normalise : lignes → espaces, espaces multiples → un seul, nettoie les bords.
 sed 's/[[:space:]]\+/ /g; s/^ *//; s/ *$//' "${TMP_TXT}.txt" 2>/dev/null \

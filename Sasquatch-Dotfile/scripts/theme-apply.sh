@@ -36,7 +36,22 @@ fi
 # NB : skip keyé sur le chemin, pas le contenu (ré-export du même nom = skip —
 # edge case accepté).
 LAST="$RUNDIR/sasquatch-theme-last"
-if [ -f "$WALL" ] && [ "$WALL" = "$(cat "$LAST" 2>/dev/null)" ] && pgrep -x waybar >/dev/null 2>&1; then
+
+# Un waybar ne compte pour le skip idempotent que s'il appartient à l'instance
+# Hyprland COURANTE. Un orphelin d'une session morte (relogin/crash) est vivant
+# pour pgrep mais invisible à l'écran → sans ce test, la nouvelle session
+# resterait sans barre (le skip penserait que la barre tourne déjà).
+waybar_current_session() {
+    local inst="${HYPRLAND_INSTANCE_SIGNATURE:-}" pid sig
+    [ -n "$inst" ] || return 1
+    for pid in $(pgrep -x waybar 2>/dev/null); do
+        sig=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^HYPRLAND_INSTANCE_SIGNATURE=//p' | head -1)
+        [ "$sig" = "$inst" ] && return 0
+    done
+    return 1
+}
+
+if [ -f "$WALL" ] && [ "$WALL" = "$(cat "$LAST" 2>/dev/null)" ] && waybar_current_session; then
     echo "theme-apply: inchangé ($WALL)"
     exit 0
 fi

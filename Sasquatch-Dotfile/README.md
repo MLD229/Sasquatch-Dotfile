@@ -159,6 +159,9 @@ Sasquatch-Dotfile/
 │   ├── cava.py                  ← cycle de vie cava
 │   ├── ocr.sh                   ← OCR écran (slurp + grim + tesseract → stdout)
 │   ├── cava.conf                ← égaliseur (fifo raw, sortie audio)
+│   ├── web_bridge.py            ← now-playing navigateur (POST /api/music/web)
+│   ├── browser-bridge/          ← extension Chromium (Brave) → pousse YouTube/Spotify Web
+│   │                             vers le CC (chargée via --load-extension, cf. keybinds.conf)
 │   └── qml/
 │       ├── Palette.qml          ← couleurs (retinté par theme-apply, LU via /api/palette)
 │       ├── Gauge.qml / IconButton.qml / Tile.qml / Sparkline.qml
@@ -180,7 +183,7 @@ bordures Hyprland, hyprlock, mako et rofi.
   clair, accent = couleur vive du fond, accent2 = complémentaire.
 - `scripts/theme-apply.sh` orchestre + relance waybar (verrou `flock`).
 - Les zones retintées sont délimitées par des markers `SASQUATCH-PALETTE-BEGIN/END`
-  dans 7 fichiers (waybar, kitty, hypr/general.conf, hyprlock, mako, rofi, cc/qml/Palette.qml).
+  dans 8 fichiers (waybar, kitty, hypr/general.conf, hyprlock, mako, rofi, cc/qml/Palette.qml, fastfetch/config.jsonc).
 - **Hook automatique** : dans `~/.config/waypaper/config.ini` (fichier runtime,
   non versionné — à configurer après install) :
   `post_command = ~/.config/scripts/theme-apply.sh $wallpaper`
@@ -234,17 +237,70 @@ Dashboard **Quickshell** (`cc/`) — UI native Qt Quick + backend Python stdlib 
 - **Screenshot** : zone / plein écran / fenêtre (grim + slurp), copié + sauvegardé.
 - Fermeture : `Escape`, bouton ✕, ou re-appui `SUPER+G` (toggle).
 
-Architecture : `cc.sh` lance le backend `server.py` (port 8765, localhost), puis la
-fenêtre `cc/qml/main.qml` (titre `Sasquatch CC` → windowrule float + border 0 +
-`move 0 0` pour couvrir tout l'écran malgré la zone réservée de waybar). À la
-fermeture, le serveur est arrêté automatiquement. La palette est dynamique :
+Architecture : `cc.sh` toggles la fenêtre `cc/qml/main.qml` (titre `Sasquatch CC` →
+windowrule float + border 0 + `move 0 0` pour couvrir tout l'écran malgré la zone
+réservée de waybar). Le backend `server.py` (port 8765, localhost) est un
+**service systemd user `sasquatch-cc`** : permanent, `Restart=always`, logs dans
+journald (`journalctl --user -u sasquatch-cc`). Il survit aux relogins
+(cleanup-orphans.sh ne le tue pas : pas de signature Hyprland dans son environ)
+→ fini les crashs silencieux, les cava orphelins et le « serveur injoignable ».
+La fermeture du CC ne tue plus le serveur. La palette est dynamique :
 `cc/qml/Palette.qml` est retinté par theme-apply.py et pollé par le CC toutes
 les 2 s → le panneau suit le thème du wallpaper. Le slider volume contrôle le
 volume SYSTÈME (wpctl), pas le volume MPD. Les captures masquent le CC pendant
 grim/slurp puis le restaurent.
 
+**Media sync unifié** : `cc/player.py` lit MPRIS (playerctl — Brave, mpv…), MPD
+(socket user) et le pont navigateur. Les navigateurs Chromium modernes (Brave)
+exposent un **MPRIS natif** quand la page utilise la MediaSession API → la source
+web (`cc/browser-bridge/`) n'est utilisée qu'en FALLBACK pour les sites SANS
+MediaSession (lecteurs `<video>` custom), sinon doublon (le serveur ignore la
+source web quand un MPRIS est actif). `/api/music/status` est caché 500 ms pour
+ne pas re-fork playerctl à chaque poll du QML. cava est **lazy** : lancé par
+`/api/viz` quand le CC est visible, arrêté par un idle watchdog ~8 s après la
+fermeture (le serveur permanent ne fait plus tourner ffmpeg H24).
+
 Dépendances : `quickshell`, `mpd`, `cava`, `alsa-utils`, `songrec`, `tesseract`
-(inclus dans install.sh). MPD expose une seule FIFO : `/tmp/mpd-cc.fifo`
-(CC Capture → finder) — voir `mpd/mpd.conf`. L'égaliseur cava lit le monitor
-PipeWire (`/tmp/sasquatch-audio.fifo`), pas une fifo MPD.
+(inclus dans install.sh). MPD est **isolé par utilisateur** : socket unix
+`~/.local/share/mpd/socket` (pas de port TCP partagé → chaque user pilote SON
+MPD, le CC n'affiche plus la musique d'un autre). mpc/ncmpc pointent dessus via
+`MPD_HOST` (fish/config.fish), le CC via `cc/config.py` → `MPD_SOCKET`. MPD
+expose une seule FIFO : `~/.local/share/mpd/cc.fifo` (CC Capture → finder) —
+voir `mpd/mpd.conf`. L'égaliseur cava lit le monitor PipeWire (fifos par user
+dans `$XDG_RUNTIME_DIR`, voir `cc/cava.py`), pas une fifo MPD.
 Aucun paquet pip requis : le backend est 100 % stdlib (PEP 668 OK).
+
+## ⚙️ Panneau Settings (SUPER+I)
+
+Panneau de configuration **Quickshell** (`settings/`) — même architecture que le CC :
+UI glass adaptative (palette dynamique pollée toutes les 2 s) + backend Python stdlib
+(`settings.py`, port 8770, `settings.sh` toggle). Fenêtre titrée `Sasquatch Settings`
+(windowrules float + border 0 + `move 0 0`). Sauvegarde **automatique** à chaque
+modification dans `settings/settings.json`.
+
+Sections :
+
+- **VEILLE** — toggle hypridle (désactivation immédiate `pkill hypridle`) + timeouts
+  dim / lock / écran off / suspend en minutes. Régénère `hypr/conf.d/../hypridle.conf`
+  (secondes = minutes × 60) et relance/arrête hypridle selon l'état.
+- **APPARENCE** — palette auto (wallpaper) ou manuelle : grille de 12 couleurs +
+  champ hex pour accent/accent2 → `theme-apply.sh` re-teinte tout le desktop
+  (waybar, rofi, hyprlock, GTK…).
+- **HORLOGE** — format waybar (module `clock` de `waybar/config`) + hyprlock
+  12/24 h + date (lus par `theme-apply.py` via settings.json).
+- **RACCOURCIS** — liste complète des binds parsée depuis `hypr/keybinds.conf`
+  (57 binds, `$mod` → SUPER) ; édition de la commande d'un bind → écrit dans
+  `hypr/keybinds-user.conf` (overrides, dernier gagnant) + `hyprctl reload` ;
+  bouton « Réinitialiser les overrides ».
+- **CONTROL PANEL** — cava on/off, langue OCR (fra/eng), cover art : écrits dans
+  settings.json, lus par `cc/server.py` / `cc/ocr.sh` au démarrage.
+- **SYSTÈME** — gaps intérieur/extérieur, rounding, animations (patch
+  `general.conf` / `decoration.conf` / `animations.conf` + `hyprctl reload`) et
+  bouton « Choisir un wallpaper » (ouvre waypaper, toggle comme SUPER+Y).
+
+## 🌙 Veille / suspend (NVIDIA)
+
+Le gel GPU au réveil (écran noir → reboot) est corrigé par
+`scripts/fix-suspend.sh` (à lancer en `sudo`) : active `nvidia_drm.modeset=1`
+(GRUB), `NVreg_PreserveVideoMemoryAllocations=1` (modprobe) et les services
+`nvidia-suspend` / `nvidia-resume` / `nvidia-hibernate`.

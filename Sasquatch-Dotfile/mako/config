@@ -1,12 +1,12 @@
 # === SASQUATCH-PALETTE-BEGIN ===
 sort=-time
 layer=overlay
-background-color=#201012cc
-text-color=#e0cacc
+background-color=#0f0f19cc
+text-color=#cdd6f4
 width=340
 height=120
 border-size=1
-border-color=#bf616a44
+border-color=#88aaee44
 border-radius=12
 padding=12
 margin=10
@@ -20,16 +20,16 @@ default-timeout=4000
 ignore-timeout=0
 
 [urgency=low]
-background-color=#201012bb
+background-color=#0f0f19bb
 border-color=#6c708644
-text-color=#897678
+text-color=#6c7086
 
 [urgency=normal]
-background-color=#201012cc
-border-color=#bf616a44
+background-color=#0f0f19cc
+border-color=#88aaee44
 
 [urgency=high]
-background-color=#201012cc
+background-color=#0f0f19cc
 border-color=#f38ba8aa
 text-color=#f38ba8
 # === SASQUATCH-PALETTE-END ===

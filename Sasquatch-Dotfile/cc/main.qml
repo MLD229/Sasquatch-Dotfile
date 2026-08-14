@@ -85,7 +85,10 @@ FloatingWindow {
     }
 
     function quit() {
-        api("POST", "/api/close", null, function() {});
+        // Le serveur backend est un service systemd user (sasquatch-cc) :
+        // il vit en permanence, le CC ne fait que se fermer. NE PAS appeler
+        // /api/close (ça tuerait le serveur → restart inutile à chaque
+        // ouverture + perte de la synchro musique).
         Qt.quit();
     }
 
@@ -399,7 +402,7 @@ FloatingWindow {
                         // Badge source : montre d'où vient la musique (navigateur
                         // YouTube, MPD…).
                         Text {
-                            text: (root.music && root.music.source === "mpris") ? ("via " + ((root.music.player) ? root.music.player : "navigateur")) : ""
+                            text: (root.music && (root.music.source === "mpris" || root.music.source === "web")) ? ("via " + ((root.music.player) ? root.music.player : "navigateur")) : ""
                             font.pixelSize: 10
                             font.bold: true
                             color: root.cAccent

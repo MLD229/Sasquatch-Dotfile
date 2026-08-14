@@ -11,10 +11,11 @@ import time
 import urllib.parse
 import wave
 
-from config import SCRIPT_DIR
+from config import SCRIPT_DIR, RUNTIME_DIR
 
 # FIFO MPD dédiée au CC (mono 44.1k, mpd.conf "CC Capture") — lecture SOLO.
-CC_FIFO = "/tmp/mpd-cc.fifo"
+# Par user : déclarée dans mpd.conf audio_output fifo (mpd la crée au boot).
+CC_FIFO = os.path.expanduser("~/.local/share/mpd/cc.fifo")
 CC_FIFO_FORMAT = (44100, 1)
 
 
@@ -287,7 +288,7 @@ def do_finder():
     # Check songrec FIRST: without it, recording 8s just to fail is wasted.
     if shutil.which("songrec") is None:
         return {"ok": False, "recognized": False, "error": "songrec requis (pacman -S songrec)"}
-    wav = "/tmp/sasquatch-finder-%d.wav" % os.getpid()
+    wav = os.path.join(RUNTIME_DIR, "sasquatch-finder-%d.wav" % os.getpid())
 
     def _result(title, artist, source="shazam"):
         return {"ok": True, "recognized": True, "title": title,

@@ -1,0 +1,25 @@
+[Unit]
+Description=Sasquatch Control Center - backend HTTP (127.0.0.1:8765)
+# Le serveur a besoin de MPD (socket user) et de PipeWire (monitor cava).
+After=mpd.service pipewire.service wireplumber.service
+Wants=mpd.service pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.config/cc/server.py
+WorkingDirectory=%h/.config/cc
+# Restart=always : un crash ne tue plus le CC en silence — systemd relance.
+Restart=always
+RestartSec=3
+# Nettoyage à l'arrêt : cava + ffmpeg orphelins (fuites quand le serveur
+# meurt sans /api/close). Pattern bracket pour ne jamais s'auto-matcher.
+ExecStopPost=-/usr/bin/pkill -9 -f "cava -p"
+ExecStopPost=-/usr/bin/pkill -9 -f "[f]fmpeg.*sasquatch-audio"
+# Logs dans journald (journalctl --user -u sasquatch-cc) au lieu d'un
+# fichier vide : les exceptions deviennent diagnosables.
+StandardOutput=journal
+StandardError=journal
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

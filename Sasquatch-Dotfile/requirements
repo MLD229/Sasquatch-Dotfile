@@ -18,6 +18,7 @@ python-pillow
 eza
 bat
 neovim
+code                    # VS Code — lecteur par défaut du code/txt (mimeapps)
 dolphin
 rofi
 mako
@@ -50,6 +51,7 @@ pipewire-pulse
 wireplumber
 pavucontrol
 playerctl
+mpv                     # lecteur audio/vidéo par défaut (mimeapps : mp3, mp4…)
 
 # Luminosité / volume
 brightnessctl
@@ -71,7 +73,7 @@ bluez-utils
 blueman
 
 # Navigateurs
-brave
+brave-bin        # AUR (le paquet "brave" n'existe pas)
 firefox
 
 # Control Center (Super+G, cc/) — UI Quickshell + backend python
