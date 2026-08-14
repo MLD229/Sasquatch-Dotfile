@@ -31,12 +31,14 @@ def local_albumart(file_):
         return None
     key = hashlib.sha1(file_.encode("utf-8", "replace")).hexdigest()[:12]
     cache = os.path.join(_LOCAL_ART_CACHE, "sasquatch-art-%s.img" % key)
-    if os.path.isfile(cache) and os.path.getsize(cache) > 0:
-        try:
-            with open(cache, "rb") as f:
-                return f.read()
-        except Exception:
-            pass
+    if os.path.isfile(cache):
+        if os.path.getsize(cache) > 0:
+            try:
+                with open(cache, "rb") as f:
+                    return f.read()
+            except Exception:
+                pass
+        return None  # échec précédent mémorisé (fichier vide) → pas de re-ffmpeg
     try:
         out = subprocess.run(
             ["ffmpeg", "-y", "-i", file_, "-map", "0:v:0", "-c:v", "copy",
@@ -45,6 +47,10 @@ def local_albumart(file_):
     except Exception:
         return None
     if out.returncode != 0 or not os.path.isfile(cache) or os.path.getsize(cache) == 0:
+        try:
+            open(cache, "wb").close()  # mémorise l'échec (0 octet)
+        except Exception:
+            pass
         return None
     try:
         with open(cache, "rb") as f:

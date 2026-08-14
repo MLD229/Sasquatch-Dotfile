@@ -10,6 +10,7 @@ installé ; playerctld est optionnel, `playerctl --all-players` fonctionne sans)
 import os
 import re
 import shutil
+import signal
 import subprocess
 import time
 import urllib.parse
@@ -18,6 +19,11 @@ import urllib.request
 from mpd import mpd_status, mpd_simple_command, mpd_toggle
 from config import RUNTIME_DIR
 from web_bridge import web_status, push_command as web_push_command
+
+# Les mpv lancés par _pulse_play (Popen + start_new_session) ne sont jamais
+# reaptés → chaque next/prev laissait un ZOMBIE jusqu'au restart du serveur.
+# SIGCHLD=IGN → reaping automatique par le noyau.
+signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 _SEP = "\x1f"
 _ART_CACHE_DIR = RUNTIME_DIR
@@ -230,6 +236,12 @@ def _pulse_streams():
     streams.sort(key=lambda s: s["num"], reverse=True)
     return streams
 
+# Recherche du fichier local (pactl ne donne que le nom) : TOUS les dossiers
+# médias connus — la musique ET les vidéos (mp4/mkv…), adaptatif.
+_PULSE_SEARCH_DIRS = (os.path.expanduser("~/songs"), os.path.expanduser("~/Music"),
+                      os.path.expanduser("~/Téléchargements"),
+                      os.path.expanduser("~/Vidéos"), os.path.expanduser("~/Videos"))
+# Fallback playlist quand rien de local ne joue → la MUSIQUE seulement.
 _PULSE_MUSIC_DIRS = (os.path.expanduser("~/songs"), os.path.expanduser("~/Music"))
 _pulse_file_cache = {}
 
@@ -246,7 +258,7 @@ def _resolve_local_file(title):
     found = None
     target = (title or "").lower()
     if target:
-        for d in _PULSE_MUSIC_DIRS:
+        for d in _PULSE_SEARCH_DIRS:
             if not os.path.isdir(d):
                 continue
             try:
@@ -261,6 +273,117 @@ def _resolve_local_file(title):
                 break
     _pulse_file_cache[title] = found
     return found
+
+
+_PULSE_AUDIO_EXTS = (".mp3", ".flac", ".m4a", ".opus", ".ogg", ".wav", ".aac", ".wma")
+_PULSE_VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".wmv", ".ts", ".flv")
+_PULSE_EXTS = _PULSE_AUDIO_EXTS + _PULSE_VIDEO_EXTS
+
+
+def _pulse_folder_files(directory):
+    """Fichiers jouables (audio ET vidéo) du dossier donné, triés par nom.
+    → adaptatif : on continue dans le dossier du fichier courant, mp4 inclus."""
+    files = []
+    if not directory or not os.path.isdir(directory):
+        return files
+    try:
+        with os.scandir(directory) as it:
+            for e in it:
+                if e.is_file() and e.name.lower().endswith(_PULSE_EXTS):
+                    files.append(e.path)
+    except OSError:
+        return files
+    return sorted(files, key=lambda p: os.path.basename(p).lower())
+
+
+def _pulse_playlist_files():
+    """Tous les fichiers audio des dossiers musique, triés (nom, insensible casse)."""
+    files = []
+    for d in _PULSE_MUSIC_DIRS:
+        if not os.path.isdir(d):
+            continue
+        try:
+            with os.scandir(d) as it:
+                for e in it:
+                    if e.is_file() and e.name.lower().endswith(_PULSE_EXTS):
+                        files.append(e.path)
+        except OSError:
+            continue
+    return sorted(files, key=lambda p: os.path.basename(p).lower())
+
+
+def _pgrep_mpv():
+    try:
+        out = subprocess.run(["pgrep", "-x", "mpv"], capture_output=True,
+                             text=True, timeout=2).stdout or ""
+        return [int(x) for x in out.split() if x.strip().isdigit()]
+    except Exception:
+        return []
+
+
+def _kill_local_mpv():
+    """Tue les mpv dont la cmdline référence un de nos dossiers musique.
+    (Précis : ne touche pas un mpv qui joue une vidéo ailleurs.)"""
+    killed = 0
+    for pid in _pgrep_mpv():
+        try:
+            with open("/proc/%d/cmdline" % pid, "rb") as f:
+                cmd = f.read().replace(b"\0", b" ").decode("utf-8", "replace")
+        except OSError:
+            continue
+        if any(d in cmd for d in _PULSE_SEARCH_DIRS):
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed += 1
+            except OSError:
+                pass
+    return killed
+
+
+def _pulse_play(playlist):
+    if not playlist:
+        return False
+    try:
+        # start_new_session : le mpv survit au serveur (comme nohup/setsid)
+        subprocess.Popen(["mpv"] + playlist, start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except OSError:
+        return False
+
+
+def _pulse_jump(direction):
+    """next/prev pour l'audio local (pulse) : playlist mpv depuis la piste
+    suivante/précédente. Le wrap est circulaire → à la fin d'une piste, mpv
+    enchaîne automatiquement (auto-advance). Ne vole PAS le contrôle d'une
+    autre app (vlc, jeu…) : seuls les mpv qui jouent depuis nos dossiers
+    musique sont tués."""
+    pulse = _pulse_streams()
+    app = pulse[0]["app"] if pulse else None
+    if app and app.lower() != "mpv":
+        return False  # pas notre affaire (vlc, jeu, navigateur sans MPRIS…)
+    cur = None
+    if pulse:
+        cur = _resolve_local_file(pulse[0]["title"])
+    if cur:
+        # ADAPTATIF : on continue dans le dossier du fichier courant
+        # (audio OU vidéo). Si le dossier n'a qu'un fichier → musique.
+        files = _pulse_folder_files(os.path.dirname(cur))
+        if len(files) < 2:
+            files = _pulse_playlist_files()
+    else:
+        files = _pulse_playlist_files()
+    if not files:
+        return False
+    if cur in files:
+        idx = files.index(cur)
+    else:
+        idx = -1 if direction > 0 else 0  # rien de local → début (next) / fin (prev)
+    n = len(files)
+    start = (idx + direction) % n
+    playlist = files[start:] + files[:start]
+    _kill_local_mpv()
+    return _pulse_play(playlist)
 
 
 def now_playing():
@@ -435,7 +558,7 @@ def next_track():
     if src == "mpris":
         return _mpris_cmd(name, "next")
     if src == "pulse":
-        return False
+        return _pulse_jump(+1)
     return mpd_simple_command("next")
 
 
@@ -447,7 +570,7 @@ def prev_track():
     if src == "mpris":
         return _mpris_cmd(name, "previous")
     if src == "pulse":
-        return False
+        return _pulse_jump(-1)
     return mpd_simple_command("previous")
 
 
@@ -470,6 +593,8 @@ def seek(pos):
         return True
     if src == "mpris":
         return _mpris_cmd(name, "position", str(int(pos)))
+    if src == "pulse":
+        return False  # pas de seek sans MPRIS (ne pas chercher MPD par erreur)
     return mpd_simple_command("seekcur %d" % int(pos))
 
 

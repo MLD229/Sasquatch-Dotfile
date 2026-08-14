@@ -213,7 +213,8 @@ class Handler(BaseHTTPRequestHandler):
                 # embarquée (ffmpeg) sinon thumbnail YouTube si le nom porte un id.
                 rp = os.path.realpath(local)
                 allowed = [os.path.realpath(os.path.expanduser(d))
-                           for d in ("~/songs", "~/Music", "~/Téléchargements")]
+                           for d in ("~/songs", "~/Music", "~/Téléchargements",
+                                     "~/Vidéos", "~/Videos")]
                 if not any(rp.startswith(a + os.sep) for a in allowed):
                     _not_found(self)
                     return

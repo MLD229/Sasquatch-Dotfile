@@ -2,7 +2,7 @@
 application/json=code.desktop;
 application/pdf=firefox.desktop;brave-browser.desktop;
 audio/flac=mpv.desktop;
-audio/mpeg=mpv.desktop;
+audio/mpeg=mpv-4.desktop;mpv.desktop;
 audio/ogg=mpv.desktop;
 audio/wav=mpv.desktop;
 image/avif=firefox.desktop;
@@ -25,7 +25,7 @@ x-scheme-handler/mailto=firefox.desktop;
 application/json=code.desktop;
 application/pdf=firefox.desktop;
 audio/flac=mpv.desktop;
-audio/mpeg=mpv.desktop;
+audio/mpeg=mpv-4.desktop;
 audio/ogg=mpv.desktop;
 audio/wav=mpv.desktop;
 image/avif=firefox.desktop;
