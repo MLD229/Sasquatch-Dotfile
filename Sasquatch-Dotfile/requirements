@@ -84,7 +84,7 @@ tesseract               # OCR écran (cc/ocr.sh)
 tesseract-data-fra      # langue française pour tesseract
 curl                    # healthcheck serveur (cc/cc.sh)
 nvidia-utils            # nvidia-smi (waybar GPU + metrics.py) — machine NVIDIA
-nvidia-vaapi-driver     # décodage VA-API NVIDIA (env.conf LIBVA_DRIVER_NAME=nvidia)
+libva-nvidia-driver     # décodage VA-API NVIDIA (env.conf LIBVA_DRIVER_NAME=nvidia)
 ffmpeg                  # fallback finder (si pw-record absent)
 python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
 gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
