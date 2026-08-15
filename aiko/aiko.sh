@@ -65,12 +65,12 @@ if [ "$server_up" -ne 1 ]; then
     exit 1
 fi
 
-# Positionne la fenêtre à droite (multi-résolution) :
+# Positionne la fenêtre à gauche (multi-résolution) :
 # ⚠️ `move 100%-N` ne marche PAS avec match:title (bug Hyprland 0.56) →
 # on injecte la règle avec la valeur absolue calculée AVANT de créer la fenêtre.
 WIN_W=420
 MON_W=$(hyprctl monitors -j | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['width'])" 2>/dev/null || echo 1920)
-X=$((MON_W - WIN_W - 16))   # 16px de marge à droite
+X=16   # 16px de marge à gauche
 hyprctl keyword "windowrule" "match:title ^(Aiko)$, move $X 62" >/dev/null 2>&1
 
 # Lance la sidebar
