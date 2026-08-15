@@ -206,10 +206,11 @@ FloatingWindow {
     }
 
     title: "Aiko"
-    // Fenêtre plein écran (voile sombre partout), panel collé à droite.
-    // windowrule move 0 0 (rules.conf) — même pattern que le CC.
-    implicitWidth: Screen.width
-    implicitHeight: Screen.height
+    // Fenêtre = UNIQUEMENT la sidebar (pas plein écran) → le reste de l'écran
+    // reste visible et net. Marge en haut (waybar 42px + 20) et en bas (20).
+    // Position : windowrule move 100%-440 62 (droite + marge).
+    implicitWidth: 420
+    implicitHeight: Screen.height - 42 - 40
     visible: true
     color: "transparent"
     // Animation d'ouverture (sur le panel, pas sur la FloatingWindow —
@@ -221,7 +222,8 @@ FloatingWindow {
         inputField.forceActiveFocus();
     }
 
-    // Fermeture : Escape, clic sur le voile (le voile couvre tout l'écran)
+    // Fermeture : Escape ou ✕ (pas de voile cliquable — la fenêtre ne couvre
+    // plus tout l'écran, le toggle Super+N ferme aussi)
     Shortcut {
         sequence: "Escape"
         enabled: !inputField.activeFocus || inputField.text.length === 0
@@ -290,29 +292,16 @@ FloatingWindow {
     // ══════════════════════════════════════════════════════════
     //  UI
     // ══════════════════════════════════════════════════════════
-    Rectangle {
-        anchors.fill: parent
-        color: cOverlay
-
-        MouseArea {
-            anchors.fill: parent
-            onClicked: root.quit() // clic dehors = fermer
-        }
-
-    }
-
+    // Panel flottant : marge tout autour (effet carte), coins arrondis.
     Rectangle {
         id: panel
 
-        width: 420
-        height: root.height
+        anchors.fill: parent
+        anchors.margins: 16
         color: cCard
         border.color: cBorder
         border.width: 1
-        radius: 0 // sidebar = plein bord droit, pas d'arrondi
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
+        radius: 20
 
         // Animation d'ouverture (pattern CC : sur l'élément, pas la fenêtre)
         opacity: 0

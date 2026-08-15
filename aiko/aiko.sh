@@ -47,7 +47,7 @@ if ! curl -s -o /dev/null -m 1 "http://127.0.0.1:$PORT/api/health"; then
         notify-send "愛子" "Modèle absent : $MODEL_FILE — lance : bash $SCRIPT_DIR/setup.sh" -t 4000
         exit 1
     fi
-    python3 "$SCRIPT_DIR/server.py" --port "$PORT" >/dev/null 2>&1 &
+    python3 "$SCRIPT_DIR/server.py" --port "$PORT" >>"$SCRIPT_DIR/server.log" 2>&1 &
 fi
 
 # Attend que le backend réponde (max ~6s)
@@ -64,6 +64,14 @@ if [ "$server_up" -ne 1 ]; then
     notify-send "愛子" "Backend injoignable (port $PORT) — vérifie server.py" -t 3000
     exit 1
 fi
+
+# Positionne la fenêtre à droite (multi-résolution) :
+# ⚠️ `move 100%-N` ne marche PAS avec match:title (bug Hyprland 0.56) →
+# on injecte la règle avec la valeur absolue calculée AVANT de créer la fenêtre.
+WIN_W=420
+MON_W=$(hyprctl monitors -j | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['width'])" 2>/dev/null || echo 1920)
+X=$((MON_W - WIN_W - 16))   # 16px de marge à droite
+hyprctl keyword "windowrule" "match:title ^(Aiko)$, move $X 62" >/dev/null 2>&1
 
 # Lance la sidebar
 quickshell -p "$SCRIPT_DIR/main.qml"
