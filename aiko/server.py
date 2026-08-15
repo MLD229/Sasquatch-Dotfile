@@ -17,6 +17,20 @@
 #    POST /api/close               → arrête llama-server + quitte
 #
 #  Python stdlib uniquement. Ports : backend=8780, llama-server=8781.
+#
+#  Robustesse (2026-08-15) :
+#    - Vrai streaming SSE depuis llama-server (le job met à jour jobs[id]["text"]
+#      au fil de l'eau → le poll QML affiche le texte progressivement, y compris
+#      pendant les générations vision de 40-60 s).
+#    - Catch large + log dans le worker de génération (plus jamais de mort
+#      silencieuse sans trace) ; fallback appel non-stream si le SSE échoue.
+#    - Handlers SIGTERM/SIGINT → stop_llama() avant exit : llama-server ne
+#      reste JAMAIS orphelin (cause racine du « crash silencieux » : server.py
+#      tué par un signal → llama-server survivait en gardant la VRAM).
+#    - Timeouts réseau explicites (ping 1.5 s, génération 300 s, démarrage 90 s).
+#    - Purge des jobs terminés après 60 s (anti-fuite mémoire).
+#    - Filet d'erreur : toute exception d'un handler HTTP → 500 JSON logué,
+#      le serveur ne meurt jamais sur une requête malformée.
 # ─────────────────────────────────────────────────────────────
 import base64
 import json
@@ -27,6 +41,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,6 +51,13 @@ CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
 MODELS_DIR = os.path.join(SCRIPT_DIR, "models")
 SESSIONS_DIR = os.path.join(SCRIPT_DIR, "sessions")
 PORT = 8780
+
+# ─── Timeouts / limites ─────────────────────────────────────
+LLAMA_PING_TIMEOUT = 1.5      # GET /v1/models (test de vie du port)
+LLAMA_READY_TIMEOUT = 90      # attente du démarrage (préfill GPU)
+LLAMA_GEN_TIMEOUT = 300       # socket timeout pendant la génération
+JOB_RETENTION_SECONDS = 60    # garde un job terminé 60 s (le QML poll), puis purge
+MAX_BODY_BYTES = 16 * 1024 * 1024  # body max (image base64) : 16 Mo
 
 # ─── Config ─────────────────────────────────────────────────
 
@@ -62,6 +84,12 @@ history_lock = threading.Lock()
 jobs = {}
 jobs_lock = threading.Lock()
 job_counter = [0]
+job_counter_lock = threading.Lock()
+
+
+def log(msg):
+    """Trace vers stderr (→ server.log via aiko.sh). flush pour un log en direct."""
+    print(f"[aiko {time.strftime('%H:%M:%S')}] {msg}", file=sys.stderr, flush=True)
 
 
 # ─── llama-server (lazy) ────────────────────────────────────
@@ -101,7 +129,7 @@ def llama_env():
 def llama_running():
     """True si llama-server répond (test du port = source de vérité)."""
     try:
-        with urllib.request.urlopen(f"{LLAMA_URL}/v1/models", timeout=1.5) as r:
+        with urllib.request.urlopen(f"{LLAMA_URL}/v1/models", timeout=LLAMA_PING_TIMEOUT) as r:
             return r.status == 200
     except Exception:
         return False
@@ -156,6 +184,9 @@ def start_llama():
         model_path = os.path.join(MODELS_DIR, MODEL_CFG["model_file"])
         if not os.path.isfile(model_path):
             return False, f"modèle absent : {model_path} (lance bash setup.sh)"
+        # Ancien process mort → on nettoie la référence avant de relancer
+        if llama_proc is not None and llama_proc.poll() is not None:
+            llama_proc = None
         cmd = [
             bin_path,
             "--host", LLAMA_HOST,
@@ -176,29 +207,45 @@ def start_llama():
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
+            log(f"llama-server lancé (pid {llama_proc.pid}, port {LLAMA_PORT})")
         except Exception as e:
+            llama_proc = None
             return False, f"échec démarrage llama-server : {e}"
     # Attend la disponibilité (préfill GPU peut prendre quelques secondes)
-    deadline = time.time() + 60
+    deadline = time.time() + LLAMA_READY_TIMEOUT
     while time.time() < deadline:
         if llama_running():
             llama_ready.set()
+            log("llama-server prêt")
             return True, msg_vram or "modèle chargé"
+        # Le process est mort avant d'être prêt → erreur immédiate (pas 90 s d'attente)
+        with llama_proc_lock:
+            p = llama_proc
+        if p is not None and p.poll() is not None:
+            log(f"llama-server (pid {p.pid}) mort au démarrage, code {p.returncode}")
+            return False, "llama-server a crashé au démarrage (VRAM insuffisante ? binaire ?)"
         time.sleep(0.4)
-    return False, "timeout : llama-server ne répond pas (voir journal sasquatch-cc)"
+    return False, "timeout : llama-server ne répond pas (voir server.log)"
 
 
 def stop_llama():
-    """Arrête llama-server proprement (SIGTERM → KILL)."""
+    """Arrête llama-server proprement (SIGTERM → KILL). Aucun zombie."""
     global llama_proc
     with llama_proc_lock:
-        if llama_proc and llama_proc.poll() is None:
-            llama_proc.terminate()
-            try:
-                llama_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                llama_proc.kill()
+        proc = llama_proc
         llama_proc = None
+    if proc is not None and proc.poll() is None:
+        log(f"stop_llama : SIGTERM → llama-server (pid {proc.pid})")
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            log("stop_llama : SIGKILL (timeout 5 s)")
+            proc.kill()
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                pass
     llama_ready.clear()
 
 
@@ -206,71 +253,159 @@ def stop_llama():
 
 SYSTEM_PROMPT = PERSONA["system_prompt"]
 
+
 def build_messages():
+    """Historique COMPLET (multi-tours) + system prompt."""
     with history_lock:
         msgs = [{"role": "system", "content": SYSTEM_PROMPT}] + list(history)
     return msgs
 
 
+def _with_image(messages, image_b64):
+    """Copie défensive : dernier message user → content list avec l'image.
+    Ne mute JAMAIS les dicts de `history` (remplacement d'élément sur une copie)."""
+    text = messages[-1]["content"]
+    msgs = [dict(m) for m in messages]
+    msgs[-1] = {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": text},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+        ],
+    }
+    return msgs
+
+
 def chat_completion(messages, image_b64=None):
-    """Appel non-streaming à llama-server (utilisé par le job streaming)."""
+    """Appel NON-streaming (fallback si le SSE échoue). Timeout explicite."""
     payload = {
-        "messages": messages,
+        "messages": _with_image(messages, image_b64) if image_b64 else messages,
         "temperature": MODEL_CFG["temperature"],
         "max_tokens": MODEL_CFG["max_tokens"],
         "stream": False,
     }
-    if image_b64:
-        # Vision : image en content_url data URI (format OpenAI)
-        text = messages[-1]["content"]
-        messages[-1] = {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": text},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
-            ],
-        }
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"{LLAMA_URL}/v1/chat/completions", data=data,
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=300) as r:
+    with urllib.request.urlopen(req, timeout=LLAMA_GEN_TIMEOUT) as r:
         resp = json.loads(r.read().decode())
     return resp["choices"][0]["message"]["content"]
 
 
+def stream_chat_completion(messages, image_b64=None, on_chunk=None):
+    """Appel STREAMING (SSE) à llama-server. on_chunk(str) à chaque morceau.
+    Lève une exception en cas d'échec réseau/HTTP/JSON — le worker décide."""
+    payload = {
+        "messages": _with_image(messages, image_b64) if image_b64 else messages,
+        "temperature": MODEL_CFG["temperature"],
+        "max_tokens": MODEL_CFG["max_tokens"],
+        "stream": True,
+    }
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{LLAMA_URL}/v1/chat/completions", data=data,
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=LLAMA_GEN_TIMEOUT) as r:
+        for raw in r:
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                obj = json.loads(data)
+                delta = obj["choices"][0]["delta"]
+                c = delta.get("content")
+            except Exception:
+                continue
+            if c and on_chunk:
+                on_chunk(c)
+
+
 def run_chat_job(job_id, user_text, image_b64):
-    """Thread du job : garde l'historique, génère, stocke les morceaux."""
+    """Thread du job : garde l'historique, stream la génération, met à jour
+    jobs[job_id]["text"] au fil de l'eau. Catch large : un échec ne tue JAMAIS
+    le process — il marque le job en erreur (visible dans le poll QML)."""
     with history_lock:
         history.append({"role": "user", "content": user_text})
     msgs = build_messages()
-    full = ""
-    try:
-        # Note : llama-server supporte stream, mais on fait un appel complet
-        # et on renvoie le texte par morceaux depuis le job (simple + robuste).
-        full = chat_completion(msgs, image_b64)
-        with history_lock:
-            history.append({"role": "assistant", "content": full})
-    except Exception as e:
+    chunks = []
+    error = None
+
+    def on_chunk(c):
+        chunks.append(c)
         with jobs_lock:
-            jobs[job_id]["error"] = str(e)
+            j = jobs.get(job_id)
+            if j is not None:
+                j["text"] = "".join(chunks)
+
+    try:
+        stream_chat_completion(msgs, image_b64, on_chunk)
+    except Exception as e:
+        log(f"[job {job_id}] stream échec : {e}")
+        if chunks:
+            # Texte partiel déjà reçu → on garde, on signale l'interruption
+            error = f"génération interrompue : {e}"
+        else:
+            # Rien reçu → fallback appel complet (robustesse maximale)
+            try:
+                full = chat_completion(msgs, image_b64)
+                chunks = [full]
+                log(f"[job {job_id}] fallback non-stream OK ({len(full)} chars)")
+            except Exception as e2:
+                error = f"{e2}"
+                log(f"[job {job_id}] fallback échoué : {e2}")
+
+    full_text = "".join(chunks)
     with jobs_lock:
-        jobs[job_id]["done"] = True
-        jobs[job_id]["text"] = full
+        j = jobs.get(job_id)
+        if j is None:  # filet : le job existe toujours en pratique
+            j = jobs[job_id] = {"done": True, "text": "", "error": None, "finished_at": None}
+        if error:
+            j["error"] = error
+        else:
+            j["text"] = full_text
+        j["done"] = True
+        j["finished_at"] = time.time()
+
+    if error is None:
+        with history_lock:
+            history.append({"role": "assistant", "content": full_text})
+    log(f"[job {job_id}] terminé : {len(full_text)} chars" + (f" — ERREUR : {error}" if error else ""))
+
+
+def _purge_jobs():
+    """Supprime les jobs terminés depuis > JOB_RETENTION_SECONDS (anti-fuite)."""
+    now = time.time()
+    with jobs_lock:
+        stale = [
+            jid for jid, j in jobs.items()
+            if j.get("done") and (j.get("finished_at") or 0) < now - JOB_RETENTION_SECONDS
+        ]
+        for jid in stale:
+            del jobs[jid]
+    if stale:
+        log(f"purge de {len(stale)} job(s) terminé(s) : {stale}")
 
 
 def start_chat(user_text, image_b64=None):
+    _purge_jobs()
     if not llama_running():
         ok, msg = start_llama()
         if not ok:
             return None, msg
-    job_id = f"job{job_counter[0]}"
-    job_counter[0] += 1
+    with job_counter_lock:
+        job_id = f"job{job_counter[0]}"
+        job_counter[0] += 1
     with jobs_lock:
-        jobs[job_id] = {"done": False, "text": "", "error": None}
+        jobs[job_id] = {"done": False, "text": "", "error": None, "finished_at": None}
     t = threading.Thread(target=run_chat_job, args=(job_id, user_text, image_b64), daemon=True)
     t.start()
+    log(f"[chat] job {job_id} démarré ({len(user_text)} chars, image={'oui' if image_b64 else 'non'})")
     return job_id, None
 
 
@@ -327,7 +462,7 @@ def get_palette():
 # ─── HTTP ───────────────────────────────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "Aiko/1.0"
+    server_version = "Aiko/1.1"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *a):
@@ -338,23 +473,32 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(body).encode()
         elif isinstance(body, str):
             body = body.encode()
-        self.send_response(code)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass  # client parti — jamais fatal
 
     def _read_body(self):
-        length = int(self.headers.get("Content-Length") or 0)
-        if not length:
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            length = 0
+        if length <= 0:
             return {}
+        if length > MAX_BODY_BYTES:
+            return {"_too_large": True}
         try:
             return json.loads(self.rfile.read(length).decode())
         except Exception:
             return {}
 
-    def do_GET(self):
+    # ── Routes GET ──
+    def _route_get(self):
         path = self.path.split("?")[0]
         if path == "/api/health":
             self._send(200, {"ok": True, "model": MODEL_CFG["model_file"]})
@@ -365,17 +509,22 @@ class Handler(BaseHTTPRequestHandler):
             with jobs_lock:
                 job = jobs.get(job_id)
             if not job:
-                self._send(404, {"done": True, "error": "job inconnu"})
+                # Job inconnu → 404 JSON propre (jamais d'exception)
+                self._send(404, {"done": True, "text": "", "error": "job inconnu"})
             else:
                 self._send(200, {"done": job["done"], "text": job["text"], "error": job["error"]})
         elif path == "/api/palette":
             self._send(200, get_palette())
         else:
-            self._send(404, {"ok": False, "error": "not found"}, "text/plain")
+            self._send(404, {"ok": False, "error": "not found"})
 
-    def do_POST(self):
+    # ── Routes POST ──
+    def _route_post(self):
         path = self.path.split("?")[0]
         body = self._read_body()
+        if body.get("_too_large"):
+            self._send(413, {"ok": False, "error": "body trop volumineux"})
+            return
         if path == "/api/model/start":
             ok, msg = start_llama()
             self._send(200, {"ok": ok, "msg": msg})
@@ -383,7 +532,7 @@ class Handler(BaseHTTPRequestHandler):
             stop_llama()
             self._send(200, {"ok": True})
         elif path == "/api/chat":
-            text = body.get("message", "").strip()
+            text = str(body.get("message") or "").strip()
             image = body.get("image") or None
             if not text:
                 self._send(400, {"ok": False, "error": "message vide"})
@@ -404,7 +553,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(200, {"ok": True, "image": b64})
         elif path == "/api/session/save":
-            name = body.get("name") or f"session-{int(time.time())}"
+            name = str(body.get("name") or f"session-{int(time.time())}")
             safe = re.sub(r"[^a-zA-Z0-9_-]", "_", name) + ".json"
             os.makedirs(SESSIONS_DIR, exist_ok=True)
             with history_lock:
@@ -417,19 +566,57 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"ok": True})
             threading.Timer(0.3, shutdown_server).start()
         else:
-            self._send(404, {"ok": False, "error": "not found"}, "text/plain")
+            self._send(404, {"ok": False, "error": "not found"})
+
+    # ── Filet de sécurité : une exception ici ne tue JAMAIS le serveur ──
+    def do_GET(self):
+        try:
+            self._route_get()
+        except Exception:
+            log(f"GET {self.path} → exception :\n{traceback.format_exc()}")
+            try:
+                self._send(500, {"ok": False, "error": "internal error"})
+            except Exception:
+                pass
+
+    def do_POST(self):
+        try:
+            self._route_post()
+        except Exception:
+            log(f"POST {self.path} → exception :\n{traceback.format_exc()}")
+            try:
+                self._send(500, {"ok": False, "error": "internal error"})
+            except Exception:
+                pass
 
 
 # ─── Main ───────────────────────────────────────────────────
 
 def shutdown_server():
+    """Arrêt propre : llama-server tué AVANT l'exit (aucun orphelin)."""
+    log("shutdown : arrêt de llama-server…")
     stop_llama()
+    log("bye")
     os._exit(0)
+
+
+def _signal_shutdown(signum, frame):
+    """SIGTERM/SIGINT → même arrêt propre que /api/close.
+    Cause racine du crash silencieux : server.py tué par un signal laissait
+    llama-server (start_new_session) orphelin, VRAM bloquée, chat « mort ».
+    stop_llama tourne dans un thread dédié (pas de lock dans un handler de
+    signal → pas de deadlock)."""
+    log(f"signal {signum} reçu — arrêt propre")
+    t = threading.Thread(target=stop_llama, daemon=True)
+    t.start()
+    t.join(timeout=6)
+    os._exit(128 + signum)
 
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+    request_queue_size = 128  # pics de polls QML (150 ms) pendant une vision
 
 
 def main():
@@ -439,14 +626,19 @@ def main():
             PORT = int(sys.argv[sys.argv.index("--port") + 1])
         except (IndexError, ValueError):
             pass
+    signal.signal(signal.SIGTERM, _signal_shutdown)
+    signal.signal(signal.SIGINT, _signal_shutdown)
     # Verrouille le port si déjà occupé → un serveur aiko tourne déjà
     try:
         srv = Server(("127.0.0.1", PORT), Handler)
     except OSError:
         print(f"Aiko déjà lancé sur le port {PORT}", flush=True)
         sys.exit(0)
-    print(f"Aiko ready on http://127.0.0.1:{PORT}", flush=True)
-    srv.serve_forever()
+    log(f"Aiko ready on http://127.0.0.1:{PORT}")
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        _signal_shutdown(signal.SIGINT, None)
 
 
 if __name__ == "__main__":
