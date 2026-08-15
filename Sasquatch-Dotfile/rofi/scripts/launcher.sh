@@ -17,4 +17,6 @@ rofi \
     -modi "drun,run,window" \
     -terminal "kitty" \
     -no-lazy-grab \
+    -sort \
+    -matching fuzzy \
     "$@"

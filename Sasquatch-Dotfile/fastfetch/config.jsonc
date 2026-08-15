@@ -10,12 +10,12 @@
         "source": "arch",
         /* === SASQUATCH-PALETTE-BEGIN === */
     "color": {
-        "1": "#7f4848",
-        "2": "#996d6d",
-        "3": "#b08e8e",
-        "4": "#c8b0b0",
-        "5": "#e1d4d4",
-        "6": "#f9f6f6"
+        "1": "#6b524d",
+        "2": "#93706a",
+        "3": "#b78d85",
+        "4": "#d3aca5",
+        "5": "#e7d2ce",
+        "6": "#faf6f5"
     }
 /* === SASQUATCH-PALETTE-END === */
     },

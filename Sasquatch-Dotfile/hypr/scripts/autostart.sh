@@ -26,11 +26,11 @@ fcitx5 -d &
 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
 
 # ── Idle / Lock ──────────────────────────────
-# Le panneau Settings (Super+I) peut désactiver la veille : hypridle n'est
-# lancé que si settings.json autorise l'idle (défaut : activé).
-if python3 -c 'import json,os;d=json.load(open(os.path.expanduser("~/.config/settings/settings.json")));exit(0 if d.get("idle",{}).get("enabled",True) else 1)' 2>/dev/null; then
-    hypridle &
-fi
+# hypridle tourne TOUJOURS : le lock au capot (logind HandleLidSwitch=lock
+# → lock-session → lock_cmd → hyprlock) dépend de lui. Si l'idle est
+# désactivé via le panneau Settings (Super+I), settings.py écrit un conf
+# lock-only (pas de timeouts de veille) mais hypridle reste lancé.
+hypridle &
 
 # ── Lecteur MPD (CC musique + finder) ────────
 # Service user normalement activé par install.sh ; ce start est un filet de

@@ -1,22 +1,22 @@
 /* === SASQUATCH-PALETTE-BEGIN === */
 * {
     /* ── Backgrounds ────────────────────────────────── */
-    bg-window:   rgba(21, 21, 21, 0.85);
-    bg-input:    rgba(32, 25, 25, 0.80);
-    bg-selected: rgba(119, 60, 60, 0.25);
+    bg-window:   rgba(18, 21, 33, 0.85);
+    bg-input:    rgba(40, 37, 46, 0.80);
+    bg-selected: rgba(203, 156, 147, 0.25);
     urgent-bg:   rgba(243, 139, 168, 0.25);
 
     /* ── Foregrounds ────────────────────────────────── */
-    fg:          rgba(209, 209, 209, 1.0);
-    fg-dim:      rgba(124, 124, 124, 1.0);
+    fg:          rgba(207, 208, 214, 1.0);
+    fg-dim:      rgba(121, 123, 132, 1.0);
     fg-selected: rgba(255, 255, 255, 1.0);
 
     /* ── Accents ────────────────────────────────────── */
-    accent:      rgba(119, 60, 60, 1.0);
-    accent-dim:  rgba(119, 60, 60, 0.75);
+    accent:      rgba(203, 156, 147, 1.0);
+    accent-dim:  rgba(203, 156, 147, 0.75);
     urgent:      rgba(243, 139, 168, 1.0);
 
     /* ── Border ─────────────────────────────────────── */
-    border:      rgba(119, 60, 60, 0.50);
+    border:      rgba(203, 156, 147, 0.50);
 }
 /* === SASQUATCH-PALETTE-END === */

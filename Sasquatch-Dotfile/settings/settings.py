@@ -107,6 +107,21 @@ listener {
 }
 """
 
+# Variante MINIMALE quand idle est désactivé : hypridle tourne pour le
+# lock_cmd (lock au capot via logind → hyprlock) mais SANS les timeouts
+# de veille (dim/lock auto/off/suspend).
+HYPRIDLE_TEMPLATE_LOCK_ONLY = """# hypridle.conf — régénéré par le panneau Settings (Super+I)
+# Mode idle désactivé : hypridle tourne UNIQUEMENT pour le lock au capot.
+# (logind HandleLidSwitch=lock → lock-session → lock_cmd → hyprlock)
+
+general {
+    lock_cmd = pidof hyprlock || hyprlock
+    before_sleep_cmd = loginctl lock-session
+    after_sleep_cmd = hyprctl dispatch dpms on
+    ignore_dbus_inhibit = false
+}
+"""
+
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -353,26 +368,31 @@ def _post_veille(body):
     }
     _write_settings(settings)
 
-    conf = (HYPRIDLE_TEMPLATE
-            .replace("{DIM}", str(dim_min * 60))
-            .replace("{LOCK}", str(lock_min * 60))
-            .replace("{OFF}", str(off_min * 60))
-            .replace("{SUSPEND}", str(suspend_min * 60)))
+    # Template complet si idle activé, sinon lock-only (hypridle tourne
+    # quand même : lock_cmd = lock au capot via logind)
+    if enabled:
+        conf = (HYPRIDLE_TEMPLATE
+                .replace("{DIM}", str(dim_min * 60))
+                .replace("{LOCK}", str(lock_min * 60))
+                .replace("{OFF}", str(off_min * 60))
+                .replace("{SUSPEND}", str(suspend_min * 60)))
+    else:
+        conf = HYPRIDLE_TEMPLATE_LOCK_ONLY
     tmp = HYPRIDLE_CONF + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(conf)
     os.replace(tmp, HYPRIDLE_CONF)
 
-    # restart hypridle : pkill systématique, relance uniquement si enabled
+    # restart hypridle : pkill systématique, relance TOUJOURS (même si
+    # idle désactivé — lock au capot dépend de lock_cmd)
     subprocess.run(["pkill", "-x", "hypridle"], capture_output=True, timeout=5)
-    if enabled:
-        try:
-            devnull = open(os.devnull, "w")
-            subprocess.Popen(["hypridle"], stdout=devnull, stderr=devnull,
-                             start_new_session=True)
-            devnull.close()
-        except Exception:
-            pass
+    try:
+        devnull = open(os.devnull, "w")
+        subprocess.Popen(["hypridle"], stdout=devnull, stderr=devnull,
+                         start_new_session=True)
+        devnull.close()
+    except Exception:
+        pass
     return {"ok": True, "hypridle": _hypridle_running()}
 
 
