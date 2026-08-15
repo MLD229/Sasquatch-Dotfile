@@ -6,3 +6,7 @@ __pycache__/
 fcitx5/conf/cached_layouts
 # cc : palette générée par theme-apply.py à chaque changement de wallpaper
 cc/qml/Palette.qml
+
+# aiko : modèles GGUF (2.6 Go !) — téléchargés par aiko/setup.sh, jamais versionnés
+aiko/models/*.gguf
+aiko/sessions/*.json

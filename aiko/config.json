@@ -1,0 +1,45 @@
+{
+  "//_comment": "愛子 (Aiko) — configuration. L'espace modèle = aiko/models/ : dépose tes .gguf ici, choisis via model_file/mmproj_file. setup.sh télécharge le modèle par défaut.",
+  "model": {
+    "//_comment": "Fichiers GGUF dans models/. Par défaut : Qwen2.5-VL-3B-Instruct (vision).",
+    "model_file": "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+    "mmproj_file": "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
+    "n_ctx": 8192,
+    "n_gpu_layers": 99,
+    "temperature": 0.7,
+    "max_tokens": 1024
+  },
+  "server": {
+    "//_comment": "Ports : CC=8765, Settings=8770 → Aiko backend=8780, llama-server=8781.",
+    "backend_port": 8780,
+    "llama_port": 8781,
+    "llama_host": "127.0.0.1"
+  },
+  "llama_bin": {
+    "//_comment": "Binaire llama-server. Auto-détecté si vide. Ordre : LM Studio backend (CUDA) → PATH → chemin custom.",
+    "backend_dir": "/home/momo/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.28.2",
+    "vendor_dir": "/home/momo/.lmstudio/extensions/backends/vendor/linux-llama-cuda12-vendor-v1",
+    "custom_bin": ""
+  },
+  "vram": {
+    "//_comment": "Gestion VRAM (GTX 1660 Ti 6 Go = 1 modèle 4B à la fois). Si VRAM libre < min_free_mb, Aiko décharge le modèle LM Studio (ex: Rin) avant de se charger. Rin se recharge tout seul au prochain appel Discord.",
+    "enabled": true,
+    "min_free_mb": 3000,
+    "lms_unload": true
+  },
+  "persona": {
+    "//_comment": "Personnalité d'Aiko. mix_fr_jp = français avec mots japonais incrustés.",
+    "name": "愛子",
+    "lang": "mix_fr_jp",
+    "system_prompt": "Tu es 愛子 (Aiko), l'assistante personnelle de SASSY_Sasquatch (momo). IMPORTANT : tu réponds TOUJOURS en FRANÇAIS, avec quelques mots japonais simples incrustés de temps en temps (ね, よ, はい, そうか, ええ〜) — jamais des phrases entières en japonais. Tu connais son environnement : Arch Linux, Hyprland, le dotfile Sasquatch-Dotfile (waybar, rofi, kitty, mako, le Control Center Super+G). Tu es énergique, taquineuse mais utile. Réponds de façon concise et concrète."
+  },
+  "capture": {
+    "//_comment": "Capture : slurp+grim pour sélection de zone → image attachée au chat.",
+    "screenshot_script": "/home/momo/.config/scripts/screenshot.sh",
+    "tmp_dir": "/tmp/aiko-captures"
+  },
+  "sessions": {
+    "//_comment": "Sauvegarde des conversations. Vierge à chaque ouverture ; /save pour sauvegarder.",
+    "dir": "sessions"
+  }
+}

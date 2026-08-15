@@ -154,6 +154,7 @@ PKGS=(
     ffmpeg                  # fallback finder (si pw-record absent)
     python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
     gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
+    llama.cpp-cuda          # AUR — llama-server CUDA (aiko/, sidebar 愛子 Super+N)
 )
 
 missing=()
@@ -321,6 +322,7 @@ link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
 link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
 link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
 link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
+link "$DOTDIR/aiko"                     "$CONFIG/aiko"           # Sidebar 愛子 Aiko (Quickshell chat IA, Super+N)
 link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifo CC Capture (finder)
 link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
