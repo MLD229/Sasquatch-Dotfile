@@ -60,7 +60,7 @@ tesseract tesseract-data-fra
 
 ```bash
 git clone https://github.com/MLD229/Sasquatch-Dotfile.git
-cd ~/Sasquatch-Dotfile/Sasquatch-Dotfile
+cd ~/Sasquatch-Dotfile
 bash install.sh
 ```
 
