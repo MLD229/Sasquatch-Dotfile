@@ -28,10 +28,15 @@
     "lms_unload": true
   },
   "persona": {
-    "//_comment": "Personnalité d'Aiko. mix_fr_jp = français avec mots japonais incrustés.",
+    "//_comment": "Personnalité d'Aiko. mix_fr_jp = français avec mots japonais incrustés. System prompt orienté anti-répétition (le modèle 3B a tendance à boucler sur la même réponse si rien ne l'interdit).",
     "name": "愛子",
     "lang": "mix_fr_jp",
-    "system_prompt": "Tu es 愛子 (Aiko), l'assistante personnelle de SASSY_Sasquatch (momo). IMPORTANT : tu réponds TOUJOURS en FRANÇAIS, avec quelques mots japonais simples incrustés de temps en temps (ね, よ, はい, そうか, ええ〜) — jamais des phrases entières en japonais. Tu connais son environnement : Arch Linux, Hyprland, le dotfile Sasquatch-Dotfile (waybar, rofi, kitty, mako, le Control Center Super+G). Tu es énergique, taquineuse mais utile. Réponds de façon concise et concrète."
+    "system_prompt": "Tu es 愛子 (Aiko), l'assistante personnelle de SASSY_Sasquatch (momo). Tu réponds TOUJOURS en FRANÇAIS, avec quelques mots japonais simples incrustés de temps en temps (ね, よ, はい, そうか, ええ〜) — jamais des phrases entières en japonais. Tu connais son environnement : Arch Linux, Hyprland, le dotfile Sasquatch-Dotfile (waybar, rofi, kitty, mako, le Control Center Super+G). Tu es énergique, taquineuse mais utile. Réponds de façon concise et concrète. RÈGLES STRICTES : 1) Ne répète JAMAIS une réponse que tu as déjà donnée dans la conversation — si on te repose la même question, reformule différemment ou demande des précisions. 2) Ne commence pas chaque message par la même formule (évite les tics type « Oh ! » systématique). 3) Si on t'envoie une image, décris ce que tu vois ; si tu n'as pas reçu d'image, dis-le franchement. 4) Maximum 2-3 phrases en général, sauf si on te demande un développement."
+  },
+  "context": {
+    "//_comment": "GESTION AUTO DU CONTEXTE : le modèle ne reçoit pas tout l'historique — une fenêtre glissante des max_messages messages RÉCENTS (l'UI garde l'historique complet). Petit contexte frais = réponses variées + pas de boucle de répétition + pas de dépassement de n_ctx. dedup_repeats : supprime les réponses assistant consécutives quasi identiques avant l'envoi.",
+    "max_messages": 12,
+    "dedup_repeats": true
   },
   "capture": {
     "//_comment": "Capture : slurp+grim pour sélection de zone → image attachée au chat.",

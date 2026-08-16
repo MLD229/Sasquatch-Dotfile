@@ -65,6 +65,8 @@ PKGS=(
     playerctl
     libqalculate       # calculatrice rofi (calc.sh, SUPER+C)
     python-pillow
+    python-numpy           # wallclock-ja.py (position auto dans la zone plate du wallpaper)
+    python-cairo           # wallclock-ja.py + fastview.py (dessin cairo GTK)
 
     # Presse-papier (clipboard.sh, SUPER+V) + captures (grim/slurp)
     cliphist
@@ -149,11 +151,13 @@ PKGS=(
     tesseract               # OCR écran (cc/ocr.sh)
     tesseract-data-fra      # langue française pour tesseract
     curl                    # healthcheck serveur (cc/cc.sh)
+    jq                      # parsing JSON (lock-media.sh au lock, scripts)
     nvidia-utils            # nvidia-smi (waybar GPU + metrics.py) — machine NVIDIA
     libva-nvidia-driver     # décodage VA-API NVIDIA (env.conf LIBVA_DRIVER_NAME=nvidia)
     ffmpeg                  # fallback finder (si pw-record absent)
     python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
     gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
+    opentabletdriver        # AUR — daemon tablette XP-Pen (service user activé plus bas)
     llama.cpp-cuda          # AUR — llama-server CUDA (aiko/, sidebar 愛子 Super+N)
 )
 
@@ -263,6 +267,15 @@ else
     warning "Service user mpd non activé (pas de session) — autostart.sh le lancera au login"
 fi
 
+# Service USER opentabletdriver (tablette graphique XP-Pen, 28bd:0907).
+# Le kernel Arch n'a PAS hid_uclogic → OTD fait le relais tablette→libinput
+# (Hyprland voit la tablette virtuelle, pression + tilt). Idempotent.
+if systemctl --user enable --now opentabletdriver 2>/dev/null; then
+    success "opentabletdriver (service user) activé — tablette XP-Pen"
+else
+    warning "Service user opentabletdriver non activé (pas de session) — à activer au login"
+fi
+
 # Services USER audio (PipeWire/WirePlumber) — SANS EUX : pas de son, wpctl/pactl
 # échouent (volume.sh, waybar pulseaudio, CC volume morts). Les sockets ne sont
 # pas activées par défaut sur une machine neuve → on les active explicitement.
@@ -324,6 +337,7 @@ link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (
 link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
 link "$DOTDIR/aiko"                     "$CONFIG/aiko"           # Sidebar 愛子 Aiko (Quickshell chat IA, Super+N)
 link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifo CC Capture (finder)
+link "$DOTDIR/settings"                 "$CONFIG/settings"       # Panneau Settings (Quickshell, Super+I)
 link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
 link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"
@@ -337,6 +351,8 @@ chmod +x "$DOTDIR"/scripts/*.sh
 chmod +x "$DOTDIR"/hypr/scripts/*.sh
 chmod +x "$DOTDIR"/rofi/scripts/*.sh      # ← ajouté (bug #31)
 chmod +x "$DOTDIR"/cc/*.sh                # ← Control Center (cc.sh, ocr.sh)
+chmod +x "$DOTDIR"/aiko/*.sh              # ← Sidebar 愛子 Aiko (aiko.sh, setup.sh)
+chmod +x "$DOTDIR"/settings/*.sh          # ← Panneau Settings (settings.sh)
 chmod +x "$DOTDIR"/set-wall.sh            # ← ajouté (bug #31)
 success "Scripts rendus exécutables"
 

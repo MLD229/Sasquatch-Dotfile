@@ -64,6 +64,10 @@ BTN_MIN_W = 24          # CSS #workspaces button { min-width: 24px }
 BTN_PAD = 7             # CSS #workspaces button { padding: 0 7px }
 FONT_BTN = "JetBrainsMono Nerd Font 14"
 FONT_TITLE = "JetBrainsMono Nerd Font 9"
+# Labels des boutons workspaces (waybar config : format "{name}", noms définis
+# dans hypr/conf.d/rules.conf) — la mesure des largeurs DOIT utiliser les
+# MÊMES textes que waybar, sinon le hover fastview est décalé.
+WS_LABELS = ["いち", "に", "さん", "よん", "ご", "ろく", "なな", "はち", "きゅう", "じゅう"]
 
 POPUP_W = 340
 POPUP_H_MAX = 230
@@ -178,7 +182,7 @@ def measure_button_widths():
     layout.set_font_description(fd)
     widths = []
     for i in range(1, WS_COUNT + 1):
-        layout.set_text(str(i), -1)
+        layout.set_text(WS_LABELS[i - 1], -1)
         tw, _ = layout.get_pixel_size()
         widths.append(max(BTN_MIN_W, tw) + 2 * BTN_PAD)
     return widths
@@ -462,9 +466,11 @@ class FastView:
             return
         st = self.build_state(ws_id, mon, mon.get("id"))
         n = st.get("n", len(st.get("wins", [])))
-        actif = "  ● actif" if self.active_ws.get(mon_name) == ws_id else ""
+        actif = "  ● アクティブ" if self.active_ws.get(mon_name) == ws_id else ""
+        label = WS_LABELS[ws_id - 1] if 1 <= ws_id <= WS_COUNT else str(ws_id)
         self.title_label.set_markup(
-            f"Workspace {ws_id}{actif}   <span alpha='60%'>· {n} fenêtre(s)</span>"
+            f"ワークスペース {label} — espace de travail {ws_id}{actif}"
+            f"   <span alpha='60%'>· {n} fenêtre(s)</span>"
         )
 
         if st["mode"] == "image":

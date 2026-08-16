@@ -1,0 +1,156 @@
+{
+  "_comment": "ui-ja.json — dictionnaire UI japonaise (Sasquatch-Dotfile). Spec momo : hiragana surtout, kanji rarement, katakana rarement ; yomi en hiragana si kanji/katakana ; TOUJOURS la traduction. Champ 'kanji' optionnel — ajouté seulement quand le texte affiché contient un kanji. Champ 'katakana' idem. yomi = épellation hiragana complète du texte affiché.",
+  "modules": {
+    "clock": {
+      "ja": "じかん",
+      "kanji": "時間",
+      "yomi": "じかん",
+      "fr": "l'heure"
+    },
+    "date": {
+      "ja": "ひづけ",
+      "kanji": "日付",
+      "yomi": "ひづけ",
+      "fr": "la date"
+    },
+    "now": {
+      "ja": "いま",
+      "kanji": "今",
+      "yomi": "いま",
+      "fr": "maintenant"
+    },
+    "workspaces": {
+      "ja": "ワークスペース",
+      "yomi": "わーくすぺーす",
+      "fr": "les espaces de travail"
+    },
+    "cpu": {
+      "ja": "シーピーユー",
+      "yomi": "しーぴーゆー",
+      "fr": "le processeur"
+    },
+    "gpu": {
+      "ja": "ジーピーユー",
+      "yomi": "じーぴーゆー",
+      "fr": "la carte graphique"
+    },
+    "memory": {
+      "ja": "メモリー",
+      "yomi": "めもりー",
+      "fr": "la mémoire"
+    },
+    "swap": {
+      "ja": "スワップ",
+      "yomi": "すわっぷ",
+      "fr": "le swap"
+    },
+    "network": {
+      "ja": "ネットワーク",
+      "yomi": "ねっとわーく",
+      "fr": "le réseau"
+    },
+    "wifi": {
+      "ja": "ワイファイ",
+      "yomi": "わいふぁい",
+      "fr": "le wifi"
+    },
+    "lan": {
+      "ja": "ラン",
+      "yomi": "らん",
+      "fr": "le réseau filaire (LAN)"
+    },
+    "battery": {
+      "ja": "でんち",
+      "kanji": "電池",
+      "yomi": "でんち",
+      "fr": "la batterie"
+    },
+    "battery_charging": {
+      "ja": "じゅうでんちゅう",
+      "kanji": "充電中",
+      "yomi": "じゅうでんちゅう",
+      "fr": "en charge"
+    },
+    "battery_time_left": {
+      "ja": "のこりじかん",
+      "kanji": "残り時間",
+      "yomi": "のこりじかん",
+      "fr": "temps restant"
+    },
+    "volume": {
+      "ja": "おんりょう",
+      "kanji": "音量",
+      "yomi": "おんりょう",
+      "fr": "le volume"
+    },
+    "muted": {
+      "ja": "むおん",
+      "kanji": "無音",
+      "yomi": "むおん",
+      "fr": "muet"
+    },
+    "brightness": {
+      "ja": "あかるさ",
+      "kanji": "明るさ",
+      "yomi": "あかるさ",
+      "fr": "la luminosité"
+    },
+    "bluetooth": {
+      "ja": "ブルートゥース",
+      "yomi": "ぶるーとぅーす",
+      "fr": "le bluetooth"
+    },
+    "clipboard": {
+      "ja": "クリップボード",
+      "yomi": "くりっぷぼーど",
+      "fr": "le presse-papier"
+    },
+    "tray": {
+      "ja": "トレイ",
+      "yomi": "とれい",
+      "fr": "la zone de notification"
+    },
+    "music": {
+      "ja": "おんがく",
+      "kanji": "音楽",
+      "yomi": "おんがく",
+      "fr": "la musique"
+    },
+    "hour_suffix": {
+      "ja": "じ",
+      "fr": "suffixe d'heure (2時 → にじ = 2h)"
+    },
+    "minute_suffix": {
+      "ja": "ふん",
+      "fr": "suffixe de minute (35分 → さんじゅうごふん = 35 min)"
+    },
+    "click": {
+      "ja": "クリック",
+      "yomi": "くりっく",
+      "fr": "cliquer"
+    },
+    "left_click": {
+      "ja": "ひだりクリック",
+      "yomi": "ひだりくりっく",
+      "fr": "clic gauche"
+    },
+    "right_click": {
+      "ja": "みぎクリック",
+      "yomi": "みぎくりっく",
+      "fr": "clic droit"
+    },
+    "middle_click": {
+      "ja": "なかクリック",
+      "yomi": "なかくりっく",
+      "fr": "clic du milieu"
+    },
+    "temperature": {
+      "ja": "おんど",
+      "kanji": "温度",
+      "yomi": "おんど",
+      "fr": "la température"
+    }
+  },
+  "example_clock": "じゅうにじ さんじゅうごふん — 12:35",
+  "_vocab_note": "Mots déjà connus de momo réutilisés : いま (今). Nouveaux introduits : じかん (時間), おんがく (音楽)."
+}

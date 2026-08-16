@@ -5,18 +5,28 @@
 #
 #  Endpoints :
 #    GET  /api/health              → état serveur
+#    GET  /api/history             → historique complet (role/content/ts) → restauration UI
 #    GET  /api/model/status        → llama-server tourne ? modèle chargé ?
 #    POST /api/model/start         → démarre llama-server (lazy)
 #    POST /api/model/stop          → arrête llama-server
 #    POST /api/chat                → {message, image?} → {job_id} (streaming)
 #    GET  /api/chat/poll/<id>      → {done, text, error?}
-#    POST /api/chat/reset          → vide l'historique (nouvelle conversation)
+#    POST /api/chat/reset          → vide l'historique (nouvelle conversation) + supprime l'autosave
 #    POST /api/capture             → slurp+grim → {image_b64} (attachée, pas envoyée)
 #    GET  /api/palette             → palette thème (pattern CC)
 #    POST /api/session/save        → sauvegarde la conversation → sessions/
 #    POST /api/close               → arrête llama-server + quitte
 #
 #  Python stdlib uniquement. Ports : backend=8780, llama-server=8781.
+#
+#  Persistance (2026-08-15) :
+#    - Chaque entrée d'historique porte un timestamp epoch `ts` (float).
+#    - L'historique est autosauvé dans sessions/autosave.json (atomique :
+#      tmp + os.replace) à CHAQUE mutation (message user, réponse assistant,
+#      reset) → la conversation survit à la fermeture/réouverture de la sidebar.
+#    - Au boot, si autosave.json existe et est valide → restauré dans `history`.
+#    - /api/chat/reset supprime AUSSI autosave.json (sinon l'ancienne
+#      conversation reviendrait au prochain boot).
 #
 #  Robustesse (2026-08-15) :
 #    - Vrai streaming SSE depuis llama-server (le job met à jour jobs[id]["text"]
@@ -33,6 +43,7 @@
 #      le serveur ne meurt jamais sur une requête malformée.
 # ─────────────────────────────────────────────────────────────
 import base64
+import difflib
 import json
 import os
 import re
@@ -70,15 +81,84 @@ MODEL_CFG = cfg["model"]
 SERVER_CFG = cfg["server"]
 LLAMA_CFG = cfg["llama_bin"]
 VRAM_CFG = cfg.get("vram", {"enabled": False, "min_free_mb": 3000, "lms_unload": True})
+CTX_CFG = cfg.get("context", {"max_messages": 12, "dedup_repeats": True})
 PERSONA = cfg["persona"]
+
+# Fenêtre de contexte envoyée au modèle (pas l'historique complet) :
+#  - max_messages : nb de messages RÉCENTS envoyés (l'UI garde tout, le modèle
+#    ne voit qu'une fenêtre glissante → petit contexte = réponses variées,
+#    pas de boucle de répétition, pas de dépassement de n_ctx 8192).
+#  - dedup_repeats : supprime les réponses assistant consécutives quasi
+#    identiques AVANT l'envoi (une boucle « The Matrix » ×5 ne doit pas
+#    polluer le modèle — bug vu le 15/08 soir).
+MAX_CTX_MESSAGES = max(2, int(CTX_CFG.get("max_messages", 12)))
+DEDUP_REPEATS = bool(CTX_CFG.get("dedup_repeats", True))
+REPEAT_SIMILARITY = 0.90  # ratio SequenceMatcher au-delà duquel c'est une répétition
 
 LLAMA_PORT = SERVER_CFG["llama_port"]
 LLAMA_HOST = SERVER_CFG["llama_host"]
 LLAMA_URL = f"http://{LLAMA_HOST}:{LLAMA_PORT}"
 
-# Historique du chat (mémoire vive — vierge à chaque ouverture)
+# Historique du chat — persisté dans sessions/autosave.json (gitignoré)
+# Entrées : {"role": "user"|"assistant", "content": str, "ts": epoch float}
 history = []
 history_lock = threading.Lock()
+# realpath : os.replace détruirait un symlink de FICHIER (le dossier sessions/
+# est lui-même un symlink vers le repo — realpath le résout proprement)
+AUTOSAVE_PATH = os.path.realpath(os.path.join(SESSIONS_DIR, "autosave.json"))
+
+
+def save_history():
+    """Écriture ATOMIQUE de l'historique : tmp + os.replace (jamais de fichier
+    corrompu si le process meurt en plein write). Appelée à chaque mutation."""
+    try:
+        os.makedirs(SESSIONS_DIR, exist_ok=True)
+        tmp = AUTOSAVE_PATH + ".tmp"
+        with history_lock:
+            data = list(history)
+        with open(tmp, "w") as f:
+            json.dump(data, f, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, AUTOSAVE_PATH)
+    except Exception as e:
+        log(f"autosave échec : {e}")
+
+
+def load_history():
+    """Au boot : restaure l'historique persisté s'il existe et est valide.
+    Ignore silencieusement un fichier corrompu (jamais fatal)."""
+    if not os.path.isfile(AUTOSAVE_PATH):
+        return
+    try:
+        with open(AUTOSAVE_PATH) as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            raise ValueError("autosave n'est pas une liste")
+        cleaned = []
+        for m in data:
+            if (isinstance(m, dict) and m.get("role") in ("user", "assistant")
+                    and isinstance(m.get("content"), str)):
+                cleaned.append({
+                    "role": m["role"],
+                    "content": m["content"],
+                    "ts": float(m.get("ts") or time.time()),
+                })
+        if cleaned:
+            with history_lock:
+                history[:] = cleaned
+            log(f"historique restauré : {len(cleaned)} message(s) depuis autosave.json")
+    except Exception as e:
+        log(f"autosave illisible, ignoré : {e}")
+
+
+def append_history(role, content):
+    """Ajoute une entrée horodatée PUIS persiste immédiatement (atomique)."""
+    entry = {"role": role, "content": content, "ts": time.time()}
+    with history_lock:
+        history.append(entry)
+    save_history()
+    return entry
 
 # Jobs de génération (streaming)
 jobs = {}
@@ -131,6 +211,22 @@ def llama_running():
     try:
         with urllib.request.urlopen(f"{LLAMA_URL}/v1/models", timeout=LLAMA_PING_TIMEOUT) as r:
             return r.status == 200
+    except Exception:
+        return False
+
+
+def llama_loaded():
+    """True si llama-server a chargé AU MOINS UN modèle.
+
+    /v1/models répond 200 dès que le port écoute, AVANT la fin du chargement
+    (data vide) — le test de port seul mentirait sur l'état réel (bug
+    « prête » affiché alors que le modèle charge encore). La source de
+    vérité = la liste `data` contient le modèle.
+    """
+    try:
+        with urllib.request.urlopen(f"{LLAMA_URL}/v1/models", timeout=LLAMA_PING_TIMEOUT) as r:
+            data = json.loads(r.read().decode())
+            return bool(data.get("data"))
     except Exception:
         return False
 
@@ -254,10 +350,63 @@ def stop_llama():
 SYSTEM_PROMPT = PERSONA["system_prompt"]
 
 
+def _clean_reply(text):
+    """Nettoie la réponse générée : retire les tics « Oh! » en TÊTE de phrase
+    (le modèle 3B commence ~toujours par « Oh! » malgré le prompt — vu en test
+    E2E 2026-08-15 : 3 réponses sur 3). Ne touche JAMAIS le reste du texte.
+    Le contenu est conservé tel quel si le pattern n'est pas en tête."""
+    if not text:
+        return text
+    t = text.strip()
+    cleaned = re.sub(r"^(?:Oh!+\s*)+", "", t)
+    cleaned = re.sub(r"^Oh,\s*", "", cleaned, count=1)
+    cleaned = cleaned.strip()
+    return cleaned or t  # fallback : ne jamais vider une réponse
+
+
+def _is_repeat(prev, cur):
+    """True si `cur` est quasi identique à la réponse `prev` (boucle de répétition)."""
+    if not prev or not cur:
+        return False
+    a, b = prev.strip(), cur.strip()
+    if not a or not b:
+        return False
+    # Ratio global + ratio sur les 100 premiers chars (les tics « Oh! Ok… »)
+    if difflib.SequenceMatcher(None, a, b).ratio() >= REPEAT_SIMILARITY:
+        return True
+    short = min(len(a), len(b), 100)
+    if short >= 20 and difflib.SequenceMatcher(None, a[:short], b[:short]).ratio() >= REPEAT_SIMILARITY:
+        return True
+    return False
+
+
 def build_messages():
-    """Historique COMPLET (multi-tours) + system prompt."""
+    """Historique → fenêtre glissante POUR LE MODÈLE (l'UI garde tout).
+
+    - Dédup : les réponses assistant consécutives quasi identiques sont
+      supprimées (une boucle « The Matrix » ×5 ne pollue pas le modèle).
+    - Fenêtre glissante : seuls les MAX_CTX_MESSAGES derniers messages sont
+      envoyés. Un petit contexte frais = réponses variées + pas de dépassement
+      de n_ctx. Le `ts` est STRIPPÉ (l'API OpenAI-compatible n'attend que
+      role/content)."""
     with history_lock:
-        msgs = [{"role": "system", "content": SYSTEM_PROMPT}] + list(history)
+        hist = list(history)
+    if DEDUP_REPEATS:
+        deduped = []
+        last_assistant = ""  # dernière réponse assistant ACCEPTÉE (les user s'intercalent)
+        for m in hist:
+            if m["role"] == "assistant" and last_assistant:
+                # Répétition non consécutive aussi (boucle « The Matrix » : les
+                # réponses identiques sont séparées par des user « hoh? »/« what »)
+                if _is_repeat(last_assistant, m["content"]):
+                    continue  # réponse répétée → sautée (la 1re occurrence reste)
+            if m["role"] == "assistant":
+                last_assistant = m["content"]
+            deduped.append(m)
+        hist = deduped
+    window = hist[-MAX_CTX_MESSAGES:]
+    msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+    msgs += [{"role": m["role"], "content": m["content"]} for m in window]
     return msgs
 
 
@@ -330,8 +479,9 @@ def run_chat_job(job_id, user_text, image_b64):
     """Thread du job : garde l'historique, stream la génération, met à jour
     jobs[job_id]["text"] au fil de l'eau. Catch large : un échec ne tue JAMAIS
     le process — il marque le job en erreur (visible dans le poll QML)."""
-    with history_lock:
-        history.append({"role": "user", "content": user_text})
+    # Le message user est stocké en texte SEUL (l'image base64 ne part que
+    # dans le job — pas dans l'historique, comportement conservé)
+    append_history("user", user_text)
     msgs = build_messages()
     chunks = []
     error = None
@@ -361,6 +511,14 @@ def run_chat_job(job_id, user_text, image_b64):
                 log(f"[job {job_id}] fallback échoué : {e2}")
 
     full_text = "".join(chunks)
+    if full_text.strip():
+        # Nettoie le tic « Oh! » en tête (le modèle 3B le met partout)
+        full_text = _clean_reply(full_text)
+    if error is None and not full_text.strip():
+        # Réponse VIDE (modèle muet — vu le 15/08 : assistant "" persisté) :
+        # ne pas polluer l'historique avec un message vide, marquer le job.
+        error = "réponse vide du modèle (modèle muet ? réessaie)"
+        log(f"[job {job_id}] réponse vide — non persistée")
     with jobs_lock:
         j = jobs.get(job_id)
         if j is None:  # filet : le job existe toujours en pratique
@@ -373,8 +531,7 @@ def run_chat_job(job_id, user_text, image_b64):
         j["finished_at"] = time.time()
 
     if error is None:
-        with history_lock:
-            history.append({"role": "assistant", "content": full_text})
+        append_history("assistant", full_text)
     log(f"[job {job_id}] terminé : {len(full_text)} chars" + (f" — ERREUR : {error}" if error else ""))
 
 
@@ -462,7 +619,7 @@ def get_palette():
 # ─── HTTP ───────────────────────────────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "Aiko/1.1"
+    server_version = "Aiko/1.2"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *a):
@@ -502,8 +659,15 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         if path == "/api/health":
             self._send(200, {"ok": True, "model": MODEL_CFG["model_file"]})
+        elif path == "/api/history":
+            # Copie complète (role/content/ts) pour la restauration de la UI
+            with history_lock:
+                self._send(200, {"ok": True, "messages": list(history)})
         elif path == "/api/model/status":
-            self._send(200, {"running": llama_running()})
+            # running = llama-server écoute ; loaded = un modèle est VRAIMENT
+            # chargé (data non vide). L'UI ne doit afficher « prête » QUE si
+            # loaded — running seul ment (port ouvert pendant le chargement).
+            self._send(200, {"running": llama_running(), "loaded": llama_loaded()})
         elif path.startswith("/api/chat/poll/"):
             job_id = path.rsplit("/", 1)[-1]
             with jobs_lock:
@@ -545,6 +709,14 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/chat/reset":
             with history_lock:
                 history.clear()
+            # Supprime l'autosave : au prochain boot, l'ancienne conversation
+            # ne doit PAS revenir (sinon le reset serait inutile)
+            try:
+                if os.path.exists(AUTOSAVE_PATH):
+                    os.remove(AUTOSAVE_PATH)
+                    log("autosave.json supprimé (reset)")
+            except Exception as e:
+                log(f"autosave suppression échouée : {e}")
             self._send(200, {"ok": True})
         elif path == "/api/capture":
             b64, err = do_capture()
@@ -628,6 +800,8 @@ def main():
             pass
     signal.signal(signal.SIGTERM, _signal_shutdown)
     signal.signal(signal.SIGINT, _signal_shutdown)
+    # Restaure la conversation persistée (sessions/autosave.json) si présente
+    load_history()
     # Verrouille le port si déjà occupé → un serveur aiko tourne déjà
     try:
         srv = Server(("127.0.0.1", PORT), Handler)

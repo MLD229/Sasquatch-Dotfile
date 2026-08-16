@@ -204,6 +204,18 @@ L'IME est intégré au dotfile (dossier `fcitx5/`, symlinké par install.sh) :
 - Une fois l'IME actif, `Shift` bascule romaji/hiragana (comportement Mozc), `Escape` annule la pré-édition.
 - Configuration complète : `fcitx5-configtool` (paquet inclus).
 
+## 🇯🇵 UI japonaise (immersion + tooltips)
+
+L'interface du desktop est passée en **japonais** (hiragana surtout, kanji/katakana rarement) avec tooltips au survol = épellation (yomi) + traduction française. Spec : hiragana surtout, kanji rarement (pour habituer), katakana rarement ; si kanji/katakana → yomi en hiragana ; TOUJOURS la traduction. Dictionnaire de référence : `waybar/ui-ja.json`.
+
+- **Waybar 100 % japonais** : workspaces (ワークスペース), mpris (おんがく), cpu (シーピーユー), gpu (ジーピーユー), memory (メモリー), network (ワイファイ), battery (でんち), pulseaudio (おんりょう), brightness (あかるさ), bluetooth (ブルートゥース), clipboard (クリップボード) — labels courts + tooltips complets (yomi + trad fr).
+- **Heure en hiragana** : `waybar/scripts/clock-ja.py` (module `custom/clock-ja`, return-type json) — じゅうにじ さんじゅうごふん, tooltip avec date + mini calendrier.
+- **Workspaces japonais** : `hypr/conf.d/rules.conf` → `workspace = N, defaultName:いち..じゅう` (⚠️ `defaultName:` PAS `name:` — non supporté en 0.56 hyprlang). `fastview.py` affiche `ワークスペース X — espace de travail N`.
+- **Horloge flottante** : `waybar/scripts/wallclock-ja.py` — heure hiragana dans le fond d'écran (layer-shell BOTTOM, sous les fenêtres), position auto dans la zone plate du wallpaper (analyse variance, grille 48×27), glisse avec animation quand le wallpaper change, couleur adaptée à la zone (35 % plus light si fond sombre). Lancé par autostart.sh.
+- **Hyprlock japonais** : `hypr/scripts/lock-ja.py` (heure + date en hiragana, sortie PLAIN TEXT — ⚠️ jamais de Pango dans les `cmd[]` de hyprlock, lock cassé sinon) + `lock-media.sh` (now playing `♫ titre — artiste` depuis le CC). Police obligatoire : `Noto Sans CJK JP` (JetBrains Mono = tofu hiragana).
+
+Dépendances : `python-numpy`, `python-cairo` (wallclock/fastview), `jq` (lock-media.sh) — inclus dans install.sh.
+
 ## 🧮 Calculatrice (SUPER+C)
 
 `scripts/calc.sh` — calculatrice rofi basée sur `qalc` (libqalculate) :
@@ -297,6 +309,19 @@ Sections :
 - **SYSTÈME** — gaps intérieur/extérieur, rounding, animations (patch
   `general.conf` / `decoration.conf` / `animations.conf` + `hyprctl reload`) et
   bouton « Choisir un wallpaper » (ouvre waypaper, toggle comme SUPER+Y).
+
+## 🤖 Sidebar 愛子 Aiko (SUPER+N)
+
+Sidebar **Quickshell** (`aiko/`) — chat IA locale avec vision : backend Python stdlib
+(`aiko/server.py`, port 8780) + `llama-server` (llama.cpp CUDA, port 8781, lazy — ne
+tourne que si la sidebar est ouverte). Modèle : **Qwen2.5-VL-3B-Instruct** (GGUF Q4_K_M
++ mmproj vision) — téléchargé par `aiko/setup.sh` (les `.gguf` sont gitignorés, jamais
+versionnés). Fonctions : chat persistant (historique autosave), capture de zone
+d'écran → vision, gestion auto du contexte (fenêtre glissante 12 messages + dédup
+anti-répétition), streaming SSE. Toggle : `aiko/aiko.sh` (pidfile). Si la VRAM est
+trop juste, Aiko préempte Rin (llama-server déchargé puis rechargé).
+
+Dépendances : `llama.cpp-cuda` (AUR) + le setup du modèle — voir `aiko/setup.sh`.
 
 ## 🌙 Veille / suspend (NVIDIA)
 

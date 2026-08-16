@@ -13,10 +13,13 @@ qt5ct
 kvantum
 waypaper
 python-pillow
+python-numpy            # wallclock-ja.py (position auto dans la zone plate du wallpaper)
+python-cairo            # wallclock-ja.py + fastview.py (dessin cairo GTK)
 
 # Outils de base
 eza
 bat
+jq                      # parsing JSON (lock-media.sh au lock, scripts)
 neovim
 code                    # VS Code — lecteur par défaut du code/txt (mimeapps)
 dolphin
@@ -90,6 +93,10 @@ libva-nvidia-driver     # décodage VA-API NVIDIA (env.conf LIBVA_DRIVER_NAME=nv
 ffmpeg                  # fallback finder (si pw-record absent)
 python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
 gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
+
+# Tablette graphique XP-Pen (Star G640 / 28bd:0907) — OpenTabletDriver daemon
+# Service user : systemctl --user enable --now opentabletdriver
+opentabletdriver         # AUR — daemon tablette (remplace hid_uclogic absent du kernel)
 
 # Sidebar 愛子 Aiko (Super+N, aiko/) — chat IA locale + vision
 # Modèle : Qwen2.5-VL-3B-Instruct (GGUF Q4_K_M) — vision incluse

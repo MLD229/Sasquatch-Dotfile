@@ -172,15 +172,18 @@ def b_hypr(p):
 
 def b_hyprlock(p, clock=None):
     clock = clock or {}
-    hh = "%H:%M" if clock.get("lock_24h", True) else "%I:%M %p"
+    # lock-ja.py : heure + date en hiragana (spec momo 2026-08-16) — le lock
+    # doit rester en japonais même après un changement de wallpaper (theme-apply
+    # régénère CE bloc). Police OBLIGATOIRE : Noto Sans CJK JP (hiragana, pas de
+    # tofu). Pas de Pango dans la sortie cmd (hyprlock le gère mal).
     date_label = "" if clock.get("lock_date", True) else "# date masquée (réglage horloge)"
     lines = [
         "label {",
         "    monitor =",
-        "    text = cmd[update:1000] date +%s" % hh,
+        "    text = cmd[update:1000] python3 ~/.config/hypr/scripts/lock-ja.py time",
         "    color = rgba(%sff)" % p["FG"][1:],
         "    font_size = 72",
-        "    font_family = JetBrains Mono Bold",
+        "    font_family = Noto Sans CJK JP",
         "    position = 0, -20",
         "    halign = center",
         "    valign = center",
@@ -191,10 +194,10 @@ def b_hyprlock(p, clock=None):
             "",
             "label {",
             "    monitor =",
-            "    text = cmd[update:1000] date +'%A %d %B'",
+            "    text = cmd[update:1000] python3 ~/.config/hypr/scripts/lock-ja.py date",
             "    color = rgba(%scc)" % p["FG_DIM"][1:],
             "    font_size = 18",
-            "    font_family = JetBrains Mono",
+            "    font_family = Noto Sans CJK JP",
             "    position = 0, -110",
             "    halign = center",
             "    valign = center",

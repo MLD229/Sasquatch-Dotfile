@@ -13,6 +13,12 @@
 # → waypaper ne le remplace pas → fond noir) puis lance waypaper --restore.
 ~/.config/hypr/scripts/wallpaper.sh
 
+# ── Horloge flottante (projet UI japonaise) ──
+# wallclock-ja.py : heure en hiragana dans le fond d'écran, positionnée dans
+# la zone plate du wallpaper (analyse variance), glisse quand le wallpaper
+# change (watcher interne 2 s). Layer background, sous les fenêtres.
+python3 ~/.config/waybar/scripts/wallclock-ja.py >/dev/null 2>&1 &
+
 # ── Bar ──────────────────────────────────────
 # waybar est lancé par theme-apply.sh (le thème doit être prêt avant la barre)
 
