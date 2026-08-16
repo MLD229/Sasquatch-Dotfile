@@ -342,6 +342,7 @@ link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
 link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
 link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
 link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
+link "$DOTDIR/wp"                       "$CONFIG/wp"             # Sélecteur de fonds d'écran (Quickshell, Super+Y)
 link "$DOTDIR/aiko"                     "$CONFIG/aiko"           # Sidebar 愛子 Aiko (Quickshell chat IA, Super+N)
 link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifo CC Capture (finder)
 link "$DOTDIR/settings"                 "$CONFIG/settings"       # Panneau Settings (Quickshell, Super+I)

@@ -32,6 +32,8 @@ from player import (now_playing as player_now_playing, toggle as player_toggle,
 from web_bridge import handle_web_post as web_bridge_post
 from actions import do_screenshot, do_translate, do_imgsearch, do_finder
 from palette import read_palette
+from wallpaper import (list_wallpapers, set_folder, apply_wallpaper,
+                       pick_path, thumbnail)
 from cava import (_start_cava, _stop_cava, _cava_watchdog, _cava_idle_watchdog,
                   _ensure_cava, _touch_viz_poll)
 
@@ -201,6 +203,26 @@ class Handler(BaseHTTPRequestHandler):
             self._json(read_palette())
             return
 
+        if path == "/api/wallpapers":
+            # Sélecteur de fonds d'écran (Super+Y) : liste du dossier courant.
+            self._json(list_wallpapers())
+            return
+
+        if path == "/api/wallpaper/thumb":
+            # Miniature du filmstrip (cache sha1 côté serveur).
+            qs = urllib.parse.parse_qs(parsed.query)
+            file_path = (qs.get("file") or [None])[0]
+            data = thumbnail(file_path)
+            if not data:
+                _not_found(self)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         if path == "/albumart":
             qs = urllib.parse.parse_qs(parsed.query)
             art_url = (qs.get("url") or [None])[0]
@@ -278,6 +300,18 @@ class Handler(BaseHTTPRequestHandler):
             if "v" in body:
                 _brightness_set(_safe_int(body.get("v", 0)))
             self._json(_brightness_get())
+            return
+        if path == "/api/wallpaper/folder":
+            # Sélecteur : mémorise le dossier choisi (config.ini folder=).
+            self._json(set_folder(body.get("folder") or ""))
+            return
+        if path == "/api/wallpaper/apply":
+            # Applique le wallpaper (config.ini + waypaper --restore → thème).
+            self._json(apply_wallpaper(body.get("file") or ""))
+            return
+        if path == "/api/wallpaper/pick":
+            # Ouvre le sélecteur natif zenity (dossier ou fichier).
+            self._json(pick_path(body.get("kind") or "file"))
             return
         if path == "/api/music/seek":
             pos = _safe_int(body.get("pos", 0))

@@ -36,7 +36,7 @@ Super + Ctrl+Z/S/Q/D  → Resize fenêtre
 Super + Gauche/Droite → Workspace précédent/suivant
 Super + 1..5     → Workspaces 1..5
 Super + Shift+1..5    → Déplacer fenêtre vers workspace
-Super + Y        → Waypaper (fond d'écran)
+Super + Y        → Sélecteur de fond d'écran (壁紙, Quickshell)
 Molette (Super)  → Workspace suivant/précédent
 Ctrl+Shift+1     → IME japonais (fcitx5/Mozc)"
 
