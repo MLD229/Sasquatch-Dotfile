@@ -22,7 +22,8 @@ Super + V        → Presse-papier (cliphist)
 Super + F        → Fullscreen (complet)
 Super + D        → Agrandir la fenêtre (internal, barre visible)
 Super + P        → Pseudo-tiling
-Super + J        → Toggle split
+Super + J        → Masquer la waybar (toggle)
+Super + R        → Toggle split
 Super + Shift+V  → Libre / flottant (togglefloating)
 Super + Q        → Fermer la fenêtre (killactive)
 Super + L        → Verrouiller (hyprlock)
@@ -36,7 +37,6 @@ Super + Gauche/Droite → Workspace précédent/suivant
 Super + 1..5     → Workspaces 1..5
 Super + Shift+1..5    → Déplacer fenêtre vers workspace
 Super + Y        → Waypaper (fond d'écran)
-Super + R        → (libre)
 Molette (Super)  → Workspace suivant/précédent
 Ctrl+Shift+1     → IME japonais (fcitx5/Mozc)"
 
