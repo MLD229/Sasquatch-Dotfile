@@ -143,6 +143,20 @@ FloatingWindow {
         }, 30000);
     }
 
+    function randomPick() {
+        // 🎲 : le serveur pioche dans le dossier courant → preview (crossfade),
+        // l'utilisateur valide avec Appliquer (cohérent avec le reste du picker).
+        root.api("GET", "/api/wallpaper/random", null, function(res) {
+            if (!res || !res.ok) return;
+            var files = root.wp.files;
+            if (!files) return;
+            for (var i = 0; i < files.length; i++) {
+                if (files[i].path === res.path) { root.goTo(i); return; }
+            }
+            root.loadWallpapers();
+        });
+    }
+
     // ---------- cycle de vie ----------
     onCurPathChanged: {
         imgOld.opacity = 1.0;
@@ -313,6 +327,7 @@ FloatingWindow {
                 RowLayout { spacing: 14; Layout.fillWidth: true; Layout.preferredHeight: 42
                     WpButton { label: "‹"; fg: root.cText; bg: root.cCardSolid; onClicked: root.goTo(root.idx - 1) }
                     WpButton { label: "›"; fg: root.cText; bg: root.cCardSolid; onClicked: root.goTo(root.idx + 1) }
+                    WpButton { label: "🎲 Aléatoire"; fg: root.cText; bg: root.cCardSolid; onClicked: root.randomPick() }
                     ColumnLayout { spacing: 0
                         Text {
                             text: root.wp.files.length > 0 ? (root.idx + 1) + " / " + root.wp.files.length : "—"

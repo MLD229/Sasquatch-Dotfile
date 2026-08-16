@@ -33,7 +33,7 @@ from web_bridge import handle_web_post as web_bridge_post
 from actions import do_screenshot, do_translate, do_imgsearch, do_finder
 from palette import read_palette
 from wallpaper import (list_wallpapers, set_folder, apply_wallpaper,
-                       pick_path, thumbnail)
+                       pick_path, thumbnail, random_wallpaper)
 from cava import (_start_cava, _stop_cava, _cava_watchdog, _cava_idle_watchdog,
                   _ensure_cava, _touch_viz_poll)
 
@@ -206,6 +206,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/wallpapers":
             # Sélecteur de fonds d'écran (Super+Y) : liste du dossier courant.
             self._json(list_wallpapers())
+            return
+
+        if path == "/api/wallpaper/random":
+            # Bouton 🎲 : pioche un fichier aléatoire du dossier courant.
+            self._json(random_wallpaper())
             return
 
         if path == "/api/wallpaper/thumb":

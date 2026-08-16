@@ -16,6 +16,7 @@ par la même chaîne que waypaper : rien n'est réinventé.
 import hashlib
 import io
 import os
+import random
 import subprocess
 
 from config import RUNTIME_DIR
@@ -98,6 +99,15 @@ def list_wallpapers():
         "current": current,
         "files": files,
     }
+
+
+def random_wallpaper():
+    """Pioche un fichier aléatoire dans le dossier courant (bouton 🎲)."""
+    data = list_wallpapers()
+    if not data["files"]:
+        return {"ok": False, "error": "aucun fichier"}
+    pick = random.choice(data["files"])
+    return {"ok": True, "name": pick["name"], "path": pick["path"]}
 
 
 def set_folder(folder):
