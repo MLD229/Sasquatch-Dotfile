@@ -70,10 +70,17 @@ accent:      rgba(130, 140, 200, 100%); /* couleur d'accent */
 
 ---
 
-## 🔑 Keybind suggéré (hyprland / sway / i3)
+## 🔑 Keybinds réels (dotfile Sasquatch, hypr/keybinds.conf)
 
+```ini
+# Super seule (release) = launcher rofi (toggle)
+bindr = SUPER, SUPER_L, exec, pkill rofi || ~/.config/rofi/scripts/launcher.sh
+# Super+virgule = aide-mémoire des raccourcis (keybinds-reminder.sh, toggle)
+bind  = $mod, comma, exec, pkill rofi || ~/.config/scripts/keybinds-reminder.sh
+# Powermenu (toggle)
+bind  = $mod, Escape, exec, ~/.config/rofi/scripts/powermenu.sh
 ```
-# Hyprland
-bind = SUPER, SPACE, exec, ~/.config/rofi/scripts/launcher.sh
-bind = SUPER, ESCAPE, exec, ~/.config/rofi/scripts/powermenu.sh
-```
+
+> ⚠️ rofi 2.0 : `-no-custom` + stdin vide → sortie immédiate (menu vide).
+> Les scripts qui pipent une liste (clipboard.sh, keybinds-reminder.sh)
+> testent donc l'entrée AVANT d'appeler rofi.

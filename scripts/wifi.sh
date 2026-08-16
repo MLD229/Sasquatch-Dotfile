@@ -1,11 +1,22 @@
 #!/bin/bash
 # scripts/wifi.sh — WiFi via iwd (iwctl) + systemd-networkd
+# UTILITAIRE NON BINDÉ : usage manuel (terminal) — {toggle|status|menu}.
+# La stack réseau est iwd + systemd-networkd (PAS NetworkManager).
+set -u
+
+cmd="${1:-}"
+
+# Guard : iwctl absent (requirements iwd) → message clair
+if ! command -v iwctl >/dev/null 2>&1; then
+    notify-send "WiFi" "iwctl introuvable — installe iwd" -t 3000 2>/dev/null
+    exit 1
+fi
 
 # Détection auto de l'interface sans fil (override via WIFI_DEV)
 DEV="${WIFI_DEV:-$(ls /sys/class/net 2>/dev/null | grep '^wl' | head -1)}"
 DEV="${DEV:-wlan0}"
 
-case $1 in
+case $cmd in
     toggle)
         if iwctl device "$DEV" show | grep -q "Powered on"; then
             iwctl device "$DEV" set-property Powered off

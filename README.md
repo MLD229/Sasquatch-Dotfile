@@ -9,8 +9,8 @@ Dotfiles personnels pour un environnement **Hyprland** sur **Arch Linux**.
 | Composant        | Outil |
 |------------------|-------|
 | Compositeur      | Hyprland |
-| Barre            | Waybar |
-| Launcher         | Rofi |
+| Barre            | Waybar (🇯🇵 100 % japonais) |
+| Launcher         | Rofi (Super seule, toggle) |
 | OSD volume/luminosité | Rofi |
 | Notifications    | Mako |
 | IME japonais     | Fcitx5 + Mozc |
@@ -18,18 +18,65 @@ Dotfiles personnels pour un environnement **Hyprland** sur **Arch Linux**.
 | Shell            | Fish |
 | Prompt           | Starship |
 | Fond d’écran     | Waypaper / Hyprpaper |
-| Verrouillage     | Hyprlock |
+| Verrouillage     | Hyprlock (🇯🇵 heure/date hiragana + musique) |
 | Inactivité       | Hypridle |
 | Sysinfo          | Fastfetch |
+| Control Center   | Quickshell (`cc/`, Super+G) |
+| Panneau Settings | Quickshell (`settings/`, Super+I) |
+| Sidebar chat IA  | Quickshell + llama.cpp (`aiko/`, Super+N) |
+| Tablette graphique | OpenTabletDriver (service user) |
 
 ---
+
+## ⌨️ Raccourcis clavier (layout AZERTY)
+
+Source de vérité : `hypr/keybinds.conf` (édition possible depuis Settings → RACCOURCIS).
+
+| Touche | Action |
+|--------|--------|
+| **Super** (seule, release) | Launcher rofi (toggle) |
+| **Super + ,** | Aide-mémoire des raccourcis (reminder, toggle) |
+| **Super + T / W / E / O** | Terminal kitty / Brave (extension CC) / Dolphin / VS Code |
+| **Super + G** | Control Center (Quickshell) |
+| **Super + I** | Panneau Settings |
+| **Super + N** | Sidebar 愛子 Aiko (chat IA) |
+| **Super + C / V** | Calculatrice rofi (qalc) / Presse-papier (cliphist) |
+| **Super + B** | Bluetooth : toggle blueman-manager (wrapper anti-crash) |
+| **Super + L / Escape** | Verrouiller (hyprlock) / Powermenu rofi |
+| **Super + Q / Shift+M** | Fermer la fenêtre (killactive) / Quitter la session |
+| **Super + F / D / P** | Fullscreen / **Agrandir** (internal, barre visible) / Pseudo-tiling |
+| **Super + R** | Toggle split (layoutmsg togglesplit) |
+| **Super + J** | Masquer/afficher la waybar (SIGUSR1) |
+| **Super + Shift+V** | Libre/flottant (togglefloating) |
+| **Super + Z / S** | Focus haut / bas |
+| **Super + Shift + Z/S/Q/D** | Déplacer la fenêtre haut/bas/gauche/droite |
+| **Super + Ctrl + Z/S/Q/D** | Resize 30 px |
+| **Super + 1..5** | Workspaces 1..5 (`& é " ' (`) |
+| **Super + Shift + 1..5** | Déplacer la fenêtre vers workspace |
+| **Super + ←/→** | Workspace précédent/suivant |
+| **Super + molette** | Workspace suivant/précédent (r±1 natif, **boucle 1↔10**) |
+| **Super + Y** | Waypaper (changement de fond → thème dynamique) |
+| **Ctrl+Shift+1** | Bascule IME japonais (fcitx5/Mozc) |
+| **XF86Audio*** | Volume/mute/play/next/prev (volume.sh, media-ctl.sh) |
+| **XF86MonBrightness*** | Luminosité (brightness.sh + OSD) |
+| **Print / Super+Print** | Screenshot plein écran / zone |
+
+> **Scroll workspaces** : `r±1` natif boucle de 1 à 10. Pour un blocage strict
+> (pas de boucle), le script `hypr/scripts/scroll-workspace.sh up|down` est
+> disponible — les binds correspondants sont commentés dans keybinds.conf
+> (décision : comportement actuel conservé).
+
+---
+
 📦 Dépendances
 Paquets principaux
 
+```bash
+# Officiel (pacman)
 sudo pacman -S hyprland hyprlock hypridle hyprpaper waypaper \
 xdg-desktop-portal-hyprland xdg-utils xdg-user-dirs \
 waybar mako rofi \
-python-gobject gtk-layer-shell \
+python-gobject gtk-layer-shell python-pillow python-numpy python-cairo \
 kitty fish starship fastfetch \
 ttf-jetbrains-mono-nerd \
 noto-fonts noto-fonts-emoji noto-fonts-cjk \
@@ -38,21 +85,26 @@ pipewire pipewire-pulse wireplumber \
 qt5-wayland qt6-wayland libnotify \
 iwd bluez bluez-utils blueman \
 polkit-gnome wl-clipboard cliphist \
-grim slurp \
+grim slurp jq \
 dolphin pavucontrol \
-brave firefox \
+firefox \
 papirus-icon-theme kvantum qt5ct \
-catppuccin-gtk-theme-mocha bibata-cursor-theme \
-python-pillow \
-eza bat neovim \
-nvidia-utils \
-libva-nvidia-driver \
+eza bat neovim code mpv \
+nvidia-utils libva-nvidia-driver \
 fcitx5 fcitx5-mozc fcitx5-configtool fcitx5-gtk fcitx5-qt \
 libqalculate \
 mpd cava alsa-utils songrec quickshell curl ffmpeg \
 tesseract tesseract-data-fra
 
+# AUR (via yay — install.sh le fait automatiquement)
+yay -S brave-bin catppuccin-gtk-theme-mocha bibata-cursor-theme \
+opentabletdriver llama.cpp-cuda
+```
+
 > Liste exhaustive : voir `requirements` (source de vérité, synchro avec install.sh).
+> `jq` (lock-media.sh), `python-numpy`/`python-cairo` (wallclock-ja, fastview),
+> `code`/`mpv` (mimeapps), `opentabletdriver` (tablette XP-Pen),
+> `llama.cpp-cuda` (Aiko).
 
 ---
 
@@ -72,105 +124,118 @@ Redémarre ta session après l'installation.
 
 
 Sasquatch-Dotfile/
+├── aiko/                        ← Sidebar 愛子 — chat IA locale (Super+N)
+│   ├── aiko.sh                  ← toggle fenêtre (pidfile)
+│   ├── server.py                ← backend HTTP (port 8780, stdlib, SSE)
+│   ├── main.qml + qml/          ← UI Quickshell (glass, palette dynamique)
+│   ├── config.json              ← modèle, chemins runtime
+│   ├── setup.sh                 ← télécharge les GGUF (gitignorés, ~2,6 Go)
+│   └── sessions/                ← historique autosave (gitignoré)
+├── cc/                          ← Control Center (Super+G, Quickshell)
+│   ├── cc.sh                    ← toggle fenêtre + start service systemd
+│   ├── server.py                ← point d'entrée HTTP (port 8765, stdlib)
+│   ├── config.py / metrics.py / viz.py / mpd.py / actions.py
+│   ├── palette.py / translate.py / player.py / cava.py / web_bridge.py
+│   ├── ocr.sh                   ← OCR écran (slurp + grim + tesseract)
+│   ├── cava.conf                ← égaliseur (fifo raw)
+│   ├── sasquatch-cc.service     ← service user permanent (backend)
+│   ├── browser-bridge/          ← extension Brave → now-playing web
+│   └── qml/                     ← Gauge, IconButton, Tile, Sparkline,
+│                                   Palette.qml (généré par theme-apply, gitignoré)
 ├── fastfetch/
-│   └── config.jsonc
-├── fcitx5/
-│   ├── config                  ← bascule IME : Ctrl+Shift+1 (Control+exclam)
-│   ├── profile                 ← clavier fr + mozc (japonais)
-│   └── conf/
-│       ├── mozc.conf
-│       └── notifications.conf
+│   ├── config.jsonc             ← logo + palette dynamique (bloc SASQUATCH-PALETTE)
+│   └── arch.png                 ← logo kitty (fallback ; builtin arch par défaut)
+├── fcitx5/                      ← IME japonais (bascule Ctrl+Shift+1)
+│   ├── config / profile
+│   └── conf/ (mozc.conf, notifications.conf ; cached_layouts gitignoré)
 ├── fish/
-│   ├── config.fish
-│   └── fish_variables          ← gitignoré (spécifique machine)
+│   ├── config.fish              ← alias, MPD_HOST (socket user)
+│   └── fish_variables           ← gitignoré (spécifique machine)
 ├── hypr/
-│   ├── conf.d/
-│   │   ├── animations.conf
-│   │   ├── blur.conf
-│   │   ├── decoration.conf
-│   │   ├── env.conf
-│   │   ├── general.conf
-│   │   ├── input.conf
-│   │   ├── layout.conf
-│   │   ├── misc.conf
-│   │   ├── monitors.conf
-│   │   └── rules.conf
-│   ├── hypridle.conf
-│   ├── hyprland.conf
-│   ├── hyprlock.conf
-│   ├── hyprpaper.conf           ← wallpaper géré par waypaper
-│   ├── keybinds.conf            ← gestures trackpad, SUPER+Q kill, SUPER+V presse-papier
+│   ├── conf.d/                  ← env, monitors, general, decoration, blur,
+│   │                              animations, layout, input, misc, rules
+│   ├── hyprland.conf            ← point d'entrée (sources conf.d/ + keybinds)
+│   ├── keybinds.conf            ← tous les raccourcis ($mod = SUPER, AZERTY)
+│   ├── keybinds-user.conf       ← overrides utilisateur (via Settings, versionné)
+│   ├── hypridle.conf            ← régénéré par settings.py (veille)
+│   ├── hyprlock.conf            ← 🇯🇵 lock-ja + musique (bloc SASQUATCH-PALETTE)
+│   ├── hyprpaper.conf           ← fallback wallpaper (waypaper gère)
 │   └── scripts/
-│       ├── autostart.sh
-│       ├── scroll-workspace.sh
-│       └── wallpaper.sh          ← lanceur wallpaper (pkill hyprpaper + waypaper --restore)
+│       ├── autostart.sh         ← purge orphelins + lancement session
+│       ├── cleanup-orphans.sh   ← purge process de l'ancienne session Hyprland
+│       ├── wallpaper.sh         ← pkill hyprpaper + waypaper --restore
+│       ├── scroll-workspace.sh  ← ws bloqué 1..10 (binds commentés, r±1 natif actif)
+│       ├── lock-ja.py           ← heure/date hiragana pour hyprlock
+│       ├── lock-media.sh        ← now-playing CC pour hyprlock (jq)
+│       └── media-ctl.sh         ← contrôle musique (CC API → fallback playerctl)
+├── install.sh                   ← installateur (symlinks + paquets + services)
 ├── kitty/
-│   └── kitty.conf
+│   └── kitty.conf               ← thème (bloc SASQUATCH-PALETTE)
 ├── mako/
-│   └── config
+│   └── config                   ← notifications (bloc SASQUATCH-PALETTE)
+├── mimeapps.list                ← associations (code/*, mpv/*)
 ├── mpd/
-│   └── mpd.conf                 ← lecteur local + sortie FIFO (CC Capture → finder)
+│   └── mpd.conf                 ← lecteur local, socket user + fifo CC Capture
+├── README.md
+├── requirements                 ← dépendances (source de vérité, 75 paquets)
 ├── rofi/
 │   ├── themes/
-│   │   ├── sasquatch.rasi
+│   │   ├── sasquatch.rasi       ← thème principal (importe colors.rasi)
 │   │   ├── osd.rasi             ← OSD volume/luminosité
-│   │   └── colors.rasi          ← palette (retintée par theme-apply)
+│   │   └── colors.rasi          ← palette (retinté par theme-apply)
 │   └── scripts/
-│       ├── icon-gen.sh
-│       ├── launcher.sh
-│       └── powermenu.sh
+│       ├── launcher.sh          ← Super seule (toggle)
+│       ├── powermenu.sh         ← Super+Escape (toggle)
+│       └── icon-gen.sh          ← générateur d'icônes (doc only, non bindé)
 ├── scripts/
-│   ├── bluetooth.sh
-│   ├── brightness.sh
-│   ├── calc.sh                 ← SUPER+C : calculatrice (rofi + qalc)
-│   ├── clipboard.sh             ← SUPER+V : presse-papier (cliphist)
-│   ├── osd.sh                   ← OSD générique
-│   ├── screenshot.sh
-│   ├── theme-apply.py           ← extraction palette + patch des markers
-│   ├── theme-apply.sh           ← orchestrateur (flock + hook waypaper)
-│   ├── volume.sh
-│   └── wifi.sh
+│   ├── bluetooth.sh             ← CLI bluetoothctl (non bindé, utilitaire)
+│   ├── bluetooth-manager.sh     ← Super+B : toggle blueman (retry anti-crash)
+│   ├── brightness.sh            ← luminosité + OSD (XF86MonBrightness*)
+│   ├── calc.sh                  ← Super+C : calculatrice (rofi + qalc)
+│   ├── clipboard.sh             ← Super+V : presse-papier (cliphist)
+│   ├── fix-suspend.sh           ← veille NVIDIA (GRUB modeset, à lancer en sudo)
+│   ├── keybinds-reminder.sh     ← Super+, : aide-mémoire rofi
+│   ├── osd.sh                   ← OSD générique (anti-superposition)
+│   ├── screenshot.sh            ← grim + slurp (Print / Super+Print)
+│   ├── theme-apply.py           ← extraction palette + patch markers
+│   ├── theme-apply.sh           ← orchestrateur (flock, hook waypaper)
+│   ├── volume.sh                ← volume + OSD (XF86Audio*)
+│   ├── waybar-toggle.sh         ← Super+J : SIGUSR1 waybar de l'instance courante
+│   └── wifi.sh                  ← CLI iwd/iwctl (non bindé, utilitaire)
 ├── set-wall.sh                  ← change wallpaper + applique le thème
-├── themes/
-│   ├── gtk/
-│   │   ├── gtk-3.0/
-│   │   │   ├── gtk.css
-│   │   │   └── settings.ini
-│   │   └── gtk-4.0/
-│   │       ├── gtk.css
-│   │       └── settings.ini
-│   └── qt/
-│       └── kdeglobals
-├── waybar/
-│   ├── config
-│   ├── style.css
-│   └── scripts/
-│       └── fastview.py          ← aperçu workspaces au survol (GTK layer-shell)
-├── cc/                          ← Control Center (SUPER+G, Quickshell)
-│   ├── cc.sh                    ← launcher toggle (serveur backend + fenêtre QS)
-│   ├── server.py                ← point d'entrée HTTP (routes /api/*)
-│   ├── config.py                ← constantes (port, MPD, traduction, albumart)
-│   ├── metrics.py               ← métriques système + historique
-│   ├── viz.py                   ← lecture fifo cava (égaliseur)
-│   ├── mpd.py                   ← client MPD + notification changement de piste
-│   ├── actions.py               ← capture, OCR/traduction, recherche image, finder
-│   ├── palette.py               ← palette dynamique (lit qml/Palette.qml)
-│   ├── translate.py             ← traduction (LibreTranslate → Google GTX)
-│   ├── cava.py                  ← cycle de vie cava
-│   ├── ocr.sh                   ← OCR écran (slurp + grim + tesseract → stdout)
-│   ├── cava.conf                ← égaliseur (fifo raw, sortie audio)
-│   ├── web_bridge.py            ← now-playing navigateur (POST /api/music/web)
-│   ├── browser-bridge/          ← extension Chromium (Brave) → pousse YouTube/Spotify Web
-│   │                             vers le CC (chargée via --load-extension, cf. keybinds.conf)
-│   └── qml/
-│       ├── Palette.qml          ← couleurs (retinté par theme-apply, LU via /api/palette)
-│       ├── Gauge.qml / IconButton.qml / Tile.qml / Sparkline.qml
-│       └── (main.qml poll la palette toutes les 2 s → CC suit le thème)
+├── settings/                    ← Panneau Settings (Super+I, Quickshell)
+│   ├── settings.sh              ← toggle fenêtre
+│   ├── settings.py              ← backend HTTP (port 8770, stdlib)
+│   ├── main.qml + qml/          ← UI (Section, Toggle, SliderRow, ColorSwatch…)
+│   └── settings.json            ← config utilisateur (sauvegarde auto)
 ├── starship.toml
-├── .gitignore
-├── install.sh
-└── README.md
+├── themes/
+│   ├── gtk/gtk-3.0/ + gtk-4.0/  ← thèmes GTK (Catppuccin/Papirus, sombre)
+│   └── qt/kdeglobals            ← Qt (Papirus-Dark)
+└── waybar/
+    ├── config                   ← 🇯🇵 100 % japonais (modules + tooltips)
+    ├── style.css                ← thème (bloc SASQUATCH-PALETTE)
+    ├── ui-ja.json               ← dictionnaire japonais (labels/tooltips)
+    └── scripts/
+        ├── clock-ja.py          ← heure en hiragana (module custom/clock-ja)
+        ├── wallclock-ja.py      ← horloge flottante dans le wallpaper
+        └── fastview.py          ← aperçu workspaces au survol (GTK layer-shell)
 ```
+
+---
+
+## 🛠️ Utilitaires non bindés (usage manuel)
+
+Scripts présents mais sans touche assignée (décision : pas de keybind pour ne
+pas encombrer) — utilisables depuis un terminal :
+
+- `scripts/wifi.sh {toggle|status|menu}` — WiFi via `iwctl` (iwd + systemd-networkd).
+- `scripts/bluetooth.sh {toggle|status|menu}` — Bluetooth CLI rapide
+  (`bluetoothctl`). L'UI complète (blueman) vit sur **Super+B** via
+  `bluetooth-manager.sh`.
+- `rofi/scripts/icon-gen.sh` — générateur d'icônes pour le launcher rofi (doc only).
+- `hypr/scripts/scroll-workspace.sh up|down` — workspace bloqué 1..10 (remplace
+  la boucle r±1, binds commentés dans keybinds.conf).
 
 ---
 
@@ -242,7 +307,7 @@ Dashboard **Quickshell** (`cc/`) — UI native Qt Quick + backend Python stdlib 
 - **Music Finder** 🎤 : capture 8 s du **monitor PipeWire** (ffmpeg/pw-record —
   toute la sortie audio : MPD, navigateur…) → reconnaissance Shazam (`songrec`),
   retry 15 s si l'empreinte échoue → titre/artiste + pochettes. La FIFO MPD
-  (`/tmp/mpd-cc.fifo`) ne sert qu'en secours, et seulement si MPD joue
+  (`~/.local/share/mpd/cc.fifo`) ne sert qu'en secours, et seulement si MPD joue
   réellement (cc/actions.py) : le volume MPD est alors temporairement forcé à
   100 % (la FIFO transporte le signal APRÈS le volume logiciel) puis restauré.
   Si rien n'est audible → réponse « non reconnu » (pas de piste mensongère).

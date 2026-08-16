@@ -8,7 +8,9 @@ ICON="${3:-󰓃}"
 [ -z "$PCT" ] && exit 1
 
 # tue l'OSD précédent s'il existe (course-safe pendant les rafales bindel)
-pkill -f "rofi.*osd.rasi" 2>/dev/null
+# [r]ofi : pattern bracketé — un `pkill -f` non bracketé s'auto-matcherait
+# quand la cmdline du shell contient le pattern (leçon 2026-08-14).
+pkill -f "[r]ofi.*osd.rasi" 2>/dev/null
 
 BARW=16
 FILLED=$(( PCT * BARW / 100 ))
