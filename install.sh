@@ -267,11 +267,18 @@ else
     warning "Service user mpd non activé (pas de session) — autostart.sh le lancera au login"
 fi
 
-# Service USER opentabletdriver (tablette graphique XP-Pen, 28bd:0907).
+# Service USER opentabletdriver (tablette graphique XP-Pen Star 03, 28bd:0907).
 # Le kernel Arch n'a PAS hid_uclogic → OTD fait le relais tablette→libinput
 # (Hyprland voit la tablette virtuelle, pression + tilt). Idempotent.
+# ⚠️ PIÈGE 2026-08-16 : après un audit/test, le service peut rester arrêté
+# (dead) alors qu'il est enabled → la tablette ne répond plus. On vérifie
+# qu'il tourne VRAIMENT (is-active), pas juste qu'il est activé.
 if systemctl --user enable --now opentabletdriver 2>/dev/null; then
-    success "opentabletdriver (service user) activé — tablette XP-Pen"
+    if systemctl --user is-active --quiet opentabletdriver; then
+        success "opentabletdriver (service user) actif — tablette XP-Pen Star 03"
+    else
+        warning "opentabletdriver activé mais INACTIF (dead) — daemon crashé ? Vérifier : journalctl --user -u opentabletdriver"
+    fi
 else
     warning "Service user opentabletdriver non activé (pas de session) — à activer au login"
 fi
