@@ -215,6 +215,15 @@ FloatingWindow {
             // clics sur le panneau (hors boutons) : ne pas fermer
             MouseArea { anchors.fill: parent; onClicked: {} }
 
+            // Molette N'IMPORTE OÙ sur le panneau = changer de wallpaper
+            // (les WheelHandler plus profonds — preview, filmstrip — gagnent).
+            WheelHandler {
+                onWheel: (event) => {
+                    if (event.angleDelta.y !== 0)
+                        root.goTo(root.idx - (event.angleDelta.y > 0 ? 1 : -1));
+                }
+            }
+
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 26
@@ -293,6 +302,15 @@ FloatingWindow {
                     spacing: 7
                     clip: true
                     model: root.wp.files
+
+                    // Molette sur la liste = la faire défiler horizontalement
+                    // (le drag natif marche aussi) — PAS changer de wallpaper.
+                    WheelHandler {
+                        onWheel: (event) => {
+                            if (event.angleDelta.y !== 0)
+                                strip.contentX -= event.angleDelta.y > 0 ? 70 : -70;
+                        }
+                    }
                     delegate: Item {
                         required property var modelData
                         required property int index
