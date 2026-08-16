@@ -80,9 +80,16 @@ hyprctl reload >/dev/null 2>&1
 
 # Waybar (CSS) — démarre ou relance systématiquement (nouveau thème = nouveau CSS)
 # 9>&- : ne pas laisser waybar hériter du fd de verrou (flock serait tenu à vie)
-pkill -x waybar 2>/dev/null
-sleep 0.2
-waybar >/dev/null 2>&1 9>&- &
+# Supervision : si le service waybar (waybar/waybar.service) est actif, on
+# RECHARGE (SIGUSR2) au lieu de pkill+relance — zéro flash, zéro course avec
+# Restart=on-failure. Fallback direct si le service n'est pas installé.
+if systemctl --user is-active --quiet waybar; then
+    systemctl --user reload waybar >/dev/null 2>&1 || true
+else
+    pkill -x waybar 2>/dev/null
+    sleep 0.2
+    waybar >/dev/null 2>&1 9>&- &
+fi
 
 # Mako (notifications)
 if command -v makoctl >/dev/null 2>&1; then

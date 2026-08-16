@@ -24,6 +24,7 @@ Dotfiles personnels pour un environnement **Hyprland** sur **Arch Linux**.
 | Control Center   | Quickshell (`cc/`, Super+G) |
 | Panneau Settings | Quickshell (`settings/`, Super+I) |
 | Sidebar chat IA  | Quickshell + llama.cpp (`aiko/`, Super+N) |
+| Playlist MPD     | Quickshell (`pl/`, Super+P) — toggles random/repeat/single, liste cliquable, recherche/ajout, dossier musique |
 | Tablette graphique | OpenTabletDriver (service user) |
 
 ---
@@ -44,7 +45,8 @@ Source de vérité : `hypr/keybinds.conf` (édition possible depuis Settings →
 | **Super + B** | Bluetooth : toggle blueman-manager (wrapper anti-crash) |
 | **Super + L / Escape** | Verrouiller (hyprlock) / Powermenu rofi |
 | **Super + Q / Shift+M** | Fermer la fenêtre (killactive) / Quitter la session |
-| **Super + F / D / P** | Fullscreen / **Agrandir** (internal, barre visible) / Pseudo-tiling |
+| **Super + F / D** | Fullscreen / **Agrandir** (internal, barre visible) |
+| **Super + P / Shift+P** | Playlist MPD (panneau Quickshell) / Pseudo-tiling |
 | **Super + R** | Toggle split (layoutmsg togglesplit) |
 | **Super + J** | Masquer/afficher la waybar (SIGUSR1) |
 | **Super + Shift+V** | Libre/flottant (togglefloating) |
@@ -213,13 +215,18 @@ Sasquatch-Dotfile/
 │   ├── gtk/gtk-3.0/ + gtk-4.0/  ← thèmes GTK (Catppuccin/Papirus, sombre)
 │   └── qt/kdeglobals            ← Qt (Papirus-Dark)
 ├── waybar/
-    ├── config                   ← 🇯🇵 100 % japonais (modules + tooltips)
-    ├── style.css                ← thème (bloc SASQUATCH-PALETTE)
-    ├── ui-ja.json               ← dictionnaire japonais (labels/tooltips)
-    └── scripts/
-        ├── clock-ja.py          ← heure en hiragana (module custom/clock-ja)
-        ├── wallclock-ja.py      ← horloge flottante dans le wallpaper
-        └── fastview.py          ← aperçu workspaces au survol (GTK layer-shell)
+│   ├── config                   ← 🇯🇵 100 % japonais (modules + tooltips)
+│   ├── style.css                ← thème (bloc SASQUATCH-PALETTE)
+│   ├── waybar.service           ← supervision systemd (Restart=on-failure + reload SIGUSR2)
+│   ├── ui-ja.json               ← dictionnaire japonais (labels/tooltips)
+│   └── scripts/
+│       ├── clock-ja.py          ← heure en hiragana (module custom/clock-ja)
+│       ├── wallclock-ja.py      ← horloge flottante dans le wallpaper
+│       └── fastview.py          ← aperçu workspaces au survol (GTK layer-shell)
+├── pl/                          ← Gestionnaire de playlist MPD (Super+P, Quickshell)
+│   ├── pl.sh                    ← toggle fenêtre (pattern wp.sh, position droite injectée)
+│   ├── main.qml + qml/          ← toggles random/repeat/single, liste cliquable, recherche, dossier
+│   └── (backend : routes /api/playlist* dans cc/server.py)
 └── wp/                          ← Sélecteur de fonds d'écran (Super+Y, Quickshell)
     ├── wp.sh                    ← toggle fenêtre (pattern cc.sh : window_open + pkill)
     ├── main.qml + qml/          ← UI grille wallpapers + bouton 🎲 aléatoire
@@ -250,7 +257,9 @@ bordures Hyprland, hyprlock, mako et rofi.
 
 - `scripts/theme-apply.py` extrait la palette (PIL) : fond sombre teinté, texte
   clair, accent = couleur vive du fond, accent2 = complémentaire.
-- `scripts/theme-apply.sh` orchestre + relance waybar (verrou `flock`).
+- `scripts/theme-apply.sh` orchestre le thème (verrou `flock`) : recharge waybar
+  via `systemctl --user reload waybar` (SIGUSR2, zéro flash) si le service
+  `waybar/waybar.service` est actif, sinon pkill + relance (fallback).
 - Les zones retintées sont délimitées par des markers `SASQUATCH-PALETTE-BEGIN/END`
   dans 8 fichiers (waybar, kitty, hypr/general.conf, hyprlock, mako, rofi, cc/qml/Palette.qml, fastfetch/config.jsonc).
 - **Hook automatique** : dans `~/.config/waypaper/config.ini` (fichier runtime,

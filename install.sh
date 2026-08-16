@@ -305,6 +305,19 @@ if systemctl --user enable --now sasquatch-cc 2>/dev/null; then
 else
     warning "Service user sasquatch-cc non activé (pas de session) — cc.sh le lancera au besoin"
 fi
+
+# Service USER waybar (supervision de la barre). Restart=on-failure → un crash
+# relance la barre tout seul (avant : morte jusqu'au relogin) ; theme-apply.sh
+# recharge le CSS via `systemctl --user reload waybar` (SIGUSR2, zéro flash).
+# Le user manager expose WAYLAND_DISPLAY + HYPRLAND_INSTANCE_SIGNATURE →
+# waybar du service est reconnu par waybar_current_session() (skip idempotent).
+link "$DOTDIR/waybar/waybar.service" "$SD_USER/waybar.service"
+systemctl --user daemon-reload 2>/dev/null || true
+if systemctl --user enable --now waybar 2>/dev/null; then
+    success "waybar (service user) activé"
+else
+    warning "Service user waybar non activé (pas de session) — theme-apply.sh le lancera au besoin"
+fi
 # ─── Hook thème dynamique (waypaper) ─────────
 # Le post_command applique la palette au changement de wallpaper. Sans lui,
 # seule l'appli au login joue (filet autostart.sh) — le thème ne suivrait plus
@@ -343,6 +356,7 @@ link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
 link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
 link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
 link "$DOTDIR/wp"                       "$CONFIG/wp"             # Sélecteur de fonds d'écran (Quickshell, Super+Y)
+link "$DOTDIR/pl"                       "$CONFIG/pl"             # Playlist MPD (Quickshell, Super+P)
 link "$DOTDIR/aiko"                     "$CONFIG/aiko"           # Sidebar 愛子 Aiko (Quickshell chat IA, Super+N)
 link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifo CC Capture (finder)
 link "$DOTDIR/settings"                 "$CONFIG/settings"       # Panneau Settings (Quickshell, Super+I)
@@ -361,6 +375,7 @@ chmod +x "$DOTDIR"/rofi/scripts/*.sh      # ← ajouté (bug #31)
 chmod +x "$DOTDIR"/cc/*.sh                # ← Control Center (cc.sh, ocr.sh)
 chmod +x "$DOTDIR"/aiko/*.sh              # ← Sidebar 愛子 Aiko (aiko.sh, setup.sh)
 chmod +x "$DOTDIR"/settings/*.sh          # ← Panneau Settings (settings.sh)
+chmod +x "$DOTDIR"/pl/*.sh                # ← Playlist MPD (pl.sh)
 chmod +x "$DOTDIR"/set-wall.sh            # ← ajouté (bug #31)
 success "Scripts rendus exécutables"
 

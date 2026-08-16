@@ -34,6 +34,13 @@ from actions import do_screenshot, do_translate, do_imgsearch, do_finder
 from palette import read_palette
 from wallpaper import (list_wallpapers, set_folder, apply_wallpaper,
                        pick_path, thumbnail, random_wallpaper)
+from playlist import (playlist_status, playlist_list, playlist_toggle,
+                      playlist_play, playlist_playtoggle, playlist_stop,
+                      playlist_next, playlist_prev, playlist_seek,
+                      playlist_remove, playlist_clear,
+                      playlist_shuffle, playlist_add, load_folder,
+                      library_list, get_folder, set_folder as pl_set_folder,
+                      pick_folder, open_panel)
 from cava import (_start_cava, _stop_cava, _cava_watchdog, _cava_idle_watchdog,
                   _ensure_cava, _touch_viz_poll)
 
@@ -269,6 +276,24 @@ class Handler(BaseHTTPRequestHandler):
             self._json(_wpctl_volume())
             return
 
+        if path == "/api/playlist/status":
+            # Toggles random/repeat/single/consume + état du MPD (panneau Super+P).
+            self._json(playlist_status())
+            return
+
+        if path == "/api/playlist/list":
+            # Pistes de la playlist courante (pos, titre, durée, current).
+            self._json(playlist_list())
+            return
+
+        if path == "/api/playlist/library":
+            # Bibliothèque du dossier courant (scan) + filtre `q` (recherche).
+            qs = urllib.parse.parse_qs(parsed.query)
+            folder = (qs.get("folder") or [None])[0]
+            q = (qs.get("q") or [None])[0]
+            self._json(library_list(folder=folder, query=q))
+            return
+
         if path == "/api/system/brightness":
             self._json(_brightness_get())
             return
@@ -317,6 +342,60 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/wallpaper/pick":
             # Ouvre le sélecteur natif zenity (dossier ou fichier).
             self._json(pick_path(body.get("kind") or "file"))
+            return
+        if path == "/api/playlist/toggle":
+            # random|repeat|single|consume → bascule + état.
+            self._json(playlist_toggle(body.get("mode") or ""))
+            return
+        if path == "/api/playlist/play":
+            self._json(playlist_play(body.get("pos")))
+            return
+        if path == "/api/playlist/playtoggle":
+            self._json(playlist_playtoggle())
+            return
+        if path == "/api/playlist/stop":
+            self._json(playlist_stop())
+            return
+        if path == "/api/playlist/next":
+            self._json(playlist_next())
+            return
+        if path == "/api/playlist/prev":
+            self._json(playlist_prev())
+            return
+        if path == "/api/playlist/seek":
+            # {sec} — seek absolu dans la piste courante (barre cliquable).
+            self._json(playlist_seek(body.get("sec")))
+            return
+        if path == "/api/playlist/remove":
+            self._json(playlist_remove(body.get("pos")))
+            return
+        if path == "/api/playlist/clear":
+            self._json(playlist_clear())
+            return
+        if path == "/api/playlist/shuffle":
+            self._json(playlist_shuffle())
+            return
+        if path == "/api/playlist/add":
+            # {file: rel, play: bool} — ajoute (et joue) un morceau trouvé.
+            self._json(playlist_add(body.get("file") or "",
+                                    play=bool(body.get("play"))))
+            return
+        if path == "/api/playlist/load":
+            # {folder, random} — clear + charge le dossier + play.
+            self._json(load_folder(folder=body.get("folder"),
+                                   random=bool(body.get("random"))))
+            return
+        if path == "/api/playlist/folder":
+            # Mémorise le dossier de bibliothèque du panneau.
+            self._json(pl_set_folder(body.get("folder") or ""))
+            return
+        if path == "/api/playlist/pick":
+            # zenity dossier (choisir le dossier où sont les musiques).
+            self._json(pick_folder())
+            return
+        if path == "/api/playlist/open":
+            # Bouton du CC : toggle la fenêtre playlist (pl/pl.sh).
+            self._json(open_panel())
             return
         if path == "/api/music/seek":
             pos = _safe_int(body.get("pos", 0))

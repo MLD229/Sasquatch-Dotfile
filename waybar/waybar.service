@@ -1,0 +1,25 @@
+[Unit]
+Description=Sasquatch Waybar - barre Hyprland (supervisée, thème dynamique)
+# waybar a besoin du compositor Wayland : le user manager expose
+# WAYLAND_DISPLAY + HYPRLAND_INSTANCE_SIGNATURE (env de la session graphique).
+# PAS de Requisite=graphical-session.target : sous Hyprland ce target n'est
+# jamais démarré (c'est pourquoi le waybar.service du paquet est disabled).
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/waybar
+# Rechargement de la palette (theme-apply.sh) sans tuer la barre : SIGUSR2.
+ExecReload=kill -SIGUSR2 $MAINPID
+# Supervision : un crash (bug de module, GTK…) relance la barre tout seul.
+# on-failure (pas always) : un `systemctl stop` manuel ne relance pas.
+Restart=on-failure
+RestartSec=3
+# Logs dans journald (journalctl --user -u waybar) : les crashes deviennent
+# diagnosables. Avant : waybar lancé par theme-apply avec stderr /dev/null →
+# « la barre a disparu » sans aucune trace.
+StandardOutput=journal
+StandardError=journal
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

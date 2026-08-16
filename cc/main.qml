@@ -441,6 +441,14 @@ FloatingWindow {
                             Layout.fillWidth: true
                             spacing: 10
 
+                            // Playlist : ouvre/ferme le panneau MPD (Super+P,
+                            // pl/pl.sh via le serveur — il a l'env Hyprland).
+                            IconButton {
+                                width: 32; height: 32
+                                glyph: "📃"
+                                glyphColor: root.cText
+                                onClicked: root.api("POST", "/api/playlist/open", null, function() {})
+                            }
                             IconButton {
                                 width: 32; height: 32
                                 glyph: "⏮"

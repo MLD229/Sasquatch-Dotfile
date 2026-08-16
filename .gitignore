@@ -11,3 +11,6 @@ cc/qml/Palette.qml
 aiko/models/*.gguf
 aiko/sessions/*.json
 aiko/server.log
+
+# playlist : dossier musique mémorisé (fichier d'état runtime, choisi par l'utilisateur)
+settings/playlist_folder
