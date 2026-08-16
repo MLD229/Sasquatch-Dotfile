@@ -17,7 +17,7 @@ Dotfiles personnels pour un environnement **Hyprland** sur **Arch Linux**.
 | Terminal         | Kitty |
 | Shell            | Fish |
 | Prompt           | Starship |
-| Fond d’écran     | Waypaper / Hyprpaper |
+| Fond d’écran     | Picker `wp/` (Quickshell, Super+Y) + waypaper/hyprpaper |
 | Verrouillage     | Hyprlock (🇯🇵 heure/date hiragana + musique) |
 | Inactivité       | Hypridle |
 | Sysinfo          | Fastfetch |
@@ -55,7 +55,7 @@ Source de vérité : `hypr/keybinds.conf` (édition possible depuis Settings →
 | **Super + Shift + 1..5** | Déplacer la fenêtre vers workspace |
 | **Super + ←/→** | Workspace précédent/suivant |
 | **Super + molette** | Workspace suivant/précédent (r±1 natif, **boucle 1↔10**) |
-| **Super + Y** | Waypaper (changement de fond → thème dynamique) |
+| **Super + Y** | Sélecteur de fonds d'écran (`wp/`, Quickshell → thème dynamique) |
 | **Ctrl+Shift+1** | Bascule IME japonais (fcitx5/Mozc) |
 | **XF86Audio*** | Volume/mute/play/next/prev (volume.sh, media-ctl.sh) |
 | **XF86MonBrightness*** | Luminosité (brightness.sh + OSD) |
@@ -212,7 +212,7 @@ Sasquatch-Dotfile/
 ├── themes/
 │   ├── gtk/gtk-3.0/ + gtk-4.0/  ← thèmes GTK (Catppuccin/Papirus, sombre)
 │   └── qt/kdeglobals            ← Qt (Papirus-Dark)
-└── waybar/
+├── waybar/
     ├── config                   ← 🇯🇵 100 % japonais (modules + tooltips)
     ├── style.css                ← thème (bloc SASQUATCH-PALETTE)
     ├── ui-ja.json               ← dictionnaire japonais (labels/tooltips)
@@ -220,6 +220,10 @@ Sasquatch-Dotfile/
         ├── clock-ja.py          ← heure en hiragana (module custom/clock-ja)
         ├── wallclock-ja.py      ← horloge flottante dans le wallpaper
         └── fastview.py          ← aperçu workspaces au survol (GTK layer-shell)
+└── wp/                          ← Sélecteur de fonds d'écran (Super+Y, Quickshell)
+    ├── wp.sh                    ← toggle fenêtre (pattern cc.sh : window_open + pkill)
+    ├── main.qml + qml/          ← UI grille wallpapers + bouton 🎲 aléatoire
+    └── (backend : routes /api/wallpaper* dans cc/server.py)
 ```
 
 ---
