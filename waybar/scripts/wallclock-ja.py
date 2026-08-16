@@ -3,12 +3,18 @@
 wallclock-ja.py — horloge japonaise flottante sur le fond d'écran (Sasquatch-Dotfile).
 
 Affiche l'heure en hiragana DANS le fond d'écran (layer-shell background, sous
-les fenêtres), positionnée automatiquement dans la zone la plus "plate" du
-wallpaper (faible variance de couleur = espace libre).
+les fenêtres), positionnée automatiquement dans la zone la plus sombre ET
+plate du wallpaper (luminance prioritaire + faible variance = espace libre
+lisible, coins autorisés).
 
 Comportement (spec momo) :
   * À CHAQUE changement de wallpaper (momo change souvent), la position est
-    re-calculée et l'horloge GLISSE (animation) vers la nouvelle zone plate.
+    re-calculée et l'horloge GLISSE (animation) vers la nouvelle zone sombre.
+  * Couleur = ADAPTATIVE : la TEINTE vient de la palette du thème (accent,
+    @color4 du bloc SASQUATCH-PALETTE — lui-même calculé depuis le wallpaper
+    par theme-apply.py), la CLARTÉ suit le fond local derrière l'horloge :
+    fond sombre → version claire (lisible) ; fond clair → version FONCÉE de
+    l'accent (« teint plus foncé »). Contraste garanti, jamais invisible.
   * Palette : lue depuis waybar/style.css (bloc SASQUATCH-PALETTE, comme
     fastview.py) — le texte suit le thème dynamique.
   * Rafraîchit l'heure toutes les 30 s ; tooltip GTK natif synchronisé
@@ -22,6 +28,7 @@ daemon vivant est tué et remplacé au démarrage.
 Dépendances : python-gobject, gtk-layer-shell, Pillow, numpy (analyse image).
 """
 import atexit
+import colorsys
 import datetime
 import json
 import math
@@ -71,7 +78,8 @@ TEXT_FG_DIM = "#b0b0b0"
 
 # ── Palette (bloc SASQUATCH-PALETTE du style.css) ────────────────────────
 def read_palette():
-    """Lit le bloc SASQUATCH-PALETTE de waybar/style.css → dict couleur."""
+    """Lit le bloc SASQUATCH-PALETTE de waybar/style.css → dict couleur.
+    Format réel : @define-color name #hex; → clé = name (sans @)."""
     palette = {}
     try:
         with open(STYLE_CSS) as f:
@@ -79,7 +87,7 @@ def read_palette():
         # Format réel : /* === SASQUATCH-PALETTE-BEGIN === */ ... /* === END === */
         m = re.search(r"SASQUATCH-PALETTE-BEGIN\s*\*/\s*(.*?)/\*\s*===?\s*SASQUATCH-PALETTE", css, re.S)
         block = m.group(1) if m else css
-        for var, val in re.findall(r"(@\w+)\s*:\s*(#[0-9a-fA-F]{6})", block):
+        for var, val in re.findall(r"@define-color\s+(\w+)\s+(#[0-9a-fA-F]{6})", block):
             palette[var] = val
     except OSError:
         pass
@@ -181,22 +189,23 @@ def monitor_size():
     return 1920, 1080
 
 
-# ── Analyse d'image : trouver la zone plate ───────────────────────────────
-def find_flat_position(img_path, scr_w, scr_h):
+# ── Analyse d'image : trouver la zone sombre ET plate ─────────────────────
+def find_smart_position(img_path, scr_w, scr_h):
     """
     Analyse le wallpaper et renvoie (x, y, zone_rgb) :
-      * (x, y) = CENTRE en pixels écran de la zone la plus plate
-        (faible variance de couleur, loin des bords) ;
+      * (x, y) = CENTRE en pixels écran de la meilleure zone :
+        score = luminance (SOMBRE prioritaire, poids 1.0) + variance
+        (PLAT secondaire, poids 0.5) + pénalité bord réduite (coins permis) ;
       * zone_rgb = (r, g, b) 0..255 couleur MOYENNE de cette zone
-        (le fond derrière l'horloge — sert à choisir la couleur du texte).
+        (le fond derrière l'horloge — sert à choisir la clarté du texte).
     """
     if not HAS_IMAGING:
-        return (scr_w // 2, scr_h - 120), (200, 200, 200)
+        return (scr_w // 2, scr_h - 120), (20, 20, 20)
 
     try:
         img = Image.open(img_path).convert("RGB")
     except OSError:
-        return (scr_w // 2, scr_h - 120), (200, 200, 200)
+        return (scr_w // 2, scr_h - 120), (20, 20, 20)
 
     iw, ih = img.size
     scale = max(scr_w / iw, scr_h / ih)
@@ -205,28 +214,31 @@ def find_flat_position(img_path, scr_w, scr_h):
     off_y = max(0, (disp_h - scr_h) / 2)
 
     small = img.resize((GRID_W, GRID_H))
-    arr = np.asarray(small, dtype=float)
-    std = arr.std(axis=2)  # (GRID_H, GRID_W)
+    arr = np.asarray(small, dtype=float) / 255.0
+    # Variance (plat) et luminance perceptuelle (sombre), normalisées 0..1
+    std = arr.std(axis=2)
+    lum = 0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]
 
     cw, ch = CLOCK_CELLS_W, CLOCK_CELLS_H
     best_score, best = float("inf"), None
     step = 2
     for gy in range(0, GRID_H - ch + 1, step):
         for gx in range(0, GRID_W - cw + 1, step):
-            region = std[gy:gy + ch, gx:gx + cw]
-            score = region.mean()
+            s_region = std[gy:gy + ch, gx:gx + cw]
+            l_region = lum[gy:gy + ch, gx:gx + cw]
+            score = l_region.mean() * 1.0 + s_region.mean() * 0.5
             edge = min(gx, GRID_W - gx - cw, gy, GRID_H - gy - ch)
-            score += max(0, 6 - edge) * 4.0
+            score += max(0, 3 - edge) * 2.0
             if score < best_score:
                 best_score, best = score, (gx, gy)
 
     if best is None:
-        return (scr_w // 2, scr_h - 120), (200, 200, 200)
+        return (scr_w // 2, scr_h - 120), (20, 20, 20)
 
     gx, gy = best
     # Couleur moyenne de la zone (dans la grille réduite : suffisant)
     zone = arr[gy:gy + ch, gx:gx + cw].reshape(-1, 3)
-    zone_rgb = tuple(int(round(v)) for v in zone.mean(axis=0))
+    zone_rgb = tuple(int(round(v * 255)) for v in zone.mean(axis=0))
     cx_img = (gx + cw / 2) / GRID_W * iw
     cy_img = (gy + ch / 2) / GRID_H * ih
     sx = cx_img * scale - off_x
@@ -234,39 +246,44 @@ def find_flat_position(img_path, scr_w, scr_h):
     return (int(sx), int(sy)), zone_rgb
 
 
-def adapt_text_color(zone_rgb, lighten_amount=0.35):
+def adapt_theme_color(zone_rgb, accent_hex, light_l=0.80, dark_l=0.24):
     """
-    Couleur de texte lisible sur une zone du wallpaper, « un peu plus light ».
-
-    Prend la couleur MOYENNE de la zone plate et l'éclaircit vers le blanc
-    (comme demandé par momo : « choisit avec la couleur mais un peu plus
-    light »). Si la zone est déjà claire, on fonce à la place pour garder
-    le contraste (texte blanc sur fond blanc = illisible).
+    Couleur de texte = TEINTE de l'accent (palette adaptative) + CLARTÉ selon
+    le fond local derrière l'horloge :
+      * fond sombre  (luminance < 0.45) → version CLAIRE de l'accent (lisible) ;
+      * fond clair   (luminance ≥ 0.45) → version FONCÉE de l'accent (le
+        « teint plus foncé » de momo) — contraste garanti, jamais invisible.
+    La teinte (hue) et la saturation de l'accent sont conservées (colorsys
+    HLS) ; seule la luminance cible change.
     Retourne (fg_hex, fg_dim_hex) pour l'heure et la date secondaire.
     """
     r, g, b = (c / 255.0 for c in zone_rgb)
     lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    if lum < 0.45:
-        # fond sombre → éclaircir (la demande « light »)
-        def mix(c):
-            return int(round((c + (1.0 - c) * lighten_amount) * 255))
-        fg = (mix(r), mix(g), mix(b))
-        dim = tuple(int(round(c * 0.72)) for c in fg)  # un peu plus discret
-    else:
-        # fond clair → foncer pour rester lisible
-        def mix(c):
-            return int(round(c * (1.0 - lighten_amount) * 255))
-        fg = (mix(r), mix(g), mix(b))
-        dim = tuple(int(round(c * 0.72)) for c in fg)
-    return "#{:02x}{:02x}{:02x}".format(*fg), "#{:02x}{:02x}{:02x}".format(*dim)
+    ah = (accent_hex or "").lstrip("#")
+    try:
+        ar, ag, ab = (int(ah[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+    except (ValueError, TypeError):
+        ar = ag = ab = 0.8
+    h, l, s = colorsys.rgb_to_hls(ar, ag, ab)
+    target = light_l if lum < 0.45 else dark_l
+    r1, g1, b1 = colorsys.hls_to_rgb(h, target, s)
+    fg = "#{:02x}{:02x}{:02x}".format(*(int(round(c * 255)) for c in (r1, g1, b1)))
+    # dim = même teinte, légèrement plus discret (clair → un peu plus clair
+    # encore ; foncé → un peu plus foncé).
+    d = max(0.0, min(1.0, target + (0.10 if lum < 0.45 else -0.10)))
+    r2, g2, b2 = colorsys.hls_to_rgb(h, d, s)
+    dim = "#{:02x}{:02x}{:02x}".format(*(int(round(c * 255)) for c in (r2, g2, b2)))
+    return fg, dim
 
 
 # ── Fenêtre layer-shell ───────────────────────────────────────────────────
 class WallClock:
     def __init__(self):
         self.palette = read_palette()
-        self.fg = self.palette.get("@foreground", TEXT_FG)
-        self.fg_dim = self.palette.get("@color2", TEXT_FG_DIM)
+        self.accent = self.palette.get("color4", self.palette.get("foreground", TEXT_FG))
+        self.current_zone_rgb = None
+        # fg/fg_dim réels posés par apply_theme_color (fallback clair)
+        self.fg = self.fg_dim = "#e8e8e8"
 
         self.win = Gtk.Window()
         self.win.set_title("sasquatch-wallclock")
@@ -370,16 +387,14 @@ class WallClock:
         # hover/tooltip fonctionne sans appel explicite — set_input_region
         # n'existe PAS dans cette version de gtk-layer-shell).
 
-    def refresh_palette(self):
-        """Relit la palette (le thème change avec le wallpaper)."""
+    def apply_theme_color(self):
+        """Relit la palette (le thème suit le wallpaper) et adapte la couleur
+        du texte : TEINTE = accent (@color4), CLARTÉ = fond local derrière
+        l'horloge (clair sur sombre, teinte foncée sur fond clair)."""
         self.palette = read_palette()
-        self.fg = self.palette.get("@foreground", TEXT_FG)
-        self.fg_dim = self.palette.get("@color2", TEXT_FG_DIM)
-        self.update_label()
-
-    def set_zone_color(self, zone_rgb):
-        """Couleur du texte adaptée à la zone plate du wallpaper (light)."""
-        self.fg, self.fg_dim = adapt_text_color(zone_rgb)
+        self.accent = self.palette.get("color4", self.palette.get("foreground", TEXT_FG))
+        zone = self.current_zone_rgb or (20, 20, 20)
+        self.fg, self.fg_dim = adapt_theme_color(zone, self.accent)
         self.update_label()
 
     def initial_place(self):
@@ -391,8 +406,9 @@ class WallClock:
             except OSError:
                 pass
             scr_w, scr_h = monitor_size()
-            (cx, cy), zone_rgb = find_flat_position(wp, scr_w, scr_h)
-            self.set_zone_color(zone_rgb)
+            (cx, cy), zone_rgb = find_smart_position(wp, scr_w, scr_h)
+            self.current_zone_rgb = zone_rgb
+            self.apply_theme_color()
             self.cur_x, self.cur_y = cx, cy
             self.target_x, self.target_y = cx, cy
             self.apply_position(cx, cy)
@@ -436,15 +452,15 @@ class WallClock:
                 self.current_wallpaper = wp
                 self.last_wallpaper_mtime = mt
                 scr_w, scr_h = monitor_size()
-                (tx, ty), zone_rgb = find_flat_position(wp, scr_w, scr_h)
-                # Couleur du texte adaptée à la nouvelle zone plate
-                self.set_zone_color(zone_rgb)
+                (tx, ty), zone_rgb = find_smart_position(wp, scr_w, scr_h)
+                self.current_zone_rgb = zone_rgb
                 # Repart de la position VISUELLE actuelle
                 self.cur_x, self.cur_y = (self.target_x, self.target_y) \
                     if self.target_x is not None else (tx, ty)
                 self.animate_to(tx, ty)
-                # Le thème change avec le wallpaper → relire la palette
-                self.refresh_palette()
+        # Couleur adaptée à CHAQUE tick : le thème peut changer sans changer
+        # le wallpaper (theme-apply.sh manuel) — teinte accent + clarté du fond.
+        self.apply_theme_color()
         return True
 
 
