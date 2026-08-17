@@ -296,12 +296,11 @@ Dépendances : `python-numpy`, `python-cairo` (wallclock/fastview), `jq` (lock-m
 
 ## 🧮 Calculatrice (SUPER+C)
 
-`scripts/calc.sh` — calculatrice rofi basée sur `qalc` (libqalculate) :
+`scripts/calc.sh` — calculatrice rofi LIVE basée sur `qalc` (libqalculate) :
 
-1. `SUPER+C` → tape une expression (ex. `12*7+3`, `sqrt(144)`, `2^10`).
-2. `Enter` → le résultat s'affiche dans rofi.
-3. `Enter` à nouveau → le résultat est copié dans le presse-papier.
-4. `SUPER+C` quand elle est ouverte → la referme (toggle).
+1. `SUPER+C` → le résultat s'affiche **en direct à chaque frappe** (mode custom rofi, ex. `12*7+3` → `87`, `sqrt(144)` → `12`, `x=5; x*2` → `10`, `100 km to m`).
+2. `Enter` → le résultat est copié dans le presse-papier.
+3. `SUPER+C` quand elle est ouverte → la referme (toggle).
 
 Les notifications volume/luminosité utilisent le replace-id de mako : maintenir
 la touche (auto-répétition) met à jour UNE seule notification, sans empilement.

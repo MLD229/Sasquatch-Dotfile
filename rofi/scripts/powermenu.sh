@@ -26,8 +26,10 @@ CHOICE=$(printf "%s\n%s\n%s\n%s\n%s\n%s" \
            "$@")
 
 case "$CHOICE" in
-    "$SHUTDOWN")  systemctl poweroff ;;
-    "$REBOOT")    systemctl reboot ;;
+    "$SHUTDOWN")  dbus-send --system --print-reply --dest=org.freedesktop.login1 \
+                    /org/freedesktop/login1 org.freedesktop.login1.Manager.PowerOff boolean:false ;;
+    "$REBOOT")    dbus-send --system --print-reply --dest=org.freedesktop.login1 \
+                    /org/freedesktop/login1 org.freedesktop.login1.Manager.Reboot boolean:false ;;
     "$SUSPEND")   systemctl suspend ;;
     "$LOGOUT")    loginctl terminate-user "$USER" ;;
     "$LOCK")      loginctl lock-session ;;
