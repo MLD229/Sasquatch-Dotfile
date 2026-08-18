@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────
 #   Sasquatch-Dotfile — install.sh
 #   Adapté pour une fresh install Hyprland
-#   v1.1 — symlinks corrigés (scripts/, rofi, set-wall)
+#   v1.2 — paquets résilients (échec non bloquant) + flags --no-packages/--yes
 # ─────────────────────────────────────────
 #   ⚠️ Quelques prompts interactifs (install paquets, écrasement
 #   symlinks, chsh) : répondre Y / Entrée pour laisser faire.
@@ -28,24 +28,43 @@ error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 header()  { echo -e "\n${BOLD}${BLUE}━━━ $1 ━━━${NC}"; }
 
 # ─── Arguments ───────────────────────────
-# install.sh [--clean|-c]
-#   --clean : sauvegarde ~/.config → ~/.config.backup-<date> PUIS vide le
-#             dossier pour une réinstallation propre. À utiliser sur une
-#             machine/compte qui a déjà une vieille config (ex. test après
-#             une restructuration du repo) — sinon les symlinks existants
-#             ne sont pas remplacés et les nouvelles features manquent.
+# install.sh [--clean|-c] [--no-packages] [--yes|-y]
+#   --clean        : sauvegarde ~/.config → ~/.config.backup-<date> PUIS vide le
+#                    dossier pour une réinstallation propre. À utiliser sur une
+#                    machine/compte qui a déjà une vieille config (ex. test après
+#                    une restructuration du repo) — sinon les symlinks existants
+#                    ne sont pas remplacés et les nouvelles features manquent.
+#   --no-packages  : saute l'installation des paquets (test du CÂBLAGE :
+#                    symlinks, services, permissions — rien ne bloque sur un
+#                    build AUR long comme llama.cpp-cuda).
+#   --yes|-y       : réponse OUI automatique à tous les prompts (non-interactif,
+#                    pratique pour l'automatisation / le test headless).
 CLEAN=0
+NO_PACKAGES=0
+ASSUME_YES=0
 for arg in "$@"; do
     case "$arg" in
         --clean|-c) CLEAN=1 ;;
+        --no-packages) NO_PACKAGES=1 ;;
+        --yes|-y) ASSUME_YES=1 ;;
         -h|--help)
-            echo "Usage : bash install.sh [--clean|-c]"
-            echo "  --clean : backup ~/.config → ~/.config.backup-<date> puis réinstall propre"
+            echo "Usage : bash install.sh [--clean|-c] [--no-packages] [--yes|-y]"
+            echo "  --clean        : backup ~/.config → ~/.config.backup-<date> puis réinstall propre"
+            echo "  --no-packages  : saute l'installation des paquets (test câblage)"
+            echo "  --yes|-y       : OUI automatique à tous les prompts"
             exit 0
             ;;
         *) warning "Argument inconnu ignoré : $arg (voir --help)" ;;
     esac
 done
+
+# Prompt OUI par défaut (Entrée = OUI) — courte-circuité par --yes.
+confirm_yes() { # confirm_yes "message"
+    if [ "$ASSUME_YES" = 1 ]; then return 0; fi
+    local ans
+    read -rp "  $1 [Y/n] " ans
+    [[ ! "$ans" =~ ^[Nn]$ ]]
+}
 
 # Si --clean : backup complet puis dossier vide (réinstall propre).
 if [ "$CLEAN" = 1 ]; then
@@ -53,8 +72,7 @@ if [ "$CLEAN" = 1 ]; then
     TS="$(date +%Y%m%d-%H%M%S)"
     BACKUP="$CONFIG.backup-$TS"
     if [ -e "$CONFIG" ]; then
-        read -rp "  Sauvegarder $CONFIG → $BACKUP puis vider ? [Y/n] " confirm
-        if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
+        if confirm_yes "Sauvegarder $CONFIG → $BACKUP puis vider ?"; then
             mv "$CONFIG" "$BACKUP"
             mkdir -p "$CONFIG"
             success "Ancienne config sauvegardée : $BACKUP"
@@ -95,7 +113,15 @@ fi
 # ─── Dépendances ───────────────────────
 header "Installation des dépendances"
 
-PKGS=(
+# Groupes de paquets (même set que requirements — source de vérité).
+#   ESSENTIEL : base desktop — sans eux, pas de session utilisable.
+#   FEATURES  : CC + panneaux Quickshell (Super+G/Y/P/I/N), musique, OCR.
+#   OPTIONNEL : AUR longs/fragiles ou features indépendantes (tablette, Aiko).
+# Un échec de paquet ne BLOQUE PLUS le reste (fix 2026-08-18 : avant,
+# yay -S ... || exit 1 → le premier paquet qui foirait annulait le câblage
+# complet : symlinks, services, permissions, hook waypaper, .desktop brave).
+
+PKGS_ESSENTIAL=(
     ttf-jetbrains-mono-nerd
     waypaper
 
@@ -139,7 +165,6 @@ PKGS=(
 
     # Éditeur par défaut (config.fish EDITOR)
     neovim
-    code                    # VS Code — lecteur code/txt (mimeapps, bind $mod+O)
 
     # Navigateurs (bind SUPER+W = brave ; windowrules firefox)
     # NOTE : le paquet AUR s'appelle brave-bin (pas "brave" — introuvable, cf. audit 2026-08-14)
@@ -182,6 +207,12 @@ PKGS=(
     fcitx5-qt
     noto-fonts-cjk
 
+    # GPU NVIDIA
+    nvidia-utils            # nvidia-smi (waybar GPU + metrics.py) — machine NVIDIA
+    libva-nvidia-driver     # décodage VA-API NVIDIA (env.conf LIBVA_DRIVER_NAME=nvidia)
+)
+
+PKGS_FEATURES=(
     # Control Center (Super+G, cc/) — UI Quickshell + backend python
     quickshell
     mpd                     # lecteur local + fifos (cava + finder) — REQUIS par le CC
@@ -192,41 +223,66 @@ PKGS=(
     tesseract-data-fra      # langue française pour tesseract
     curl                    # healthcheck serveur (cc/cc.sh)
     jq                      # parsing JSON (lock-media.sh au lock, scripts)
-    nvidia-utils            # nvidia-smi (waybar GPU + metrics.py) — machine NVIDIA
-    libva-nvidia-driver     # décodage VA-API NVIDIA (env.conf LIBVA_DRIVER_NAME=nvidia)
     ffmpeg                  # fallback finder (si pw-record absent)
     python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
     gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
-    opentabletdriver        # AUR — daemon tablette XP-Pen (service user activé plus bas)
-    llama.cpp-cuda          # AUR — llama-server CUDA (aiko/, sidebar 愛子 Super+N)
 )
 
-missing=()
+PKGS_OPTIONAL=(
+    code                    # VS Code — lecteur code/txt (mimeapps, bind $mod+O)
+    opentabletdriver        # AUR — daemon tablette XP-Pen (service user activé plus bas)
+    llama.cpp-cuda          # AUR — llama-server CUDA (aiko/, sidebar 愛子 Super+N) — build LONG
+)
 
-for pkg in "${PKGS[@]}"; do
-    if ! yay -Qi "$pkg" &>/dev/null; then
-        missing+=("$pkg")
-    else
-        success "$pkg"
-    fi
-done
+PKGS_FAILED=()
 
-if [ ${#missing[@]} -gt 0 ]; then
-    warning "Paquets manquants : ${missing[*]}"
-    read -rp "  Installer maintenant ? [Y/n] " confirm
-    if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
-        yay -S --needed --noconfirm "${missing[@]}" || {
-            error "Échec de l'installation des paquets — corrige puis relance."
-            exit 1
-        }
+# Installe un groupe SANS bloquer : échec → warning + collecte + CONTINUE.
+install_group() {
+    local label="$1"; shift
+    local missing=() pkg
+    for pkg in "$@"; do
+        if ! yay -Qi "$pkg" &>/dev/null; then
+            missing+=("$pkg")
+        fi
+    done
+    if [ ${#missing[@]} -eq 0 ]; then
+        success "$label : déjà présents"
+        return 0
     fi
-fi
+    if [ "$NO_PACKAGES" = 1 ]; then
+        warning "$label : ${missing[*]} — non installés (--no-packages)"
+        PKGS_FAILED+=("${missing[@]}")
+        return 1
+    fi
+    warning "$label manquants : ${missing[*]}"
+    if yay -S --needed --noconfirm "${missing[@]}" 2>/dev/null; then
+        success "$label installés"
+        return 0
+    fi
+    # Échec (partiel ou total) : on identifie ce qui manque encore.
+    local still=()
+    for pkg in "${missing[@]}"; do
+        yay -Qi "$pkg" &>/dev/null || still+=("$pkg")
+    done
+    if [ ${#still[@]} -gt 0 ]; then
+        error "$label : échec sur ${still[*]} — je continue, à réinstaller ensuite"
+        PKGS_FAILED+=("${still[@]}")
+        return 1
+    fi
+    success "$label installés (retour non-zéro mais tout présent)"
+    return 0
+}
+
+install_group "Essentiel" "${PKGS_ESSENTIAL[@]}"
+install_group "Features"  "${PKGS_FEATURES[@]}"
+install_group "Optionnel" "${PKGS_OPTIONAL[@]}"
 
 # ─── XDG ───────────────────────────────
 header "Initialisation des dossiers XDG"
 mkdir -p "$CONFIG"
 mkdir -p "$HOME/.local/share/icons"
 mkdir -p "$HOME/songs"                 # bibliothèque musicale (mpd.conf music_directory)
+mkdir -p "$HOME/.local/share/mpd/playlists"   # MPD : socket + state PAR USER (mpd.conf) — sinon mpd refuse de démarrer
 xdg-user-dirs-update
 success "Dossiers XDG créés"
 
@@ -254,9 +310,13 @@ link() {
     fi
 
     if [ -e "$dst" ] || [ -L "$dst" ]; then
-        read -rp "  ⚠ '$dst' existe déjà. Écraser ? [y/N] " confirm
-        [[ "$confirm" =~ ^[Yy]$ ]] || { warning "Ignoré : $dst"; return; }
-        rm -rf "$dst"
+        if [ "$ASSUME_YES" = 1 ]; then
+            rm -rf "$dst"
+        else
+            read -rp "  ⚠ '$dst' existe déjà. Écraser ? [y/N] " confirm
+            [[ "$confirm" =~ ^[Yy]$ ]] || { warning "Ignoré : $dst"; return; }
+            rm -rf "$dst"
+        fi
     fi
 
     ln -s "$src" "$dst"
@@ -449,13 +509,24 @@ success "Scripts rendus exécutables"
 # ─── Fish comme shell par défaut ───────
 header "Shell par défaut"
 if command -v fish >/dev/null 2>&1 && [ "$SHELL" != "$(command -v fish)" ]; then
-    read -rp "  Définir Fish comme shell par défaut ? [Y/n] " confirm
-    if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
+    if confirm_yes "Définir Fish comme shell par défaut ?"; then
         chsh -s "$(command -v fish)" && success "Fish défini comme shell par défaut" \
             || warning "chsh a échoué (mot de passe ?) — à faire manuellement"
     fi
 else
     success "Fish déjà défini (ou absent)"
+fi
+
+# ─── Récapitulatif ─────────────────────
+header "Récapitulatif"
+if [ ${#PKGS_FAILED[@]} -gt 0 ]; then
+    warning "Paquets NON installés (${#PKGS_FAILED[@]}) : ${PKGS_FAILED[*]}"
+    warning "  → Relance : yay -S --needed --noconfirm ${PKGS_FAILED[*]}"
+else
+    success "Tous les paquets requis sont présents"
+fi
+if ! ls "$DOTDIR"/aiko/models/*.gguf &>/dev/null; then
+    info "Aiko (Super+N) : aucun modèle GGUF — lance : bash $DOTDIR/aiko/setup.sh (téléchargement ~2-4 Go)"
 fi
 
 echo -e "\n${GREEN}${BOLD}━━━ Sasquatch-Dotfile installé avec succès ! ━━━${NC}"
