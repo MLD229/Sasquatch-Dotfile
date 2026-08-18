@@ -80,12 +80,22 @@ hyprctl reload >/dev/null 2>&1
 
 # Waybar (CSS) — démarre ou relance systématiquement (nouveau thème = nouveau CSS)
 # 9>&- : ne pas laisser waybar hériter du fd de verrou (flock serait tenu à vie)
-# Supervision : si le service waybar (waybar/waybar.service) est actif, on
-# RECHARGE (SIGUSR2) au lieu de pkill+relance — zéro flash, zéro course avec
-# Restart=on-failure. Fallback direct si le service n'est pas installé.
+# Supervision : si le service waybar (waybar/waybar.service) est INSTALLÉ, c'est
+# LUI le seul lanceur — `systemctl --user start` est idempotent et ne crée PAS de
+# doublon, même pendant la course du login (service encore en retry
+# Restart=on-failure ; un `waybar &` direct donnerait 2 barres). Fallback direct
+# uniquement si le service n'existe pas du tout (install.sh pas relancé).
 if systemctl --user is-active --quiet waybar; then
     systemctl --user reload waybar >/dev/null 2>&1 || true
+elif systemctl --user list-unit-files waybar.service >/dev/null 2>&1; then
+    systemctl --user start waybar >/dev/null 2>&1 || true
+    for _ in 1 2 3 4 5; do
+        systemctl --user is-active --quiet waybar && break
+        sleep 0.3
+    done
+    systemctl --user reload waybar >/dev/null 2>&1 || true
 else
+    # Service non installé → fallback direct (ancien comportement).
     pkill -x waybar 2>/dev/null
     sleep 0.2
     waybar >/dev/null 2>&1 9>&- &
