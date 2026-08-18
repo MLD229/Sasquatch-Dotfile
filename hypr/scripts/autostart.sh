@@ -8,6 +8,15 @@
 # ports). À purger AVANT tout lancement.
 ~/.config/hypr/scripts/cleanup-orphans.sh
 
+# ── Env graphique pour le backend CC ─────────
+# Le service sasquatch-cc (enabled) démarre au login AVANT Hyprland → sans
+# WAYLAND_DISPLAY/HYPRLAND_INSTANCE_SIGNATURE/DISPLAY. Résultat : zenity
+# (choix dossier du sélecteur) et waypaper --restore (changement de fond)
+# échouent silencieusement depuis le backend. On propage l'env de la session
+# au user manager systemd, puis on redémarre le service pour qu'il en hérite.
+systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE DISPLAY XDG_CURRENT_DESKTOP 2>/dev/null || true
+systemctl --user restart sasquatch-cc 2>/dev/null || true
+
 # ── Wallpaper ────────────────────────────────
 # wallpaper.sh tue les hyprpaper orphelins (bug : orphelin d'une session passée
 # → waypaper ne le remplace pas → fond noir) puis lance waypaper --restore.

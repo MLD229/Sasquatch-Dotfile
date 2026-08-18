@@ -358,8 +358,12 @@ header "Hook waypaper (thème dynamique)"
 WP_CFG="$CONFIG/waypaper/config.ini"
 WP_HOOK='post_command = ~/.config/scripts/theme-apply.sh $wallpaper'
 mkdir -p "$(dirname "$WP_CFG")"
+# Dossier de wallpapers par défaut (vide, idempotent) : sans clé folder=,
+# waypaper retombe sur ~/Pictures → le sélecteur affiche des images jamais
+# choisies. Vide → "aucune image" tant que l'user ne choisit pas un dossier.
+mkdir -p ~/Wall-E-Desk
 if [ ! -f "$WP_CFG" ]; then
-    printf '[settings]\n%s\n' "$WP_HOOK" > "$WP_CFG"
+    printf '[settings]\nfolder = ~/Wall-E-Desk\n%s\n' "$WP_HOOK" > "$WP_CFG"
     success "config.ini waypaper créé avec le hook thème"
 elif ! grep -q '^post_command' "$WP_CFG"; then
     if grep -q '^\[settings\]' "$WP_CFG"; then
@@ -370,6 +374,14 @@ elif ! grep -q '^post_command' "$WP_CFG"; then
     success "Hook thème ajouté à waypaper"
 else
     success "Hook thème déjà présent"
+fi
+
+# Garde configs existantes : sans clé folder=, waypaper retombe sur ~/Pictures
+# → le sélecteur affiche des images jamais choisies par l'user. On force le
+# dossier par défaut juste après [settings] (idempotent via le grep).
+if ! grep -q '^folder' "$WP_CFG"; then
+    sed -i '/^\[settings\]/a folder = ~/Wall-E-Desk' "$WP_CFG"
+    success "folder par défaut Wall-E-Desk ajouté à waypaper"
 fi
 
 # ─── Symlinks ──────────────────────────
