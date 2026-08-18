@@ -27,6 +27,46 @@ warning() { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 header()  { echo -e "\n${BOLD}${BLUE}━━━ $1 ━━━${NC}"; }
 
+# ─── Arguments ───────────────────────────
+# install.sh [--clean|-c]
+#   --clean : sauvegarde ~/.config → ~/.config.backup-<date> PUIS vide le
+#             dossier pour une réinstallation propre. À utiliser sur une
+#             machine/compte qui a déjà une vieille config (ex. test après
+#             une restructuration du repo) — sinon les symlinks existants
+#             ne sont pas remplacés et les nouvelles features manquent.
+CLEAN=0
+for arg in "$@"; do
+    case "$arg" in
+        --clean|-c) CLEAN=1 ;;
+        -h|--help)
+            echo "Usage : bash install.sh [--clean|-c]"
+            echo "  --clean : backup ~/.config → ~/.config.backup-<date> puis réinstall propre"
+            exit 0
+            ;;
+        *) warning "Argument inconnu ignoré : $arg (voir --help)" ;;
+    esac
+done
+
+# Si --clean : backup complet puis dossier vide (réinstall propre).
+if [ "$CLEAN" = 1 ]; then
+    header "Nettoyage de l'ancienne configuration"
+    TS="$(date +%Y%m%d-%H%M%S)"
+    BACKUP="$CONFIG.backup-$TS"
+    if [ -e "$CONFIG" ]; then
+        read -rp "  Sauvegarder $CONFIG → $BACKUP puis vider ? [Y/n] " confirm
+        if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
+            mv "$CONFIG" "$BACKUP"
+            mkdir -p "$CONFIG"
+            success "Ancienne config sauvegardée : $BACKUP"
+            info "~/.config vidé — installation propre en cours..."
+        else
+            warning "Nettoyage annulé — installation sur la config existante (risque : anciennes features)"
+        fi
+    else
+        success "Pas de ~/.config existant — rien à nettoyer"
+    fi
+fi
+
 # ─── yay ───────────────────────────────
 header "Vérification de yay"
 if ! command -v yay &>/dev/null; then
@@ -199,6 +239,9 @@ link() {
 
     if [ ! -e "$src" ]; then
         warning "Source absente, lien ignoré : $src"
+        if [ "$CLEAN" != 1 ]; then
+            warning "  → Ancien clone ou structure périmée ? Relance avec : bash install.sh --clean"
+        fi
         return 1
     fi
 
