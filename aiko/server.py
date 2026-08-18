@@ -176,13 +176,13 @@ def log(msg):
 
 def find_llama_bin():
     """Trouve le binaire llama-server : custom → LM Studio backend → PATH."""
-    custom = LLAMA_CFG.get("custom_bin", "")
+    custom = os.path.expanduser(LLAMA_CFG.get("custom_bin", ""))
     if custom and os.path.isfile(custom):
         return custom, []
-    backend = LLAMA_CFG.get("backend_dir", "")
+    backend = os.path.expanduser(LLAMA_CFG.get("backend_dir", ""))
     if backend and os.path.isfile(os.path.join(backend, "llama-server")):
         libs = [backend]
-        vendor = LLAMA_CFG.get("vendor_dir", "")
+        vendor = os.path.expanduser(LLAMA_CFG.get("vendor_dir", ""))
         if vendor and os.path.isdir(vendor):
             libs.append(vendor)
         return os.path.join(backend, "llama-server"), libs

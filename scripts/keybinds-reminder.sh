@@ -21,7 +21,8 @@ Super + C        → Calculatrice rofi (qalc)
 Super + V        → Presse-papier (cliphist)
 Super + F        → Fullscreen (complet)
 Super + D        → Agrandir la fenêtre (internal, barre visible)
-Super + P        → Pseudo-tiling
+Super + P        → Playlist MPD (panneau Quickshell)
+Super + Shift+P  → Pseudo-tiling
 Super + J        → Masquer la waybar (toggle)
 Super + R        → Toggle split
 Super + Shift+V  → Libre / flottant (togglefloating)

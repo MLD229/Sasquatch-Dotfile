@@ -16,9 +16,9 @@
     "llama_host": "127.0.0.1"
   },
   "llama_bin": {
-    "//_comment": "Binaire llama-server. Auto-détecté si vide. Ordre : LM Studio backend (CUDA) → PATH → chemin custom.",
-    "backend_dir": "/home/momo/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.28.2",
-    "vendor_dir": "/home/momo/.lmstudio/extensions/backends/vendor/linux-llama-cuda12-vendor-v1",
+    "//_comment": "Binaire llama-server. Auto-détecté si vide. Ordre : LM Studio backend (CUDA) → PATH → chemin custom. Chemins portables : ~ est expansé au runtime (os.path.expanduser).",
+    "backend_dir": "~/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.28.2",
+    "vendor_dir": "~/.lmstudio/extensions/backends/vendor/linux-llama-cuda12-vendor-v1",
     "custom_bin": ""
   },
   "vram": {
@@ -40,7 +40,7 @@
   },
   "capture": {
     "//_comment": "Capture : slurp+grim pour sélection de zone → image attachée au chat.",
-    "screenshot_script": "/home/momo/.config/scripts/screenshot.sh",
+    "screenshot_script": "~/.config/scripts/screenshot.sh",
     "tmp_dir": "/tmp/aiko-captures"
   },
   "sessions": {

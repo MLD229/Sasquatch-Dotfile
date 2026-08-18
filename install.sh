@@ -289,6 +289,78 @@ grep -q "^HandleLidSwitchExternalPower=" "$LOGIND" || \
 grep -q "^HandleLidSwitchDocked=" "$LOGIND" || \
     echo "HandleLidSwitchDocked=lock" | sudo tee -a "$LOGIND"
 
+# ─── Hook thème dynamique (waypaper) ─────────
+# Le post_command applique la palette au changement de wallpaper. Sans lui,
+# seule l'appli au login joue (filet autostart.sh) — le thème ne suivrait plus
+# les changements de fond. Idempotent : ne touche pas une config existante
+# qui a déjà le hook (ex. config live de momo).
+header "Hook waypaper (thème dynamique)"
+WP_CFG="$CONFIG/waypaper/config.ini"
+WP_HOOK='post_command = ~/.config/scripts/theme-apply.sh $wallpaper'
+mkdir -p "$(dirname "$WP_CFG")"
+if [ ! -f "$WP_CFG" ]; then
+    printf '[settings]\n%s\n' "$WP_HOOK" > "$WP_CFG"
+    success "config.ini waypaper créé avec le hook thème"
+elif ! grep -q '^post_command' "$WP_CFG"; then
+    if grep -q '^\[settings\]' "$WP_CFG"; then
+        sed -i '/^\[settings\]/a post_command = ~/.config/scripts/theme-apply.sh $wallpaper' "$WP_CFG"
+    else
+        printf '\n[settings]\n%s\n' "$WP_HOOK" >> "$WP_CFG"
+    fi
+    success "Hook thème ajouté à waypaper"
+else
+    success "Hook thème déjà présent"
+fi
+
+# ─── Symlinks ──────────────────────────
+header "Création des symlinks"
+
+link "$DOTDIR/hypr"                     "$CONFIG/hypr"
+link "$DOTDIR/waybar"                   "$CONFIG/waybar"
+link "$DOTDIR/rofi"                     "$CONFIG/rofi"
+link "$DOTDIR/mako"                     "$CONFIG/mako"
+link "$DOTDIR/kitty"                    "$CONFIG/kitty"
+link "$DOTDIR/fcitx5"                   "$CONFIG/fcitx5"   # IME japonais (config+profile+conf)
+link "$DOTDIR/fish"                     "$CONFIG/fish"
+link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
+link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
+link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
+link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
+link "$DOTDIR/wp"                       "$CONFIG/wp"             # Sélecteur de fonds d'écran (Quickshell, Super+Y)
+link "$DOTDIR/pl"                       "$CONFIG/pl"             # Playlist MPD (Quickshell, Super+P)
+link "$DOTDIR/aiko"                     "$CONFIG/aiko"           # Sidebar 愛子 Aiko (Quickshell chat IA, Super+N)
+link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifo CC Capture (finder)
+link "$DOTDIR/settings"                 "$CONFIG/settings"       # Panneau Settings (Quickshell, Super+I)
+link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
+link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
+link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"
+link "$DOTDIR/mimeapps.list"            "$CONFIG/mimeapps.list"   # associations par défaut (code/mpv)
+# themes/icons et themes/cursors retirés : absents du repo (bug #9)
+# Icônes/curseurs gérés par les paquets : papirus-icon-theme, bibata-cursor-theme
+
+# ─── .desktop Brave + extension CC ────────
+# L'extension maison browser-bridge (cc/browser-bridge) fait le pont
+# YouTube→CC (MPRIS natif absent sur certains Chromium). Le keybind Super+W
+# passe --load-extension, mais un lancement depuis rofi/drun utilise le
+# .desktop SANS l'extension → le pont ne se charge pas. On copie le .desktop
+# système vers ~/.local/share/applications avec Exec patché (idempotent).
+# ⚠️ Exec de .desktop N'expand PAS ~ → chemin absolu $HOME ici.
+header "Extension CC dans le .desktop Brave"
+BRAVE_DESKTOP_SRC="/usr/share/applications/brave-browser.desktop"
+BRAVE_DESKTOP_DST="$HOME/.local/share/applications/brave-browser.desktop"
+if [ -f "$BRAVE_DESKTOP_SRC" ]; then
+    mkdir -p "$(dirname "$BRAVE_DESKTOP_DST")"
+    if [ ! -f "$BRAVE_DESKTOP_DST" ] || ! grep -q 'load-extension' "$BRAVE_DESKTOP_DST"; then
+        cp "$BRAVE_DESKTOP_SRC" "$BRAVE_DESKTOP_DST"
+        sed -i "s|^Exec=brave |Exec=brave --load-extension=$HOME/.config/cc/browser-bridge |" "$BRAVE_DESKTOP_DST"
+        success "brave-browser.desktop patché (extension CC chargée)"
+    else
+        success "brave-browser.desktop déjà patché"
+    fi
+else
+    warning ".desktop brave-browser introuvable (brave-bin pas installé ?) — Super+W garde l'extension, rofi non"
+fi
+
 # ─── Services systemd ──────────────────────
 header "Activation des services systemd"
 
@@ -361,54 +433,6 @@ if systemctl --user enable --now waybar 2>/dev/null; then
 else
     warning "Service user waybar non activé (pas de session) — theme-apply.sh le lancera au besoin"
 fi
-# ─── Hook thème dynamique (waypaper) ─────────
-# Le post_command applique la palette au changement de wallpaper. Sans lui,
-# seule l'appli au login joue (filet autostart.sh) — le thème ne suivrait plus
-# les changements de fond. Idempotent : ne touche pas une config existante
-# qui a déjà le hook (ex. config live de momo).
-header "Hook waypaper (thème dynamique)"
-WP_CFG="$CONFIG/waypaper/config.ini"
-WP_HOOK='post_command = ~/.config/scripts/theme-apply.sh $wallpaper'
-mkdir -p "$(dirname "$WP_CFG")"
-if [ ! -f "$WP_CFG" ]; then
-    printf '[settings]\n%s\n' "$WP_HOOK" > "$WP_CFG"
-    success "config.ini waypaper créé avec le hook thème"
-elif ! grep -q '^post_command' "$WP_CFG"; then
-    if grep -q '^\[settings\]' "$WP_CFG"; then
-        sed -i '/^\[settings\]/a post_command = ~/.config/scripts/theme-apply.sh $wallpaper' "$WP_CFG"
-    else
-        printf '\n[settings]\n%s\n' "$WP_HOOK" >> "$WP_CFG"
-    fi
-    success "Hook thème ajouté à waypaper"
-else
-    success "Hook thème déjà présent"
-fi
-
-# ─── Symlinks ──────────────────────────
-header "Création des symlinks"
-
-link "$DOTDIR/hypr"                     "$CONFIG/hypr"
-link "$DOTDIR/waybar"                   "$CONFIG/waybar"
-link "$DOTDIR/rofi"                     "$CONFIG/rofi"
-link "$DOTDIR/mako"                     "$CONFIG/mako"
-link "$DOTDIR/kitty"                    "$CONFIG/kitty"
-link "$DOTDIR/fcitx5"                   "$CONFIG/fcitx5"   # IME japonais (config+profile+conf)
-link "$DOTDIR/fish"                     "$CONFIG/fish"
-link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
-link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
-link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
-link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
-link "$DOTDIR/wp"                       "$CONFIG/wp"             # Sélecteur de fonds d'écran (Quickshell, Super+Y)
-link "$DOTDIR/pl"                       "$CONFIG/pl"             # Playlist MPD (Quickshell, Super+P)
-link "$DOTDIR/aiko"                     "$CONFIG/aiko"           # Sidebar 愛子 Aiko (Quickshell chat IA, Super+N)
-link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifo CC Capture (finder)
-link "$DOTDIR/settings"                 "$CONFIG/settings"       # Panneau Settings (Quickshell, Super+I)
-link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
-link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
-link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"
-link "$DOTDIR/mimeapps.list"            "$CONFIG/mimeapps.list"   # associations par défaut (code/mpv)
-# themes/icons et themes/cursors retirés : absents du repo (bug #9)
-# Icônes/curseurs gérés par les paquets : papirus-icon-theme, bibata-cursor-theme
 
 # ─── Scripts exécutables ───────────────
 header "Permissions des scripts"
