@@ -7,10 +7,10 @@ install où le dossier mémorisé n'existe pas, la liste est vide et l'UI
 invite à parcourir (zenity, lancé par le serveur — il a DISPLAY/WAYLAND
 via le manager systemd user).
 
-Pipeline apply : config.ini (folder + wallpaper) → `waypaper --restore`
-→ post_command (theme-apply.sh) → toute la palette suit (waybar, kitty,
-fastfetch, CC, overlays japonais…). Le changement d'image est donc géré
-par la même chaîne que waypaper : rien n'est réinventé.
+Pipeline apply : config.ini (folder + wallpaper) → `apply-wallpaper.sh`
+(hyprpaper direct, plus de dépendance waypaper) → theme-apply.sh
+→ toute la palette suit (waybar, kitty, fastfetch, CC, overlays japonais…).
+Le script commun est partagé avec wallpaper.sh (restauration au login).
 """
 
 import hashlib
@@ -120,21 +120,22 @@ def set_folder(folder):
 
 
 def apply_wallpaper(path):
-    """Applique un wallpaper : config.ini + waypaper --restore (post_command
-    → theme-apply.sh → toute la palette suit)."""
+    """Applique un wallpaper : config.ini + apply-wallpaper.sh (hyprpaper
+    direct, plus de dépendance waypaper) + theme-apply.sh (palette)."""
     path = os.path.expanduser((path or "").strip())
     if not path or not os.path.isfile(path):
         return {"ok": False, "error": "fichier introuvable"}
     if not _write_config(os.path.dirname(path), path):
         return {"ok": False, "error": "config illisible"}
+    script = os.path.expanduser("~/.config/cc/apply-wallpaper.sh")
     try:
         subprocess.Popen(
-            ["waypaper", "--restore"],
+            [script, path],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except OSError:
-        return {"ok": False, "error": "waypaper introuvable"}
+        return {"ok": False, "error": "apply-wallpaper.sh introuvable"}
     return {"ok": True}
 
 

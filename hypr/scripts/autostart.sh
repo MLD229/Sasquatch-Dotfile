@@ -11,15 +11,15 @@
 # ── Env graphique pour le backend CC ─────────
 # Le service sasquatch-cc (enabled) démarre au login AVANT Hyprland → sans
 # WAYLAND_DISPLAY/HYPRLAND_INSTANCE_SIGNATURE/DISPLAY. Résultat : zenity
-# (choix dossier du sélecteur) et waypaper --restore (changement de fond)
+# (choix dossier du sélecteur) et apply-wallpaper.sh (changement de fond)
 # échouent silencieusement depuis le backend. On propage l'env de la session
 # au user manager systemd, puis on redémarre le service pour qu'il en hérite.
 systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE DISPLAY XDG_CURRENT_DESKTOP 2>/dev/null || true
 systemctl --user restart sasquatch-cc 2>/dev/null || true
 
 # ── Wallpaper ────────────────────────────────
-# wallpaper.sh tue les hyprpaper orphelins (bug : orphelin d'une session passée
-# → waypaper ne le remplace pas → fond noir) puis lance waypaper --restore.
+# wallpaper.sh restaure le wallpaper au login via apply-wallpaper.sh (tue les
+# hyprpaper orphelins d'une session passée → fond noir, puis relance propre).
 ~/.config/hypr/scripts/wallpaper.sh
 
 # ── Horloge flottante (projet UI japonaise) ──
@@ -71,6 +71,6 @@ wl-paste --type text --watch cliphist store &
 wl-paste --type image --watch cliphist store &
 
 # ── Thème dynamique ──────────────────────────
-# waypaper --restore déclenche déjà theme-apply.sh via post_command ;
-# l'appel direct ci-dessous est un filet de sécurité (verrou flock = un seul apply).
+# apply-wallpaper.sh déclenche déjà theme-apply.sh ; l'appel direct ci-dessous
+# est un filet de sécurité (verrou flock = un seul apply).
 ~/.config/scripts/theme-apply.sh >/dev/null 2>&1 &

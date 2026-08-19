@@ -123,7 +123,6 @@ header "Installation des dépendances"
 
 PKGS_ESSENTIAL=(
     ttf-jetbrains-mono-nerd
-    waypaper
 
     eza
     bat
@@ -349,12 +348,13 @@ grep -q "^HandleLidSwitchExternalPower=" "$LOGIND" || \
 grep -q "^HandleLidSwitchDocked=" "$LOGIND" || \
     echo "HandleLidSwitchDocked=lock" | sudo tee -a "$LOGIND"
 
-# ─── Hook thème dynamique (waypaper) ─────────
-# Le post_command applique la palette au changement de wallpaper. Sans lui,
-# seule l'appli au login joue (filet autostart.sh) — le thème ne suivrait plus
-# les changements de fond. Idempotent : ne touche pas une config existante
-# qui a déjà le hook (ex. config live de momo).
-header "Hook waypaper (thème dynamique)"
+# ─── Hook thème dynamique (config waypaper) ──
+# Le fichier config.ini sert de « souvenir » du dossier/wallpaper courants
+# (lu par le backend CC et apply-wallpaper.sh). Le thème est appliqué par
+# apply-wallpaper.sh directement (hyprpaper + theme-apply.sh) — plus aucune
+# dépendance au binaire waypaper (retiré des paquets 2026-08-19).
+# Idempotent : ne touche pas une config existante.
+header "Hook thème dynamique"
 WP_CFG="$CONFIG/waypaper/config.ini"
 WP_HOOK='post_command = ~/.config/scripts/theme-apply.sh $wallpaper'
 mkdir -p "$(dirname "$WP_CFG")"

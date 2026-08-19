@@ -336,7 +336,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(set_folder(body.get("folder") or ""))
             return
         if path == "/api/wallpaper/apply":
-            # Applique le wallpaper (config.ini + waypaper --restore → thème).
+            # Applique le wallpaper (config.ini + apply-wallpaper.sh → hyprpaper + thème).
             self._json(apply_wallpaper(body.get("file") or ""))
             return
         if path == "/api/wallpaper/pick":
