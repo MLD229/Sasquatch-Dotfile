@@ -47,7 +47,7 @@ FloatingWindow {
     property var wp: ({folder: "", folderExists: false, current: "", files: []})
     property int idx: 0
     property bool applyBusy: false
-    property bool everShown: false
+    property bool picking: false
     property string curPath: ""
     property string oldPath: ""
     property string curName: ""
@@ -116,7 +116,9 @@ FloatingWindow {
 
     // ---------- actions ----------
     function pickFolder() {
+        root.picking = true;
         root.api("POST", "/api/wallpaper/pick", {kind: "folder"}, function(res) {
+            root.picking = false;
             if (!res || !res.ok) return;
             root.api("POST", "/api/wallpaper/folder", {folder: res.path}, function(r2) {
                 if (r2 && r2.ok) root.loadWallpapers();
@@ -125,7 +127,9 @@ FloatingWindow {
     }
 
     function pickFile() {
+        root.picking = true;
         root.api("POST", "/api/wallpaper/pick", {kind: "file"}, function(res) {
+            root.picking = false;
             if (!res || !res.ok) return;
             root.api("POST", "/api/wallpaper/apply", {file: res.path}, function(r2) {
                 if (r2 && r2.ok) root.loadWallpapers();
@@ -164,9 +168,14 @@ FloatingWindow {
     }
     Timer { id: fadeTimer; interval: 40; repeat: false; onTriggered: imgOld.opacity = 0.0 }
 
+    // ⚠️ Ne PAS quitter quand zenity (sélecteur Dossier/Fichier, lancé par le
+    // serveur) s'ouvre par-dessus : la FloatingWindow perd visible=true, et un
+    // Qt.quit() à ce moment annulerait le XHR pick → le serveur répond dans le
+    // vide (BrokenPipe) → la sélection n'est jamais appliquée ni mémorisée.
+    // On ne quitte que si l'utilisateur ferme vraiment (toggle wp.sh /
+    // closewindow) alors qu'aucun pick n'est en cours.
     onVisibleChanged: {
-        if (visible) everShown = true;
-        if (everShown && !visible) Qt.quit();
+        if (!visible && !root.picking) Qt.quit();
     }
     Shortcut { sequence: "Escape"; onActivated: Qt.quit() }
     Shortcut { sequence: "Left";  onActivated: root.goTo(root.idx - 1) }

@@ -146,11 +146,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, obj, code=200):
         body = json.dumps(obj).encode("utf-8")
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            # Client parti (ex: fenêtre quickshell fermée) → pas un bug, on ignore.
+            pass
 
     def _body_json(self):
         length = int(self.headers.get("Content-Length", 0) or 0)
