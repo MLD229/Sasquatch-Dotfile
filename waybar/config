@@ -180,7 +180,7 @@
         "format": "󰅍",
         "tooltip": true,
         "tooltip-format": "クリップボード — presse-papier\nひだりクリック → えらぶ (sélectionner)\nみぎクリック → れきしを けす (vider l'historique)\nなかクリック → さいごの アイテム (dernier élément)",
-        "on-click":        "cliphist list | rofi -dmenu -p 'Presse-papier' -theme ~/.config/rofi/themes/sasquatch.rasi | cliphist decode | wl-copy",
+        "on-click":        "~/.config/scripts/clipboard.sh",
         "on-click-right":  "cliphist wipe && notify-send '󰅍 Presse-papier' 'Historique vidé'",
         "on-click-middle": "cliphist list | head -1 | cliphist decode | wl-copy && notify-send '󰅍 Presse-papier' 'Dernier élément copié'"
     },

@@ -75,6 +75,8 @@ WIN_W=900
 MON_W=$(hyprctl monitors -j | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['width'])" 2>/dev/null || echo 1920)
 X=$((MON_W - WIN_W - 16))   # 16px de marge à droite
 hyprctl keyword "windowrule" "match:title ^(Sasquatch Playlist)$, move $X 62" >/dev/null 2>&1
+# NOTE : la règle runtime s'accumule jusqu'au reload (dernière gagnante, position
+# identique à chaque ouverture → sans effet fonctionnel). Comportement assumé.
 
 # Lance le panneau
 quickshell -p "$SCRIPT_DIR/main.qml"

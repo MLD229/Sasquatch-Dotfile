@@ -72,6 +72,8 @@ WIN_W=420
 MON_W=$(hyprctl monitors -j | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['width'])" 2>/dev/null || echo 1920)
 X=16   # 16px de marge à gauche
 hyprctl keyword "windowrule" "match:title ^(Aiko)$, move $X 62" >/dev/null 2>&1
+# NOTE : la règle runtime s'accumule jusqu'au reload (dernière gagnante, position
+# identique à chaque ouverture → sans effet fonctionnel). Comportement assumé.
 
 # Lance la sidebar
 quickshell -p "$SCRIPT_DIR/main.qml"

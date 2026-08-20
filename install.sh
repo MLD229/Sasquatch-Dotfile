@@ -128,6 +128,7 @@ PKGS_ESSENTIAL=(
     bat
     brightnessctl
     playerctl
+    mpc                     # client MPD (autostart.sh : mpc clear au boot)
     libqalculate       # calculatrice rofi (calc.sh, SUPER+C)
     python-pillow
     python-numpy           # wallclock-ja.py (position auto dans la zone plate du wallpaper)
@@ -225,6 +226,7 @@ PKGS_FEATURES=(
     ffmpeg                  # fallback finder (si pw-record absent)
     python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
     gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
+    zenity                  # sélecteurs « Parcourir » (wp Super+Y, pl Super+P, cc)
 )
 
 PKGS_OPTIONAL=(

@@ -50,7 +50,9 @@ Source de vérité : `hypr/keybinds.conf` (édition possible depuis Settings →
 | **Super + R** | Toggle split (layoutmsg togglesplit) |
 | **Super + J** | Masquer/afficher la waybar (SIGUSR1) |
 | **Super + Shift+V** | Libre/flottant (togglefloating) |
-| **Super + Z / S** | Focus haut / bas |
+| **Super + S / Alt+S** | Sub page : toggle scratchpad / envoyer la fenêtre dedans |
+| **Super + H** | Obsidian (toggle, float) |
+| **Super + Z** | Focus haut |
 | **Super + Shift + Z/S/Q/D** | Déplacer la fenêtre haut/bas/gauche/droite |
 | **Super + Ctrl + Z/S/Q/D** | Resize 30 px |
 | **Super + 1..5** | Workspaces 1..5 (`& é " ' (`) |
@@ -95,7 +97,7 @@ eza bat neovim code mpv \
 nvidia-utils libva-nvidia-driver \
 fcitx5 fcitx5-mozc fcitx5-configtool fcitx5-gtk fcitx5-qt \
 libqalculate \
-mpd cava alsa-utils songrec quickshell curl ffmpeg \
+mpd mpc cava alsa-utils songrec quickshell curl ffmpeg zenity \
 tesseract tesseract-data-fra
 
 # AUR (via yay — install.sh le fait automatiquement)
@@ -119,6 +121,21 @@ bash install.sh
 ```
 
 Redémarre ta session après l'installation.
+
+> **⚠️ Réseau (machine neuve)** : install.sh active `systemd-networkd` + `iwd`,
+> mais il te faut un fichier `/etc/systemd/network/*.network` (ou le DHCP iwd)
+> pour obtenir une IP. Exemple minimal pour le WiFi (à adapter à ta carte) :
+>
+> ```ini
+> # /etc/systemd/network/20-wlan.network
+> [Match]
+> Name=wlan0
+> [Network]
+> DHCP=yes
+> ```
+>
+> Sans ça : `iwctl station wlan0 connect <SSID>` associe le WiFi mais aucune IP
+> n'est attribuée.
 
 ---
 
@@ -179,7 +196,7 @@ Sasquatch-Dotfile/
 ├── mpd/
 │   └── mpd.conf                 ← lecteur local, socket user + fifo CC Capture
 ├── README.md
-├── requirements                 ← dépendances (source de vérité, 75 paquets)
+├── requirements                 ← dépendances (source de vérité, 77 paquets)
 ├── rofi/
 │   ├── themes/
 │   │   ├── sasquatch.rasi       ← thème principal (importe colors.rasi)
@@ -289,7 +306,7 @@ L'interface du desktop est passée en **japonais** (hiragana surtout, kanji/kata
 
 - **Waybar 100 % japonais** : workspaces (ワークスペース), mpris (おんがく), cpu (シーピーユー), gpu (ジーピーユー), memory (メモリー), network (ワイファイ), battery (でんち), pulseaudio (おんりょう), brightness (あかるさ), bluetooth (ブルートゥース), clipboard (クリップボード) — labels courts + tooltips complets (yomi + trad fr).
 - **Heure en hiragana** : `waybar/scripts/clock-ja.py` (module `custom/clock-ja`, return-type json) — じゅうにじ さんじゅうごふん, tooltip avec date + mini calendrier.
-- **Workspaces japonais** : `hypr/conf.d/rules.conf` → `workspace = N, defaultName:いち..じゅう` (⚠️ `defaultName:` PAS `name:` — non supporté en 0.56 hyprlang). `fastview.py` affiche `ワークスペース X — espace de travail N`.
+- **Workspaces japonais** : noms renommés à chaud par `scripts/apply-lang.sh` (lectures `いち..じゅう` en JA, `1..10` en FR) — PAS de `defaultName:` dans rules.conf (waybar les afficherait en plus des noms renommés → doublon, fix 2026-08-20). `fastview.py` affiche `ワークスペース X — espace de travail N`.
 - **Horloge flottante** : `waybar/scripts/wallclock-ja.py` — heure hiragana dans le fond d'écran (layer-shell BOTTOM, sous les fenêtres), position auto dans la zone plate du wallpaper (analyse variance, grille 48×27), glisse avec animation quand le wallpaper change, couleur adaptée à la zone (35 % plus light si fond sombre). Lancé par autostart.sh.
 - **Hyprlock japonais** : `hypr/scripts/lock-ja.py` (heure + date en hiragana, sortie PLAIN TEXT — ⚠️ jamais de Pango dans les `cmd[]` de hyprlock, lock cassé sinon) + `lock-media.sh` (now playing `♫ titre — artiste` depuis le CC). Police obligatoire : `Noto Sans CJK JP` (JetBrains Mono = tofu hiragana).
 
@@ -371,8 +388,10 @@ modification dans `settings/settings.json`.
 Sections :
 
 - **VEILLE** — toggle hypridle (désactivation immédiate `pkill hypridle`) + timeouts
-  dim / lock / écran off / suspend en minutes. Régénère `hypr/conf.d/../hypridle.conf`
-  (secondes = minutes × 60) et relance/arrête hypridle selon l'état.
+  dim / lock / écran off / suspend en minutes. Régénère `hypr/hypridle.conf`
+  (secondes = minutes × 60) et relance/arrête hypridle selon l'état. ⚠️ Ce fichier
+  est RÉGÉNÉRÉ par le panneau → s'il apparaît « modifié » dans git après usage,
+  c'est normal (comme la palette) : ne pas le committer.
 - **APPARENCE** — palette auto (wallpaper) ou manuelle : grille de 12 couleurs +
   champ hex pour accent/accent2 → `theme-apply.sh` re-teinte tout le desktop
   (waybar, rofi, hyprlock, GTK…).

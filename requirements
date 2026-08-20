@@ -53,6 +53,7 @@ pipewire-pulse
 wireplumber
 pavucontrol
 playerctl
+mpc                     # client MPD (autostart.sh : mpc clear au boot)
 mpv                     # lecteur audio/vidéo par défaut (mimeapps : mp3, mp4…)
 
 # Luminosité / volume
@@ -92,6 +93,7 @@ libva-nvidia-driver     # décodage VA-API NVIDIA (env.conf LIBVA_DRIVER_NAME=nv
 ffmpeg                  # fallback finder (si pw-record absent)
 python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
 gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
+zenity                  # sélecteurs « Parcourir » (wp Super+Y, pl Super+P, cc)
 
 # Tablette graphique XP-Pen (Star G640 / 28bd:0907) — OpenTabletDriver daemon
 # Service user : systemctl --user enable --now opentabletdriver
