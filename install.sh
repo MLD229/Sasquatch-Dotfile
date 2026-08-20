@@ -231,6 +231,7 @@ PKGS_OPTIONAL=(
     code                    # VS Code — lecteur code/txt (mimeapps, bind $mod+O)
     opentabletdriver        # AUR — daemon tablette XP-Pen (service user activé plus bas)
     llama.cpp-cuda          # AUR — llama-server CUDA (aiko/, sidebar 愛子 Super+N) — build LONG
+    obsidian                # extra — vault Obsidian (Sasquatch-Files, bind Super+H)
 )
 
 PKGS_FAILED=()
@@ -403,6 +404,7 @@ link "$DOTDIR/pl"                       "$CONFIG/pl"             # Playlist MPD 
 link "$DOTDIR/aiko"                     "$CONFIG/aiko"           # Sidebar 愛子 Aiko (Quickshell chat IA, Super+N)
 link "$DOTDIR/mpd"                      "$CONFIG/mpd"            # mpd.conf + fifo CC Capture (finder)
 link "$DOTDIR/settings"                 "$CONFIG/settings"       # Panneau Settings (Quickshell, Super+I)
+link "$DOTDIR/subpage"                  "$CONFIG/subpage"        # Sub page (scratchpad Hyprland, Super+S)
 link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
 link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"
@@ -516,6 +518,7 @@ chmod +x "$DOTDIR"/aiko/*.sh              # ← Sidebar 愛子 Aiko (aiko.sh, se
 chmod +x "$DOTDIR"/settings/*.sh          # ← Panneau Settings (settings.sh)
 chmod +x "$DOTDIR"/pl/*.sh                # ← Playlist MPD (pl.sh)
 chmod +x "$DOTDIR"/wp/*.sh                # ← Wallpaper picker Quickshell (wp.sh)
+chmod +x "$DOTDIR"/subpage/*.sh            # ← Sub page scratchpad (subpage.sh)
 chmod +x "$DOTDIR"/set-wall.sh            # ← ajouté (bug #31)
 success "Scripts rendus exécutables"
 

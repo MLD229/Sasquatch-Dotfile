@@ -11,12 +11,15 @@ Comportement (spec momo) :
   * À CHAQUE changement de wallpaper (momo change souvent), la position est
     re-calculée et l'horloge GLISSE (animation) vers la nouvelle zone sombre.
   * Couleur = ADAPTATIVE : la TEINTE vient de la palette du thème (accent,
-    @color4 du bloc SASQUATCH-PALETTE — lui-même calculé depuis le wallpaper
-    par theme-apply.py), la CLARTÉ suit le fond local derrière l'horloge :
-    fond sombre → version claire (lisible) ; fond clair → version FONCÉE de
-    l'accent (« teint plus foncé »). Contraste garanti, jamais invisible.
+     @color4 du bloc SASQUATCH-PALETTE — lui-même calculé depuis le wallpaper
+     par theme-apply.py), la CLARTÉ suit le fond local derrière l'horloge :
+     fond sombre → version claire (lisible) ; fond clair → version FONCÉE de
+     l'accent (« teint plus foncé »). Contraste garanti, jamais invisible.
+  * Suffixes じ (heure) et ふん/ぷん (minutes) colorés dans un TON PLUS
+     FONCÉ du texte (fg_suf) : les nombres ressortent, les unités se
+     distinguent visuellement (spec momo 2026-08-19).
   * Palette : lue depuis waybar/style.css (bloc SASQUATCH-PALETTE, comme
-    fastview.py) — le texte suit le thème dynamique.
+     fastview.py) — le texte suit le thème dynamique.
   * Rafraîchit l'heure toutes les 30 s ; tooltip GTK natif synchronisé
     (lecture hiragana + traduction + date + calendrier).
   * Fenêtre : layer-shell background, sans focus, input region limitée à
@@ -108,6 +111,24 @@ MIN_UNITS = {
     6: "ろっぷん", 7: "ななふん", 8: "はっぷん", 9: "きゅうふん",
 }
 MIN_TENS = {1: "じゅう", 2: "にじゅう", 3: "さんじゅう", 4: "よんじゅう", 5: "ごじゅう"}
+
+# Variantes SPLIT (nombre / suffixe) pour colorer じ et ふん/ぷん à part :
+# les tables HOURS/MIN_* ci-dessus restent pour le tooltip (texte brut).
+HOURS_NUM = {
+    0: "れい", 1: "いち", 2: "に", 3: "さん", 4: "よ", 5: "ご",
+    6: "ろく", 7: "しち", 8: "はち", 9: "く", 10: "じゅう",
+    11: "じゅういち", 12: "じゅうに", 13: "じゅうさん", 14: "じゅうよ",
+    15: "じゅうご", 16: "じゅうろく", 17: "じゅうしち", 18: "じゅうはち",
+    19: "じゅうく", 20: "にじゅう", 21: "にじゅういち", 22: "にじゅうに",
+    23: "にじゅうさん",
+}
+HOUR_SUFFIX = "じ"
+MIN_UNITS_NUM = {
+    0: "", 1: "いっ", 2: "に", 3: "さん", 4: "よん", 5: "ご",
+    6: "ろっ", 7: "なな", 8: "はっ", 9: "きゅう",
+}
+MIN_SUFFIX = {1: "ぷん", 2: "ふん", 3: "ぷん", 4: "ぷん", 5: "ふん",
+              6: "ぷん", 7: "ふん", 8: "ぷん", 9: "ふん"}
 MONTHS = {
     1: "いちがつ", 2: "にがつ", 3: "さんがつ", 4: "しがつ", 5: "ごがつ",
     6: "ろくがつ", 7: "しちがつ", 8: "はちがつ", 9: "くがつ", 10: "じゅうがつ",
@@ -137,6 +158,23 @@ def time_ja(now):
     h_ja = HOURS[now.hour]
     m_ja = minutes_ja(now.minute)
     return f"{h_ja} {m_ja}".strip() if m_ja else h_ja
+
+
+def time_ja_parts(now):
+    """Segments (texte, suffixe?) GROUPÉS par unité (heure, minutes) — les
+    segments d'un même groupe sont COLLÉS (nombre + じ/ふん), un espace
+    sépare les groupes dans le label. Le label colore les suffixes じ/ふん
+    (True) différemment des nombres (False)."""
+    groups = [[(HOURS_NUM[now.hour], False), (HOUR_SUFFIX, True)]]
+    m = now.minute
+    if m:
+        tens, units = divmod(m, 10)
+        num = MIN_TENS.get(tens, "") + MIN_UNITS_NUM[units]
+        g = [(num, False)]
+        if units:
+            g.append((MIN_SUFFIX[units], True))
+        groups.append(g)
+    return groups
 
 
 def date_ja(now):
@@ -246,7 +284,8 @@ def find_smart_position(img_path, scr_w, scr_h):
     return (int(sx), int(sy)), zone_rgb
 
 
-def adapt_theme_color(zone_rgb, accent_hex, light_l=0.80, dark_l=0.24):
+def adapt_theme_color(zone_rgb, accent_hex, light_l=0.80, dark_l=0.24,
+                      suf_delta=0.40):
     """
     Couleur de texte = TEINTE de l'accent (palette adaptative) + CLARTÉ selon
     le fond local derrière l'horloge :
@@ -255,7 +294,9 @@ def adapt_theme_color(zone_rgb, accent_hex, light_l=0.80, dark_l=0.24):
         « teint plus foncé » de momo) — contraste garanti, jamais invisible.
     La teinte (hue) et la saturation de l'accent sont conservées (colorsys
     HLS) ; seule la luminance cible change.
-    Retourne (fg_hex, fg_dim_hex) pour l'heure et la date secondaire.
+    Retourne (fg, fg_dim, fg_suf) : heure, date secondaire, et TON PLUS
+    FONCÉ pour les suffixes じ/ふん (même teinte, luminance réduite de
+    suf_delta, clampée ≥ 0.12 pour rester lisible).
     """
     r, g, b = (c / 255.0 for c in zone_rgb)
     lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
@@ -273,7 +314,10 @@ def adapt_theme_color(zone_rgb, accent_hex, light_l=0.80, dark_l=0.24):
     d = max(0.0, min(1.0, target + (0.10 if lum < 0.45 else -0.10)))
     r2, g2, b2 = colorsys.hls_to_rgb(h, d, s)
     dim = "#{:02x}{:02x}{:02x}".format(*(int(round(c * 255)) for c in (r2, g2, b2)))
-    return fg, dim
+    s_l = max(0.12, min(1.0, target - suf_delta))
+    r3, g3, b3 = colorsys.hls_to_rgb(h, s_l, s)
+    suf = "#{:02x}{:02x}{:02x}".format(*(int(round(c * 255)) for c in (r3, g3, b3)))
+    return fg, dim, suf
 
 
 # ── Fenêtre layer-shell ───────────────────────────────────────────────────
@@ -282,8 +326,9 @@ class WallClock:
         self.palette = read_palette()
         self.accent = self.palette.get("color4", self.palette.get("foreground", TEXT_FG))
         self.current_zone_rgb = None
-        # fg/fg_dim réels posés par apply_theme_color (fallback clair)
+        # fg/fg_dim/fg_suf réels posés par apply_theme_color (fallback clair)
         self.fg = self.fg_dim = "#e8e8e8"
+        self.fg_suf = "#909090"
 
         self.win = Gtk.Window()
         self.win.set_title("sasquatch-wallclock")
@@ -351,8 +396,17 @@ class WallClock:
         t_ja = time_ja(now)
         d_ja = date_ja(now)
         wd = WEEKDAYS_KANJI[now.weekday()]
+        # Groupes collés (nombre+suffixe), espace entre groupes ; les suffixes
+        # じ/ふん sont en fg_suf (ton plus foncé)
+        segs = []
+        for gi, group in enumerate(time_ja_parts(now)):
+            if gi > 0:
+                segs.append(f'<span foreground="{self.fg}"> </span>')
+            for text, is_suf in group:
+                col = self.fg_suf if is_suf else self.fg
+                segs.append(f'<span foreground="{col}">{text}</span>')
         self.lbl_time.set_markup(
-            f'<span font="{FONT_TIME}" foreground="{self.fg}">{t_ja}</span>'
+            f'<span font="{FONT_TIME}">{"".join(segs)}</span>'
         )
         self.lbl_date.set_markup(
             f'<span font="{FONT_DATE}" foreground="{self.fg_dim}">'
@@ -394,7 +448,7 @@ class WallClock:
         self.palette = read_palette()
         self.accent = self.palette.get("color4", self.palette.get("foreground", TEXT_FG))
         zone = self.current_zone_rgb or (20, 20, 20)
-        self.fg, self.fg_dim = adapt_theme_color(zone, self.accent)
+        self.fg, self.fg_dim, self.fg_suf = adapt_theme_color(zone, self.accent)
         self.update_label()
 
     def initial_place(self):

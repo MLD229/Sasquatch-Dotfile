@@ -107,3 +107,4 @@ llama.cpp-cuda          # AUR — llama-server avec CUDA (requis par aiko/server
 # Divers
 xdg-user-dirs
 xdg-utils
+obsidian                # vault Obsidian (Sasquatch-Files) — extra, bind Super+H

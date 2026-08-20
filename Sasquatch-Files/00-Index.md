@@ -196,6 +196,12 @@ updated: 2026-08-19
 - [[20-Composants/settings/settings-sh]]
 - [[20-Composants/settings]]
 
+**subpage/**
+
+- [[20-Composants/subpage/main-qml]]
+- [[20-Composants/subpage/subpage-sh]]
+- [[20-Composants/subpage]]
+
 **themes/**
 
 
