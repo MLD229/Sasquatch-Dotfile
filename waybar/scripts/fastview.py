@@ -50,6 +50,7 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango, PangoCairo, GtkLayer
 # ── Constantes ────────────────────────────────────────────────────────────
 PIDFILE = "/tmp/sasquatch-fastview.pid"
 STYLE_CSS = os.path.expanduser("~/.config/waybar/style.css")
+SETTINGS_JSON = os.path.expanduser("~/.config/settings/settings.json")
 
 POLL_MS = 40            # lecture du curseur (25 Hz)
 DATA_MS = 1000          # rafraîchissement données hyprctl pendant l'affichage
@@ -64,10 +65,13 @@ BTN_MIN_W = 24          # CSS #workspaces button { min-width: 24px }
 BTN_PAD = 7             # CSS #workspaces button { padding: 0 7px }
 FONT_BTN = "JetBrainsMono Nerd Font 14"
 FONT_TITLE = "JetBrainsMono Nerd Font 9"
-# Labels des boutons workspaces (waybar config : format "{name}", noms définis
-# dans hypr/conf.d/rules.conf) — la mesure des largeurs DOIT utiliser les
-# MÊMES textes que waybar, sinon le hover fastview est décalé.
-WS_LABELS = ["いち", "に", "さん", "よん", "ご", "ろく", "なな", "はち", "きゅう", "じゅう"]
+# Labels des boutons workspaces (waybar config : format "{name}") — la mesure
+# des largeurs DOIT utiliser les MÊMES textes que waybar, sinon le hover
+# fastview est décalé. Relus selon la langue (ui_lang) : en FR les boutons
+# s'appellent "1".."10" (renommés par apply-lang.sh), en JA les lectures
+# hiragana いち..じゅう.
+WS_LABELS_JA = ["いち", "に", "さん", "よん", "ご", "ろく", "なな", "はち", "きゅう", "じゅう"]
+WS_LABELS_FR = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 
 POPUP_W = 340
 POPUP_H_MAX = 230
@@ -98,6 +102,20 @@ def ensure_instance_env():
         inst = hyprctl(["instances", "-j"], as_json=True)
         if isinstance(inst, list) and inst:
             os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = inst[0].get("instance", "")
+
+
+def ui_lang():
+    """Langue mémorisée dans settings.json : "ja" (défaut) ou "fr".
+
+    Relue à chaque affichage → le toggle du panneau prend effet sans restart.
+    """
+    try:
+        with open(SETTINGS_JSON, encoding="utf-8") as f:
+            data = json.load(f)
+        mode = (data or {}).get("lang", {}).get("mode")
+        return mode if mode in ("ja", "fr") else "ja"
+    except Exception:
+        return "ja"
 
 
 # ── Données Hyprland ──────────────────────────────────────────────────────
@@ -181,8 +199,9 @@ def measure_button_widths():
     layout = Pango.Layout.new(ctx)
     layout.set_font_description(fd)
     widths = []
+    labels = WS_LABELS_JA if ui_lang() == "ja" else WS_LABELS_FR
     for i in range(1, WS_COUNT + 1):
-        layout.set_text(WS_LABELS[i - 1], -1)
+        layout.set_text(labels[i - 1], -1)
         tw, _ = layout.get_pixel_size()
         widths.append(max(BTN_MIN_W, tw) + 2 * BTN_PAD)
     return widths
@@ -466,10 +485,15 @@ class FastView:
             return
         st = self.build_state(ws_id, mon, mon.get("id"))
         n = st.get("n", len(st.get("wins", [])))
-        actif = "  ● アクティブ" if self.active_ws.get(mon_name) == ws_id else ""
-        label = WS_LABELS[ws_id - 1] if 1 <= ws_id <= WS_COUNT else str(ws_id)
+        ja = ui_lang() == "ja"
+        labels = WS_LABELS_JA if ja else WS_LABELS_FR
+        actif = "  ● アクティブ" if ja and self.active_ws.get(mon_name) == ws_id else (
+            "  ● actif" if self.active_ws.get(mon_name) == ws_id else ""
+        )
+        label = labels[ws_id - 1] if 1 <= ws_id <= WS_COUNT else str(ws_id)
+        ws_word = "ワークスペース" if ja else "Espace de travail"
         self.title_label.set_markup(
-            f"ワークスペース {label} — espace de travail {ws_id}{actif}"
+            f"{ws_word} {label} — espace de travail {ws_id}{actif}"
             f"   <span alpha='60%'>· {n} fenêtre(s)</span>"
         )
 
