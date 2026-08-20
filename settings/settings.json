@@ -1,25 +1,28 @@
 {
-  "idle": {
-    "enabled": false,
-    "dim_min": 3,
-    "lock_min": 5,
-    "off_min": 7,
-    "suspend_min": 15
-  },
-  "palette": {
-    "mode": "auto",
-    "accent": "#88aaee",
-    "accent2": "#aa88ff"
-  },
-  "clock": {
-    "waybar_format": "󰥔  {:%H:%M   %d %b}",
-    "lock_24h": true,
-    "lock_date": true
-  },
-  "cc": {
-    "cava": true,
-    "ocr_lang": "fra",
-    "cover_art": true
-  },
-  "keybinds": {}
+    "lang": {
+        "mode": "ja"
+    },
+    "idle": {
+        "enabled": false,
+        "dim_min": 3,
+        "lock_min": 5,
+        "off_min": 7,
+        "suspend_min": 15
+    },
+    "palette": {
+        "mode": "auto",
+        "accent": "#88aaee",
+        "accent2": "#aa88ff"
+    },
+    "clock": {
+        "waybar_format": "\udb82\udd54  {:%H:%M   %d %b}",
+        "lock_24h": true,
+        "lock_date": true
+    },
+    "cc": {
+        "cava": true,
+        "ocr_lang": "fra",
+        "cover_art": true
+    },
+    "keybinds": {}
 }

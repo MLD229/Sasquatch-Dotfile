@@ -1,5 +1,5 @@
 #!/bin/bash
-# autostart.sh
+# autostart.sh — lancement de la session Hyprland (exec-once).
 
 # ── Purge orphelins session précédente ───────
 # Relogin/crash d'Hyprland → les process de l'ancienne session (waybar, fcitx5,
@@ -52,9 +52,9 @@ hypridle &
 # sécurité (sans effet si déjà lancé).
 systemctl --user start mpd 2>/dev/null &
 
-# File vide au boot : MPD restaure la queue depuis state_file → FLUXO restait
-# scotchée en pause (repeat on + file à 1 piste) et le CC restait dessus.
-# mpc clear → démarrage propre ; le CC bascule sur le lecteur qui joue.
+# File vide au boot : MPD restaure la queue depuis state_file → la playlist
+# précédente restait en pause (repeat on + file à 1 piste) et le CC restait
+# dessus. mpc clear → démarrage propre ; le CC bascule sur le lecteur actif.
 for _ in 1 2 3 4 5; do
     mpc clear 2>/dev/null && break
     sleep 0.5
@@ -63,7 +63,7 @@ done
 # ── Media syncro (waybar mpris : dernier lecteur joué) ───────────
 # playerctld (fourni par playerctl) n'est PAS un service systemd : lancé
 # manuellement hors repo, il ne revient pas au boot → le module mpris de la
-# waybar reste scotché sur le premier lecteur au lieu du dernier joué.
+# waybar reste bloqué sur le premier lecteur au lieu du dernier joué.
 playerctld daemon &
 
 # ── Presse-papier ────────────────────────────
@@ -74,3 +74,10 @@ wl-paste --type image --watch cliphist store &
 # apply-wallpaper.sh déclenche déjà theme-apply.sh ; l'appel direct ci-dessous
 # est un filet de sécurité (verrou flock = un seul apply).
 ~/.config/scripts/theme-apply.sh >/dev/null 2>&1 &
+
+# ── Langue mémorisée (FR/日本語) ───────────────
+# apply-lang.sh applique la langue de settings.json (waybar : copie config +
+# restart ; workspaces : rename 1..10). wallclock/hyprlock/clock-ja relisent
+# settings.json eux-mêmes (pas de restart). Lancé APRÈS les composants pour
+# re-renommer les workspaces selon la langue mémorisée au login.
+~/.config/scripts/apply-lang.sh >/dev/null 2>&1 &

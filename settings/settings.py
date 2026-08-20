@@ -37,7 +37,7 @@ HYPRIDLE_CONF = os.path.realpath(
     os.path.join(HOME, ".config", "hypr", "hypridle.conf"))
 KEYBINDS_USER_CONF = os.path.realpath(
     os.path.join(REPO, "hypr", "keybinds-user.conf"))
-WAYBAR_CONFIG = os.path.realpath(os.path.join(REPO, "waybar", "config"))
+APPLY_LANG = os.path.join(REPO, "scripts", "apply-lang.sh")
 
 # Lectures (symlinks de dossier : équivalents repo/live).
 PALETTE_QML = os.path.join(HOME, ".config", "cc", "qml", "Palette.qml")
@@ -422,22 +422,10 @@ def _post_clock(body):
     }
     _write_settings(settings)
 
-    # Patch du module "clock" de waybar/config (JSONC sans extension).
-    # ensure_ascii=False : on écrit le glyph en UTF-8 brut (comme l'original),
-    # pas en escape \uXXXX que waybar n'interpréterait pas.
-    try:
-        with open(WAYBAR_CONFIG, encoding="utf-8") as f:
-            content = f.read()
-        esc = json.dumps(waybar_format, ensure_ascii=False)[1:-1]
-        pat = re.compile(r'("clock":\s*\{[^}]*?"format":\s*")[^"]*(")')
-        new_content, n = pat.subn(
-            lambda m: m.group(1) + esc + m.group(2), content, count=1)
-        if n:
-            with open(WAYBAR_CONFIG, "w", encoding="utf-8") as f:
-                f.write(new_content)
-    except OSError:
-        pass
-
+    # Le réglage waybar_format est lu directement par
+    # waybar/scripts/clock-ja.py (mode FR, à chaque tick) → pas de patch de
+    # config ici. _run_theme_apply recharge waybar (le module custom relit
+    # settings.json) + hyprlock (lock_24h / lock_date).
     _run_theme_apply()  # recharge waybar + hyprlock
     return {"ok": True}
 
@@ -451,6 +439,37 @@ def _post_cc(body):
     settings["cc"] = {"cava": cava, "ocr_lang": ocr_lang, "cover_art": cover_art}
     _write_settings(settings)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Langue UI (FR/日本語) — mémoire permanente dans settings.json
+# ---------------------------------------------------------------------------
+def _read_lang():
+    settings = _read_settings()
+    mode = settings.get("lang", {}).get("mode")
+    return mode if mode in ("ja", "fr") else "ja"
+
+
+def _post_lang(body):
+    mode = body.get("mode")
+    if mode not in ("ja", "fr"):
+        return {"ok": False, "error": "mode invalide (ja|fr)"}
+    settings = _read_settings()
+    settings["lang"] = {"mode": mode}
+    _write_settings(settings)
+    # apply-lang.sh en arrière-plan : waybar restart + renameworkspace prennent
+    # ~1 s — ne JAMAIS bloquer la réponse HTTP (Popen non bloquant).
+    try:
+        cmd = [APPLY_LANG]
+        if not os.access(APPLY_LANG, os.X_OK):
+            cmd = ["bash", APPLY_LANG]
+        devnull = open(os.devnull, "w")
+        subprocess.Popen(cmd, stdout=devnull, stderr=devnull,
+                         start_new_session=True)
+        devnull.close()
+    except Exception:
+        pass
+    return {"ok": True, "mode": mode}
 
 
 # ---------------------------------------------------------------------------
@@ -592,6 +611,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/keybinds":
             self._json({"keybinds": _parse_keybinds(), "ok": True})
             return
+        if path == "/api/lang":
+            self._json({"mode": _read_lang()})
+            return
         self._not_found()
 
     # -- POST --------------------------------------------------------------
@@ -623,6 +645,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/wallpaper":
             self._json(_post_wallpaper(body))
+            return
+        if path == "/api/lang":
+            self._json(_post_lang(body))
             return
         if path == "/api/close":
             self._json({"ok": True})

@@ -7,7 +7,7 @@
 // PIÈGES RESPECTÉS :
 //  - jamais d'anchors.fill sur les enfants directs d'un Layout
 //    (Layout.fillWidth/fillHeight à la place)
-//  - contenu scrollable (Flickable) : 5 sections dépassent ~900 px
+//  - contenu scrollable (Flickable) : 7 sections dépassent ~900 px
 //  - les signaux d'interaction (onClicked/onMoved/onAccepted) n'émettent
 //    JAMAIS de POST pendant le chargement initial (state chargé une fois)
 
@@ -72,6 +72,7 @@ FloatingWindow {
     property int pRounding: 12
     property bool pAnim: true
     property bool sysLoaded: false
+    property string langMode: "ja"
 
     // ---------- API helper (XHR, inline — identique au CC) ----------
     function api(method, path, body, cb, timeoutMs) {
@@ -161,6 +162,9 @@ FloatingWindow {
             animations: root.pAnim
         }, function() {});
     }
+    function saveLang() {
+        root.api("POST", "/api/lang", {mode: root.langMode}, function() {});
+    }
     function openWallpaper() {
         root.api("POST", "/api/wallpaper", null, function() {});
     }
@@ -210,6 +214,9 @@ FloatingWindow {
                         root.ccCava = s.cc.cava !== false;
                         root.ccOcr = s.cc.ocr_lang || "fra";
                         root.ccCover = s.cc.cover_art !== false;
+                    }
+                    if (s.lang) {
+                        root.langMode = s.lang.mode || "ja";
                     }
                 }
             });
@@ -382,7 +389,78 @@ FloatingWindow {
                     width: parent.width
                     spacing: 12
 
-                    // ═══════════ 1. VEILLE ═══════════
+                    // ═══════════ 1. LANGUE 言語 ═══════════
+                    Section {
+                        title: "LANGUE 言語"
+                        Layout.fillWidth: true
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Text {
+                                text: "Langue"
+                                color: root.cTextDim
+                                font.pixelSize: 11
+                            }
+                            Rectangle {
+                                Layout.preferredHeight: 28
+                                Layout.preferredWidth: langJaText.implicitWidth + 24
+                                radius: 8
+                                color: root.langMode === "ja"
+                                       ? Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.25)
+                                       : Qt.rgba(1, 1, 1, 0.08)
+                                border.width: root.langMode === "ja" ? 1 : 0
+                                border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.6)
+                                Text {
+                                    id: langJaText
+                                    anchors.centerIn: parent
+                                    text: "日本語"
+                                    color: root.langMode === "ja" ? root.cAccent : root.cTextDim
+                                    font.pixelSize: 11
+                                    font.bold: root.langMode === "ja"
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: { root.langMode = "ja"; root.saveLang(); }
+                                }
+                            }
+                            Rectangle {
+                                Layout.preferredHeight: 28
+                                Layout.preferredWidth: langFrText.implicitWidth + 24
+                                radius: 8
+                                color: root.langMode === "fr"
+                                       ? Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.25)
+                                       : Qt.rgba(1, 1, 1, 0.08)
+                                border.width: root.langMode === "fr" ? 1 : 0
+                                border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.6)
+                                Text {
+                                    id: langFrText
+                                    anchors.centerIn: parent
+                                    text: "Français"
+                                    color: root.langMode === "fr" ? root.cAccent : root.cTextDim
+                                    font.pixelSize: 11
+                                    font.bold: root.langMode === "fr"
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: { root.langMode = "fr"; root.saveLang(); }
+                                }
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+                        Text {
+                            text: "Toute l'UI bascule : waybar (labels + heure), horloge murale, hyprlock, noms des workspaces."
+                            color: root.cTextDim
+                            font.pixelSize: 10
+                        }
+                    }
+
+                    // ═══════════ 2. VEILLE ═══════════
                     Section {
                         title: "VEILLE"
                         Layout.fillWidth: true
@@ -423,7 +501,7 @@ FloatingWindow {
                         }
                     }
 
-                    // ═══════════ 2. APPARENCE ═══════════
+                    // ═══════════ 3. APPARENCE ═══════════
                     Section {
                         title: "APPARENCE"
                         Layout.fillWidth: true
@@ -499,7 +577,7 @@ FloatingWindow {
                         }
                     }
 
-                    // ═══════════ 3. HORLOGE ═══════════
+                    // ═══════════ 4. HORLOGE ═══════════
                     Section {
                         title: "HORLOGE"
                         Layout.fillWidth: true
@@ -526,7 +604,7 @@ FloatingWindow {
                         }
                     }
 
-                    // ═══════════ 4. RACCOURCIS ═══════════
+                    // ═══════════ 5. RACCOURCIS ═══════════
                     Section {
                         title: "RACCOURCIS"
                         Layout.fillWidth: true
@@ -609,7 +687,7 @@ FloatingWindow {
                         }
                     }
 
-                    // ═══════════ 5. CONTROL PANEL ═══════════
+                    // ═══════════ 6. CONTROL PANEL ═══════════
                     Section {
                         title: "CONTROL PANEL"
                         Layout.fillWidth: true
@@ -685,7 +763,7 @@ FloatingWindow {
                         }
                     }
 
-                    // ═══════════ 6. SYSTÈME ═══════════
+                    // ═══════════ 7. SYSTÈME ═══════════
                     Section {
                         title: "SYSTÈME"
                         Layout.fillWidth: true

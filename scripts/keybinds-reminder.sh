@@ -17,6 +17,9 @@ Super + B        → Bluetooth (toggle blueman-manager)
 Super + G        → Control Center (Quickshell)
 Super + I        → Panneau Settings
 Super + N        → Sidebar 愛子 Aiko (chat IA)
+Super + H        → Obsidian (toggle, fenêtre flottante)
+Super + S        → Sub page (scratchpad, toggle)
+Super + Shift+S  → Envoyer la fenêtre dans Sub page
 Super + C        → Calculatrice rofi (qalc)
 Super + V        → Presse-papier (cliphist)
 Super + F        → Fullscreen (complet)

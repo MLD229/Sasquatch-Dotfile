@@ -11,18 +11,19 @@ Sortie :
     hyprlock.conf, suit la palette dynamique), suffixes じ/ふん en TON PLUS
     FONCÉ (même teinte, luminance réduite). Ex : じゅうにじ さんじゅうごふん
     → じゅうに[clair] じ[foncé] さんじゅうご[clair] ふん[foncé].
-  * date : hiragana pur (pas de traduction — spec momo 2026-08-16).
+  * date : hiragana pur (pas de traduction).
 
-Markup Pango dans les cmd : hyprlock v0.9.6 le REND (vérifié 2026-08-19 :
-spans foreground rouge/vert détectés par pixels dans une capture pendant le
-lock). Seul le `<span size=...>` avait cassé le lock le 15/08 (revert) —
-ne PAS utiliser size, les couleurs passent.
+Markup Pango dans les cmd : hyprlock v0.9.6 le REND (vérifié par capture
+pendant le lock — spans foreground détectés par pixels). Seul
+`<span size=...>` a cassé le lock (reverté) — ne PAS utiliser size,
+les couleurs passent.
 
 La police hyprlock DOIT être Noto Sans CJK JP (JetBrains Mono n'a pas les
 hiragana → tofu).
 """
 import colorsys
 import datetime
+import json
 import os
 import re
 import sys
@@ -30,6 +31,29 @@ import sys
 HYPPLOCK_CONF = os.path.expanduser("~/.config/hypr/hyprlock.conf")
 FG_FALLBACK = "d5cfcb"      # si le label time n'est pas trouvé
 SUF_DELTA = 0.35            # réduction de luminance des suffixes (réglable)
+SETTINGS_JSON = os.path.expanduser("~/.config/settings/settings.json")
+
+
+def ui_lang():
+    """Langue mémorisée dans settings.json : "ja" (défaut) ou "fr".
+    Relue à chaque exécution (hyprlock lance ce script 1×/s) → le toggle du
+    panneau prend effet au prochain lock, sans toucher hyprlock.conf."""
+    try:
+        with open(SETTINGS_JSON, encoding="utf-8") as f:
+            data = json.load(f)
+        mode = (data or {}).get("lang", {}).get("mode")
+        return mode if mode in ("ja", "fr") else "ja"
+    except Exception:
+        return "ja"
+
+
+# Tables françaises (hardcodées : la locale Python n'est pas initialisée)
+MONTHS_FR = {
+    1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
+    7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre",
+    12: "décembre",
+}
+WEEKDAYS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 
 # ── Tables de lecture (synchronisées avec wallclock-ja.py / clock-ja.py) ──
 HOURS = {
@@ -85,6 +109,9 @@ def minutes_ja(m):
     if m == 0:
         return ""
     tens, units = divmod(m, 10)
+    if units == 0:
+        # Dizaine exacte : じゅう → じゅっ devant ぷん (じゅっぷん, PAS じゅうぷん)
+        return MIN_TENS[tens].replace("じゅう", "じゅっ") + "ぷん"
     return MIN_TENS.get(tens, "") + MIN_UNITS[units]
 
 
@@ -147,6 +174,19 @@ def time_ja_markup(now, fg, suf):
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "time"
     now = datetime.datetime.now()
+
+    # Mode FR : heure "14:30" (markup couleur = même format que JA) et date
+    # "jeudi 20 août" (texte brut, comme la date JA).
+    if ui_lang() == "fr":
+        if mode == "time":
+            fg = read_label_color()
+            print(f'<span foreground="#{fg}">{now:%H:%M}</span>')
+        elif mode == "date":
+            print(f"{WEEKDAYS_FR[now.weekday()]} {now.day} {MONTHS_FR[now.month]}")
+        else:
+            print(f"{now:%H:%M}")
+        return
+
     if mode == "time":
         fg = read_label_color()
         suf = darker_hex(fg)

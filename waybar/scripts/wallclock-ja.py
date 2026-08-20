@@ -7,9 +7,10 @@ les fenêtres), positionnée automatiquement dans la zone la plus sombre ET
 plate du wallpaper (luminance prioritaire + faible variance = espace libre
 lisible, coins autorisés).
 
-Comportement (spec momo) :
-  * À CHAQUE changement de wallpaper (momo change souvent), la position est
-    re-calculée et l'horloge GLISSE (animation) vers la nouvelle zone sombre.
+Comportement :
+  * À CHAQUE changement de wallpaper (les changements sont fréquents), la
+    position est re-calculée et l'horloge GLISSE (animation) vers la nouvelle
+    zone sombre.
   * Couleur = ADAPTATIVE : la TEINTE vient de la palette du thème (accent,
      @color4 du bloc SASQUATCH-PALETTE — lui-même calculé depuis le wallpaper
      par theme-apply.py), la CLARTÉ suit le fond local derrière l'horloge :
@@ -17,7 +18,7 @@ Comportement (spec momo) :
      l'accent (« teint plus foncé »). Contraste garanti, jamais invisible.
   * Suffixes じ (heure) et ふん/ぷん (minutes) colorés dans un TON PLUS
      FONCÉ du texte (fg_suf) : les nombres ressortent, les unités se
-     distinguent visuellement (spec momo 2026-08-19).
+     distinguent visuellement.
   * Palette : lue depuis waybar/style.css (bloc SASQUATCH-PALETTE, comme
      fastview.py) — le texte suit le thème dynamique.
   * Rafraîchit l'heure toutes les 30 s ; tooltip GTK natif synchronisé
@@ -60,6 +61,29 @@ except ImportError:
 PIDFILE = "/tmp/sasquatch-wallclock.pid"
 WAYPAPER_CONFIG = os.path.expanduser("~/.config/waypaper/config.ini")
 STYLE_CSS = os.path.expanduser("~/.config/waybar/style.css")
+SETTINGS_JSON = os.path.expanduser("~/.config/settings/settings.json")
+
+
+def ui_lang():
+    """Langue mémorisée dans settings.json : "ja" (défaut) ou "fr".
+    Relue à CHAQUE appel → le toggle du panneau prend effet en ~2 s, sans
+    redémarrer le daemon."""
+    try:
+        with open(SETTINGS_JSON, encoding="utf-8") as f:
+            data = json.load(f)
+        mode = (data or {}).get("lang", {}).get("mode")
+        return mode if mode in ("ja", "fr") else "ja"
+    except Exception:
+        return "ja"
+
+
+# Tables françaises (hardcodées : la locale Python n'est pas initialisée)
+MONTHS_FR = {
+    1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
+    7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre",
+    12: "décembre",
+}
+WEEKDAYS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 
 FONT_TIME = "Noto Sans CJK JP 40"      # heure (hiragana)
 FONT_DATE = "Noto Sans CJK JP 13"      # date secondaire
@@ -151,6 +175,9 @@ def minutes_ja(m):
     if m == 0:
         return ""
     tens, units = divmod(m, 10)
+    if units == 0:
+        # Dizaine exacte : じゅう → じゅっ devant ぷん (じゅっぷん, PAS じゅうぷん)
+        return MIN_TENS[tens].replace("じゅう", "じゅっ") + "ぷん"
     return MIN_TENS.get(tens, "") + MIN_UNITS[units]
 
 
@@ -291,7 +318,7 @@ def adapt_theme_color(zone_rgb, accent_hex, light_l=0.80, dark_l=0.24,
     le fond local derrière l'horloge :
       * fond sombre  (luminance < 0.45) → version CLAIRE de l'accent (lisible) ;
       * fond clair   (luminance ≥ 0.45) → version FONCÉE de l'accent (le
-        « teint plus foncé » de momo) — contraste garanti, jamais invisible.
+        « teint plus foncé ») — contraste garanti, jamais invisible.
     La teinte (hue) et la saturation de l'accent sont conservées (colorsys
     HLS) ; seule la luminance cible change.
     Retourne (fg, fg_dim, fg_suf) : heure, date secondaire, et TON PLUS
@@ -393,6 +420,25 @@ class WallClock:
 
     def update_label(self):
         now = datetime.datetime.now()
+
+        # Mode FR : heure/date françaises — mêmes couleurs adaptatives (fg /
+        # fg_dim), mêmes positions. La langue est relue à chaque tick (2 s).
+        if ui_lang() == "fr":
+            self.lbl_time.set_markup(
+                f'<span font="{FONT_TIME}" foreground="{self.fg}">{now:%H:%M}</span>'
+            )
+            self.lbl_date.set_markup(
+                f'<span font="{FONT_DATE}" foreground="{self.fg_dim}">'
+                f"{WEEKDAYS_FR[now.weekday()]} {now.day} {MONTHS_FR[now.month]} {now.year}</span>"
+            )
+            self.win.set_tooltip_markup(
+                f"{now:%H:%M} — {WEEKDAYS_FR[now.weekday()]} {now.day} "
+                f"{MONTHS_FR[now.month]} {now.year}\n\n"
+                f"<tt>{calendar_text(now.year, now.month)}</tt>"
+            )
+            self.win.queue_resize()
+            return
+
         t_ja = time_ja(now)
         d_ja = date_ja(now)
         wd = WEEKDAYS_KANJI[now.weekday()]

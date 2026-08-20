@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Sasquatch Playlist — toggle launcher (Quickshell, Super+P)
+# Sasquatch Playlist — toggle launcher (Quickshell, Super+P).
 #
 # Gestionnaire de playlist MPD (panneau « Sasquatch Playlist »). Backend =
 # serveur CC (sasquatch-cc, port 8765) : /api/playlist/status (toggles
 # random/repeat/single), /api/playlist/list (playlist courante), /api/playlist/
-# library (recherche bibliothèque), /api/playlist/load (🎲 tout en aléatoire),
+# library (recherche bibliothèque), /api/playlist/load (chargement aléatoire),
 # /api/playlist/pick (zenity dossier). L'UI suit la palette du thème.
 #
 # Lancé par le keybind Super+P (env Hyprland complet) OU par le bouton du CC
@@ -24,7 +24,8 @@ if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
     fi
 fi
 
-# Robust window detection: parse hyprctl JSON with python (grep fails on empty/errored output).
+# Détection robuste de fenêtre : parse du JSON hyprctl avec python
+# (grep échoue sur sortie vide/erronée).
 window_open() {
     python3 - "$WIN_TITLE" <<'EOF'
 import json, subprocess, sys
@@ -38,21 +39,21 @@ except Exception:
 EOF
 }
 
-# Toggle OFF: if the window is already open, close it.
+# Toggle OFF : si la fenêtre est déjà ouverte, la fermer.
 if window_open; then
     hyprctl dispatch closewindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
     exit 0
 fi
 
-# Clean up orphaned quickshell instances of this panel.
-pkill -f "quickshell.*pl/main.qml" >/dev/null 2>&1 || true
+# Purge des instances quickshell orphelines de ce panneau.
+pkill -f "[q]uickshell.*pl/main.qml" >/dev/null 2>&1 || true
 
 # Garantir le serveur backend (service systemd user, idempotent).
 if ! systemctl --user is-active --quiet sasquatch-cc; then
     systemctl --user start sasquatch-cc
 fi
 
-# Wait for the server to answer (max ~6s).
+# Attente de la réponse du serveur (max ~6s).
 server_up=0
 for i in $(seq 1 30); do
     if curl -s -o /dev/null -m 1 "http://127.0.0.1:8765/api/stats"; then
@@ -68,7 +69,7 @@ if [ "$server_up" -ne 1 ]; then
 fi
 
 # Positionne la fenêtre à DROITE, sous waybar (multi-résolution) :
-# ⚠️ `move 100%-N` ne marche PAS avec match:title (bug Hyprland 0.56) →
+# `move 100%-N` ne fonctionne pas avec match:title (bug Hyprland 0.56) →
 # on injecte la règle avec la valeur absolue calculée AVANT de créer la fenêtre.
 WIN_W=900
 MON_W=$(hyprctl monitors -j | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['width'])" 2>/dev/null || echo 1920)

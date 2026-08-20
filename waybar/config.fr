@@ -47,7 +47,7 @@
         "on-click": "activate",
         "sort-by-number": true,
         "tooltip": true,
-        "tooltip-format": "ワークスペース {name} — espace de travail {id}\n{windows}",
+        "tooltip-format": "Espace de travail {name} — workspace {id}\n{windows}",
         "format-window-separator": "\n",
         "window-rewrite-default": "󰘔  {title}",
         "window-rewrite": {
@@ -89,7 +89,7 @@
         "interval": 2,
         "max-length": 40,
         "tooltip": true,
-        "tooltip-format": "おんがく — musique\n{artist} — {title}"
+        "tooltip-format": "Musique — musique\n{artist} — {title}"
     },
 
     "custom/clock-ja": {
@@ -101,46 +101,46 @@
 
     "cpu": {
         "interval": 2,
-        "format": "󰻠 シーピーユー {usage}%",
-        "tooltip-format": "シーピーユー {usage}% — processeur (CPU) à {usage}%\nコア: {load}"
+        "format": "󰻠 CPU {usage}%",
+        "tooltip-format": "CPU {usage}% — processeur à {usage}%\nCœurs: {load}"
     },
 
     "custom/gpu": {
         "exec": "nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits | awk -F', ' '{printf \"%s%% %s°C\", $1, $2}'",
-        "format": "󰾲 ジーピーユー {}",
+        "format": "󰾲 GPU {}",
         "interval": 5,
         "tooltip": true,
-        "tooltip-format": "ジーピーユー {} — carte graphique (GPU)"
+        "tooltip-format": "GPU {} — carte graphique"
     },
 
     "memory": {
         "interval": 2,
-        "format": "󰍛 メモリー {percentage}%",
-        "tooltip-format": "メモリー {used:.1f} Go / {total:.1f} Go — RAM : {percentage}% utilisée\nスワップ {swapUsed:.1f} Go / {swapTotal:.1f} Go — swap"
+        "format": "󰍛 RAM {percentage}%",
+        "tooltip-format": "RAM {used:.1f} Go / {total:.1f} Go — {percentage}% utilisée\nSwap {swapUsed:.1f} Go / {swapTotal:.1f} Go"
     },
 
     "network": {
-        "format-wifi":        "󰤨 ワイファイ {signalStrength}%",
-        "format-disconnected": "󰤭 オフ",
-        "format-ethernet":    "󰈀 ラン",
-        "tooltip-format":     "ワイファイ — wifi\n{essid}\n{ipaddr}/{cidr}\n󰕒 ↑{bandwidthUpBytes}  ↓{bandwidthDownBytes}"
+        "format-wifi":        "󰤨 WiFi {signalStrength}%",
+        "format-disconnected": "󰤭 Hors ligne",
+        "format-ethernet":    "󰈀 Ethernet",
+        "tooltip-format":     "WiFi — wifi\n{essid}\n{ipaddr}/{cidr}\n󰕒 ↑{bandwidthUpBytes}  ↓{bandwidthDownBytes}"
     },
 
     "battery": {
         "interval": 30,
-        "format": "{icon} でんち {capacity}%",
-        "format-charging": "󰂄 でんち {capacity}%",
+        "format": "{icon} Batterie {capacity}%",
+        "format-charging": "󰂄 Batterie {capacity}%",
         "format-icons": ["󰁺","󰁻","󰁼","󰁽","󰁾","󰁿","󰂀","󰂁","󰂂","󰁹"],
         "states": {
             "warning": 30,
             "critical": 15
         },
-        "tooltip-format": "でんち {capacity}% — batterie\nのこりじかん: {time}"
+        "tooltip-format": "Batterie {capacity}% — batterie\nTemps restant: {time}"
     },
 
     "pulseaudio": {
-        "format": "{icon} おんりょう {volume}%",
-        "format-muted": "󰝟 おんりょう {volume}%",
+        "format": "{icon} Volume {volume}%",
+        "format-muted": "󰝟 Volume {volume}%",
         "format-icons": {
             "default": ["󰕿", "󰖀", "󰕾"]
         },
@@ -149,17 +149,17 @@
         "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
         "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
         "tooltip": true,
-        "tooltip-format": "おんりょう {volume}% — volume système"
+        "tooltip-format": "Volume {volume}% — volume système"
     },
 
     "custom/brightness": {
         "exec": "brightnessctl -m | awk -F, '{print $4}' | tr -d '%'",
-        "format": "󰃟 あかるさ {}%",
+        "format": "󰃟 Luminosité {}%",
         "interval": 2,
         "on-scroll-up": "brightnessctl set 5%+",
         "on-scroll-down": "brightnessctl set 5%-",
         "tooltip": true,
-        "tooltip-format": "あかるさ {}% — luminosité"
+        "tooltip-format": "Luminosité {}% — luminosité"
     },
 
     "bluetooth": {
@@ -168,8 +168,8 @@
         "format-off":                                 "󰂲",
         "format-connected":                           "󰂱  {num_connections}",
         "format-connected-battery":                   "󰂱  {device_alias} {device_battery_percentage}%",
-        "tooltip-format":                             "ブルートゥース — bluetooth\n{controller_alias}  {controller_address}\n\n{num_connections} つながった (connectés)",
-        "tooltip-format-connected":                   "ブルートゥース · {num_connections} つながった\n\n{device_enumerate}",
+        "tooltip-format":                             "Bluetooth — bluetooth\n{controller_alias}  {controller_address}\n\n{num_connections} connectés",
+        "tooltip-format-connected":                   "Bluetooth · {num_connections} connectés\n\n{device_enumerate}",
         "tooltip-format-enumerate-connected":         "  {device_alias}  {device_address}",
         "tooltip-format-enumerate-connected-battery": "  {device_alias}  {device_address}  {device_battery_percentage}%",
         "on-click":       "blueman-manager",
@@ -179,7 +179,7 @@
     "custom/clipboard": {
         "format": "󰅍",
         "tooltip": true,
-        "tooltip-format": "クリップボード — presse-papier\nひだりクリック → えらぶ (sélectionner)\nみぎクリック → れきしを けす (vider l'historique)\nなかクリック → さいごの アイテム (dernier élément)",
+        "tooltip-format": "Presse-papier — presse-papier\nClic gauche → sélectionner\nClic droit → vider l'historique\nClic milieu → dernier élément",
         "on-click":        "cliphist list | rofi -dmenu -p 'Presse-papier' -theme ~/.config/rofi/themes/sasquatch.rasi | cliphist decode | wl-copy",
         "on-click-right":  "cliphist wipe && notify-send '󰅍 Presse-papier' 'Historique vidé'",
         "on-click-middle": "cliphist list | head -1 | cliphist decode | wl-copy && notify-send '󰅍 Presse-papier' 'Dernier élément copié'"

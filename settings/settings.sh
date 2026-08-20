@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sasquatch Settings - toggle launcher (même pattern que cc/cc.sh)
+# Sasquatch Settings — toggle launcher (même pattern que cc/cc.sh).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,7 +11,8 @@ is_alive() {
     curl -s -o /dev/null -m 1 "http://127.0.0.1:8770/api/health"
 }
 
-# Robust window detection: parse hyprctl JSON with python (grep fails on empty/errored output).
+# Détection robuste de fenêtre : parse du JSON hyprctl avec python
+# (grep échoue sur sortie vide/erronée).
 window_open() {
     python3 - "$WIN_TITLE" <<'EOF'
 import json, subprocess, sys
@@ -25,22 +26,22 @@ except Exception:
 EOF
 }
 
-# Toggle OFF: if the Settings window is already open, close it.
+# Toggle OFF : si la fenêtre Settings est déjà ouverte, la fermer.
 if window_open; then
     hyprctl dispatch closewindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
     exit 0
 fi
 
-# Clean up orphaned quickshell instances of this panel.
-pkill -f "quickshell.*settings/main.qml" >/dev/null 2>&1 || true
+# Purge des instances quickshell orphelines de ce panneau.
+pkill -f "[q]uickshell.*settings/main.qml" >/dev/null 2>&1 || true
 
-# Start backend server if not already alive.
+# Démarre le serveur backend s'il n'est pas déjà vivant.
 if ! is_alive; then
     nohup python3 "$SCRIPT_DIR/settings.py" >"$LOGFILE" 2>&1 &
     echo $! > "$PIDFILE"
 fi
 
-# Wait for the server to answer (max ~6s).
+# Attente de la réponse du serveur (max ~6s).
 server_up=0
 for i in $(seq 1 30); do
     if curl -s -o /dev/null -m 1 "http://127.0.0.1:8770/api/health"; then

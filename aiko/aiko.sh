@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# 愛子 (Aiko) — toggle launcher (Super+N)
+# 愛子 (Aiko) — toggle launcher (Super+N).
 #
-# Mode LAZY : rien ne tourne quand la sidebar est fermée.
+# Mode lazy : rien ne tourne quand la sidebar est fermée.
 #  - Super+N → lance server.py (backend 8780) + quickshell main.qml
 #  - server.py démarre llama-server (8781) à l'ouverture
-#  - Fermeture (Escape / clic dehors / ✕) → QML POST /api/close →
+#  - Fermeture (Escape / clic dehors) → QML POST /api/close →
 #    server.py arrête llama-server puis meurt → 0 conso en idle
 set -uo pipefail
 
@@ -32,12 +32,12 @@ if window_open; then
     # Arrêt lazy complet : backend → llama-server → 0 conso
     curl -s -X POST -m 2 "http://127.0.0.1:$PORT/api/close" >/dev/null 2>&1 || true
     # Tue les quickshell de ce panel si encore vivants (fenêtre close ≠ process mort)
-    pkill -f "quickshell.*aiko/main.qml" >/dev/null 2>&1 || true
+    pkill -f "[q]uickshell.*aiko/main.qml" >/dev/null 2>&1 || true
     exit 0
 fi
 
 # Nettoyage des quickshell orphelins de CE panel (pattern qui ne matche pas le shell)
-pkill -f "quickshell.*aiko/main.qml" >/dev/null 2>&1 || true
+pkill -f "[q]uickshell.*aiko/main.qml" >/dev/null 2>&1 || true
 
 # Démarre le backend si pas déjà actif (idempotent)
 if ! curl -s -o /dev/null -m 1 "http://127.0.0.1:$PORT/api/health"; then
@@ -66,7 +66,7 @@ if [ "$server_up" -ne 1 ]; then
 fi
 
 # Positionne la fenêtre à gauche (multi-résolution) :
-# ⚠️ `move 100%-N` ne marche PAS avec match:title (bug Hyprland 0.56) →
+# `move 100%-N` ne fonctionne pas avec match:title (bug Hyprland 0.56) →
 # on injecte la règle avec la valeur absolue calculée AVANT de créer la fenêtre.
 WIN_W=420
 MON_W=$(hyprctl monitors -j | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['width'])" 2>/dev/null || echo 1920)
