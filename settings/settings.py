@@ -518,7 +518,7 @@ def _post_system(body):
 def _post_wallpaper(body=None):
     """Ouvre le sélecteur de wallpaper (toggle, comme le keybind SUPER+Y)."""
     try:
-        subprocess.run(["bash", "-c", "pkill waypaper || waypaper"],
+        subprocess.run(["bash", "-c", os.path.join(HOME, ".config", "wp", "wp.sh")],
                        timeout=3)
         return {"ok": True}
     except Exception:

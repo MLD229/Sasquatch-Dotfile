@@ -11,7 +11,6 @@ bibata-cursor-theme
 catppuccin-gtk-theme-mocha
 qt5ct
 kvantum
-waypaper
 python-pillow
 python-numpy            # wallclock-ja.py (position auto dans la zone plate du wallpaper)
 python-cairo            # wallclock-ja.py + fastview.py (dessin cairo GTK)

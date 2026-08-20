@@ -8,7 +8,7 @@ LOGFILE="/tmp/sasquatch-settings-server.log"
 WIN_TITLE="Sasquatch Settings"
 
 is_alive() {
-    [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null
+    curl -s -o /dev/null -m 1 "http://127.0.0.1:8770/api/health"
 }
 
 # Robust window detection: parse hyprctl JSON with python (grep fails on empty/errored output).

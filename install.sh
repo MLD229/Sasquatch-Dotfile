@@ -515,6 +515,7 @@ chmod +x "$DOTDIR"/cc/*.sh                # ← Control Center (cc.sh, ocr.sh)
 chmod +x "$DOTDIR"/aiko/*.sh              # ← Sidebar 愛子 Aiko (aiko.sh, setup.sh)
 chmod +x "$DOTDIR"/settings/*.sh          # ← Panneau Settings (settings.sh)
 chmod +x "$DOTDIR"/pl/*.sh                # ← Playlist MPD (pl.sh)
+chmod +x "$DOTDIR"/wp/*.sh                # ← Wallpaper picker Quickshell (wp.sh)
 chmod +x "$DOTDIR"/set-wall.sh            # ← ajouté (bug #31)
 success "Scripts rendus exécutables"
 

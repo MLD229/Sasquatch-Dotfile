@@ -31,11 +31,12 @@ rofi/
 ```bash
 # Rendre les scripts exécutables
 chmod +x scripts/*.sh
-
-# Symlink du thème dans la config rofi
-mkdir -p ~/.config/rofi
-ln -sf "$(pwd)/themes/sasquatch.rasi" ~/.config/rofi/config.rasi
 ```
+
+> Le dossier `rofi/` est symlinké vers `~/.config/rofi` par `install.sh` (comme
+> les autres composants). Les thèmes sont passés explicitement via `-theme` dans
+> `scripts/launcher.sh` (`$SCRIPT_DIR/../themes/sasquatch.rasi`) — pas besoin de
+> `config.rasi`.
 
 ---
 

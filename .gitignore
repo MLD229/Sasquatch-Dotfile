@@ -14,3 +14,6 @@ aiko/server.log
 
 # playlist : dossier musique mémorisé (fichier d'état runtime, choisi par l'utilisateur)
 settings/playlist_folder
+
+# Sasquatch-Files : config locale Obsidian (workspace, graph) — pas à versionner
+Sasquatch-Files/.obsidian/

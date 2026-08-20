@@ -17,7 +17,7 @@ Dotfiles personnels pour un environnement **Hyprland** sur **Arch Linux**.
 | Terminal         | Kitty |
 | Shell            | Fish |
 | Prompt           | Starship |
-| Fond d’écran     | Picker `wp/` (Quickshell, Super+Y) + waypaper/hyprpaper |
+| Fond d’écran     | Picker `wp/` (Quickshell, Super+Y) + hyprpaper |
 | Verrouillage     | Hyprlock (🇯🇵 heure/date hiragana + musique) |
 | Inactivité       | Hypridle |
 | Sysinfo          | Fastfetch |
@@ -75,7 +75,7 @@ Paquets principaux
 
 ```bash
 # Officiel (pacman)
-sudo pacman -S hyprland hyprlock hypridle hyprpaper waypaper \
+sudo pacman -S hyprland hyprlock hypridle hyprpaper \
 xdg-desktop-portal-hyprland xdg-utils xdg-user-dirs \
 waybar mako rofi \
 python-gobject gtk-layer-shell python-pillow python-numpy python-cairo \
@@ -161,11 +161,11 @@ Sasquatch-Dotfile/
 │   ├── keybinds-user.conf       ← overrides utilisateur (via Settings, versionné)
 │   ├── hypridle.conf            ← régénéré par settings.py (veille)
 │   ├── hyprlock.conf            ← 🇯🇵 lock-ja + musique (bloc SASQUATCH-PALETTE)
-│   ├── hyprpaper.conf           ← fallback wallpaper (waypaper gère)
+│   ├── hyprpaper.conf           ← fallback wallpaper (géré par wp/ + apply-wallpaper.sh)
 │   └── scripts/
 │       ├── autostart.sh         ← purge orphelins + lancement session
 │       ├── cleanup-orphans.sh   ← purge process de l'ancienne session Hyprland
-│       ├── wallpaper.sh         ← pkill hyprpaper + waypaper --restore
+│       ├── wallpaper.sh         ← délègue à apply-wallpaper.sh (hyprpaper direct)
 │       ├── scroll-workspace.sh  ← ws bloqué 1..10 (binds commentés, r±1 natif actif)
 │       ├── lock-ja.py           ← heure/date hiragana pour hyprlock
 │       ├── lock-media.sh        ← now-playing CC pour hyprlock (jq)
@@ -200,7 +200,7 @@ Sasquatch-Dotfile/
 │   ├── osd.sh                   ← OSD générique (anti-superposition)
 │   ├── screenshot.sh            ← grim + slurp (Print / Super+Print)
 │   ├── theme-apply.py           ← extraction palette + patch markers
-│   ├── theme-apply.sh           ← orchestrateur (flock, hook waypaper)
+│   ├── theme-apply.sh           ← orchestrateur (flock, hook config.ini waypaper)
 │   ├── volume.sh                ← volume + OSD (XF86Audio*)
 │   ├── waybar-toggle.sh         ← Super+J : SIGUSR1 waybar de l'instance courante
 │   └── wifi.sh                  ← CLI iwd/iwctl (non bindé, utilitaire)
@@ -265,9 +265,10 @@ bordures Hyprland, hyprlock, mako et rofi.
 - **Hook automatique** : dans `~/.config/waypaper/config.ini` (fichier runtime,
   non versionné — à configurer après install) :
   `post_command = ~/.config/scripts/theme-apply.sh $wallpaper`
-- **Au login** : `hypr/scripts/wallpaper.sh` tue les éventuels hyprpaper
-  orphelins (restés connectés à une ancienne session Hyprland → fond noir)
-  puis relance `waypaper --restore`.
+- **Au login** : `hypr/scripts/wallpaper.sh` délègue à `cc/apply-wallpaper.sh` :
+  tue les hyprpaper orphelins d'une ancienne session Hyprland (→ fond noir),
+  purge le socket stale, relance hyprpaper et applique le wallpaper de
+  `config.ini` + la palette (sans dépendre de waypaper).
 - Alternative manuelle : `./set-wall.sh <image>` change le wallpaper ET applique le thème.
 
 Dépendance : `python-pillow` (inclus dans install.sh).
@@ -385,7 +386,7 @@ Sections :
   settings.json, lus par `cc/server.py` / `cc/ocr.sh` au démarrage.
 - **SYSTÈME** — gaps intérieur/extérieur, rounding, animations (patch
   `general.conf` / `decoration.conf` / `animations.conf` + `hyprctl reload`) et
-  bouton « Choisir un wallpaper » (ouvre waypaper, toggle comme SUPER+Y).
+  bouton « Choisir un wallpaper » (ouvre le picker `wp/`, toggle comme SUPER+Y).
 
 ## 🤖 Sidebar 愛子 Aiko (SUPER+N)
 
