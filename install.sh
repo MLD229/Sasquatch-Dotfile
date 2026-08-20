@@ -5,7 +5,7 @@
 #   Adapté pour une fresh install Hyprland
 #   v1.2 — paquets résilients (échec non bloquant) + flags --no-packages/--yes
 # ─────────────────────────────────────────
-#   ⚠️ Quelques prompts interactifs (install paquets, écrasement
+#   Quelques prompts interactifs (install paquets, écrasement
 #   symlinks, chsh) : répondre Y / Entrée pour laisser faire.
 # ─────────────────────────────────────────
 
@@ -117,9 +117,9 @@ header "Installation des dépendances"
 #   ESSENTIEL : base desktop — sans eux, pas de session utilisable.
 #   FEATURES  : CC + panneaux Quickshell (Super+G/Y/P/I/N), musique, OCR.
 #   OPTIONNEL : AUR longs/fragiles ou features indépendantes (tablette, Aiko).
-# Un échec de paquet ne BLOQUE PLUS le reste (fix 2026-08-18 : avant,
-# yay -S ... || exit 1 → le premier paquet qui foirait annulait le câblage
-# complet : symlinks, services, permissions, hook waypaper, .desktop brave).
+# Un échec de paquet ne bloque plus le reste (avant, yay -S ... || exit 1
+# → le premier paquet qui échouait annulait le câblage complet : symlinks,
+# services, permissions, hook waypaper, .desktop brave).
 
 PKGS_ESSENTIAL=(
     ttf-jetbrains-mono-nerd
@@ -166,7 +166,7 @@ PKGS_ESSENTIAL=(
     neovim
 
     # Navigateurs (bind SUPER+W = brave ; windowrules firefox)
-    # NOTE : le paquet AUR s'appelle brave-bin (pas "brave" — introuvable, cf. audit 2026-08-14)
+    # NOTE : le paquet AUR s'appelle brave-bin (pas "brave" — introuvable)
     brave-bin
     firefox
 
@@ -288,7 +288,7 @@ success "Dossiers XDG créés"
 
 # ─── Fonction symlink ───────────────────
 # Vérifie que la source EXISTE avant de créer le lien
-# (évite les liens morts silencieux, cf. audit bug #9)
+# (évite les liens morts silencieux)
 link() {
     local src="$1"
     local dst="$2"
@@ -327,7 +327,7 @@ link() {
 
 header "Configuration lid switch lock"
 
-# Backup avant modification (audit bug #27)
+# Backup avant modification
 LOGIND=/etc/systemd/logind.conf
 if [ ! -f "${LOGIND}.bak-sasquatch" ]; then
     sudo cp "$LOGIND" "${LOGIND}.bak-sasquatch"
@@ -353,7 +353,7 @@ grep -q "^HandleLidSwitchDocked=" "$LOGIND" || \
 # Le fichier config.ini sert de « souvenir » du dossier/wallpaper courants
 # (lu par le backend CC et apply-wallpaper.sh). Le thème est appliqué par
 # apply-wallpaper.sh directement (hyprpaper + theme-apply.sh) — plus aucune
-# dépendance au binaire waypaper (retiré des paquets 2026-08-19).
+# dépendance au binaire waypaper (retiré des paquets).
 # Idempotent : ne touche pas une config existante.
 header "Hook thème dynamique"
 WP_CFG="$CONFIG/waypaper/config.ini"
@@ -361,7 +361,7 @@ WP_HOOK='post_command = ~/.config/scripts/theme-apply.sh $wallpaper'
 mkdir -p "$(dirname "$WP_CFG")"
 # Dossier de wallpapers par défaut (vide, idempotent) : sans clé folder=,
 # waypaper retombe sur ~/Pictures → le sélecteur affiche des images jamais
-# choisies. Vide → "aucune image" tant que l'user ne choisit pas un dossier.
+# choisies. Vide → « aucune image » tant qu'aucun dossier n'est choisi.
 mkdir -p ~/Wall-E-Desk
 if [ ! -f "$WP_CFG" ]; then
     printf '[settings]\nfolder = ~/Wall-E-Desk\n%s\n' "$WP_HOOK" > "$WP_CFG"
@@ -378,7 +378,7 @@ else
 fi
 
 # Garde configs existantes : sans clé folder=, waypaper retombe sur ~/Pictures
-# → le sélecteur affiche des images jamais choisies par l'user. On force le
+# → le sélecteur affiche des images jamais choisies. On force le
 # dossier par défaut juste après [settings] (idempotent via le grep).
 if ! grep -q '^folder' "$WP_CFG"; then
     sed -i '/^\[settings\]/a folder = ~/Wall-E-Desk' "$WP_CFG"
@@ -397,7 +397,7 @@ link "$DOTDIR/fcitx5"                   "$CONFIG/fcitx5"   # IME japonais (confi
 link "$DOTDIR/fish"                     "$CONFIG/fish"
 link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
 link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
-link "$DOTDIR/scripts"                  "$CONFIG/scripts"        # ← ajouté (bug #5)
+link "$DOTDIR/scripts"                  "$CONFIG/scripts"
 link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
 link "$DOTDIR/wp"                       "$CONFIG/wp"             # Sélecteur de fonds d'écran (Quickshell, Super+Y)
 link "$DOTDIR/pl"                       "$CONFIG/pl"             # Playlist MPD (Quickshell, Super+P)
@@ -409,7 +409,7 @@ link "$DOTDIR/themes/gtk/gtk-3.0"       "$CONFIG/gtk-3.0"
 link "$DOTDIR/themes/gtk/gtk-4.0"       "$CONFIG/gtk-4.0"
 link "$DOTDIR/themes/qt/kdeglobals"     "$CONFIG/kdeglobals"
 link "$DOTDIR/mimeapps.list"            "$CONFIG/mimeapps.list"   # associations par défaut (code/mpv)
-# themes/icons et themes/cursors retirés : absents du repo (bug #9)
+# themes/icons et themes/cursors retirés : absents du repo
 # Icônes/curseurs gérés par les paquets : papirus-icon-theme, bibata-cursor-theme
 
 # ─── .desktop Brave + extension CC ────────
@@ -418,7 +418,7 @@ link "$DOTDIR/mimeapps.list"            "$CONFIG/mimeapps.list"   # associations
 # passe --load-extension, mais un lancement depuis rofi/drun utilise le
 # .desktop SANS l'extension → le pont ne se charge pas. On copie le .desktop
 # système vers ~/.local/share/applications avec Exec patché (idempotent).
-# ⚠️ Exec de .desktop N'expand PAS ~ → chemin absolu $HOME ici.
+# Exec de .desktop n'expand PAS ~ → chemin absolu $HOME ici.
 header "Extension CC dans le .desktop Brave"
 BRAVE_DESKTOP_SRC="/usr/share/applications/brave-browser.desktop"
 BRAVE_DESKTOP_DST="$HOME/.local/share/applications/brave-browser.desktop"
@@ -459,9 +459,9 @@ fi
 # Service USER opentabletdriver (tablette graphique XP-Pen Star 03, 28bd:0907).
 # Le kernel Arch n'a PAS hid_uclogic → OTD fait le relais tablette→libinput
 # (Hyprland voit la tablette virtuelle, pression + tilt). Idempotent.
-# ⚠️ PIÈGE 2026-08-16 : après un audit/test, le service peut rester arrêté
-# (dead) alors qu'il est enabled → la tablette ne répond plus. On vérifie
-# qu'il tourne VRAIMENT (is-active), pas juste qu'il est activé.
+# Piège : après un test manuel, le service peut rester arrêté (dead) alors
+# qu'il est enabled → la tablette ne répond plus. On vérifie qu'il tourne
+# VRAIMENT (is-active), pas juste qu'il est activé.
 if systemctl --user enable --now opentabletdriver 2>/dev/null; then
     if systemctl --user is-active --quiet opentabletdriver; then
         success "opentabletdriver (service user) actif — tablette XP-Pen Star 03"
@@ -512,14 +512,14 @@ fi
 header "Permissions des scripts"
 chmod +x "$DOTDIR"/scripts/*.sh
 chmod +x "$DOTDIR"/hypr/scripts/*.sh
-chmod +x "$DOTDIR"/rofi/scripts/*.sh      # ← ajouté (bug #31)
-chmod +x "$DOTDIR"/cc/*.sh                # ← Control Center (cc.sh, ocr.sh)
-chmod +x "$DOTDIR"/aiko/*.sh              # ← Sidebar 愛子 Aiko (aiko.sh, setup.sh)
-chmod +x "$DOTDIR"/settings/*.sh          # ← Panneau Settings (settings.sh)
-chmod +x "$DOTDIR"/pl/*.sh                # ← Playlist MPD (pl.sh)
-chmod +x "$DOTDIR"/wp/*.sh                # ← Wallpaper picker Quickshell (wp.sh)
-chmod +x "$DOTDIR"/subpage/*.sh            # ← Sub page scratchpad (subpage.sh)
-chmod +x "$DOTDIR"/set-wall.sh            # ← ajouté (bug #31)
+chmod +x "$DOTDIR"/rofi/scripts/*.sh
+chmod +x "$DOTDIR"/cc/*.sh                # Control Center (cc.sh, ocr.sh)
+chmod +x "$DOTDIR"/aiko/*.sh              # Sidebar 愛子 Aiko (aiko.sh, setup.sh)
+chmod +x "$DOTDIR"/settings/*.sh          # Panneau Settings (settings.sh)
+chmod +x "$DOTDIR"/pl/*.sh                # Playlist MPD (pl.sh)
+chmod +x "$DOTDIR"/wp/*.sh                # Wallpaper picker Quickshell (wp.sh)
+chmod +x "$DOTDIR"/subpage/*.sh           # Sub page scratchpad (subpage.sh)
+chmod +x "$DOTDIR"/set-wall.sh
 success "Scripts rendus exécutables"
 
 # ─── Fish comme shell par défaut ───────

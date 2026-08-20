@@ -4,14 +4,14 @@ import os
 
 # ── Runtime PAR UTILISATEUR ──────────────────────────────────────
 # XDG_RUNTIME_DIR (/run/user/<uid>) isole fifos + caches par user :
-# deux sessions (momo, momo1…) peuvent lancer le CC sans collision.
+# deux sessions utilisateur peuvent lancer le CC sans collision.
 # Fallback /tmp hors session graphique (ex. SSH).
 RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
 
 # ── MPD : socket unix PAR USER (mpd.conf bind_to_address) ─────────
 # Chaque user pilote SON instance MPD via son propre socket. Avant :
 # bind 127.0.0.1:6600 partagé → n'importe quel user local voyait la
-# musique d'un autre (bug « musique bloquée » dans le CC).
+# musique d'un autre (la musique d'un autre user s'affichait dans le CC).
 MPD_SOCKET = os.path.expanduser("~/.local/share/mpd/socket")
 # Fallback TCP (anciennes configs, tests) — le socket unix prime.
 MPD_HOST = "127.0.0.1"

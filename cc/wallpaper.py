@@ -102,7 +102,7 @@ def list_wallpapers():
 
 
 def random_wallpaper():
-    """Pioche un fichier aléatoire dans le dossier courant (bouton 🎲)."""
+    """Pioche un fichier aléatoire dans le dossier courant (bouton aléatoire)."""
     data = list_wallpapers()
     if not data["files"]:
         return {"ok": False, "error": "aucun fichier"}

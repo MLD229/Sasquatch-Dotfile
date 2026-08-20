@@ -29,9 +29,10 @@ _SEP = "\x1f"
 _ART_CACHE_DIR = RUNTIME_DIR
 
 # Récence de lecture : quand un lecteur (MPRIS ou MPD) est passé à « Playing ».
-# Le CC affiche « le dernier en général » : si YouTube joue en fond et momo
-# lance MPD après, MPD gagne (il a démarré plus récemment) — l'ancien code
-# donnait priorité fixe à MPRIS Playing, donc le web gagnait toujours.
+# Le CC affiche « le dernier en général » : si YouTube joue en fond et que
+# l'utilisateur lance MPD après, MPD gagne (il a démarré plus récemment) —
+# l'ancien code donnait priorité fixe à MPRIS Playing, donc le web gagnait
+# toujours.
 _playing_since = {"mpd": 0.0, "web": 0.0}
 _prev_playing = {"mpd": False, "web": False}
 _init_done = False
@@ -77,9 +78,8 @@ def _mpris_players():
 
     NE PAS filtrer sur le titre : les fichiers locaux sans tags ID3 (ex.
     mp3 yt-dlp « Titre [id].mp3 ») exposent un titre VIDE mais jouent —
-    les filtrer rend le lecteur invisible et le CC reste scotché sur MPD
-    (bug « il n'affiche qu'une musique »). Le fallback titre vient du
-    nom de fichier dans _mpris_to_status().
+    les filtrer rend le lecteur invisible et le CC reste bloqué sur MPD.
+    Le fallback titre vient du nom de fichier dans _mpris_to_status().
     """
     out = _run_playerctl(["--no-messages", "--all-players", "metadata",
                           "--format", _FORMAT])

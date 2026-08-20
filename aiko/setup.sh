@@ -20,8 +20,8 @@ CONFIG="$SCRIPT_DIR/config.json"
 
 # Modèle par défaut (repo ggml-org, conversion officielle llama.cpp)
 REPO="ggml-org/Qwen2.5-VL-3B-Instruct-GGUF"
-MODEL_FILE="Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"          # 1.8 Go — le cerveau
-MMPROJ_FILE="mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf"    # 806 Mo — la vision
+MODEL_FILE="Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"          # 1.8 Go (poids du modèle)
+MMPROJ_FILE="mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf"    # 806 Mo (projecteur vision)
 
 # Couleurs
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'

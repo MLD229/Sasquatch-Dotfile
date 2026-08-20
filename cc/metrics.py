@@ -13,7 +13,8 @@ from config import HIST_LEN
 
 
 class Metrics:
-    """Samples system metrics every second and keeps a rolling history."""
+    """Échantillonne les métriques système chaque seconde et conserve un
+    historique glissant (cpu, ram, gpu, vram, températures, réseau)."""
 
     def __init__(self):
         self.lock = threading.Lock()

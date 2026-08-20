@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sasquatch CC - OCR helper : sélection d'une zone → grim → tesseract →
+# Sasquatch CC — OCR helper : sélection d'une zone → grim → tesseract →
 # texte OCR sur stdout. Ne fait PLUS l'ouverture navigateur (translate/image)
 # : c'est le serveur (cc/actions.py + cc/translate.py) qui traite le texte.
 set -uo pipefail
@@ -11,7 +11,8 @@ trap 'rm -f "$TMP_PNG" "${TMP_TXT}.txt"' EXIT
 
 WIN_TITLE="Sasquatch CC"
 
-# Robust window detection: parse hyprctl JSON with python (grep fails on empty/errored output).
+# Détection robuste de fenêtre : parse du JSON hyprctl avec python
+# (grep échoue sur sortie vide/erronée).
 window_open() {
     python3 - "$WIN_TITLE" <<'EOF'
 import json, subprocess, sys

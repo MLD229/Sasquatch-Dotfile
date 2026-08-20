@@ -1,15 +1,15 @@
 #!/bin/bash
-# osd.sh — OSD barre de progression (rofi) pour volume/luminosité
+# osd.sh — OSD barre de progression (rofi) pour volume/luminosité.
 # Usage : osd.sh <label> <percent> [icon]
-# Anti-superposition : tue l'OSD précédent (pkill) avant d'en lancer un nouveau
+# Anti-superposition : tue l'OSD précédent (pkill) avant d'en lancer un nouveau.
 LABEL="$1"
 PCT="$2"
 ICON="${3:-󰓃}"
 [ -z "$PCT" ] && exit 1
 
-# tue l'OSD précédent s'il existe (course-safe pendant les rafales bindel)
-# [r]ofi : pattern bracketé — un `pkill -f` non bracketé s'auto-matcherait
-# quand la cmdline du shell contient le pattern (leçon 2026-08-14).
+# Tue l'OSD précédent s'il existe (course-safe pendant les rafales bindel).
+# [r]ofi : pattern bracketé — un pkill -f non bracketé s'auto-matcherait
+# quand la cmdline du shell contient le pattern.
 pkill -f "[r]ofi.*osd.rasi" 2>/dev/null
 
 BARW=16

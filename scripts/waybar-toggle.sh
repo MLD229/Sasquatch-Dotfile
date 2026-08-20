@@ -1,11 +1,11 @@
 #!/bin/bash
-# waybar-toggle.sh — bascule visibilité de la waybar (Super+J)
+# waybar-toggle.sh — bascule visibilité de la waybar (Super+J).
 #
 # waybar écoute SIGUSR1 = toggle visible/invisible (signal natif, pas de kill).
 # On ne vise QUE le waybar de l'instance Hyprland COURANTE : un orphelin
 # d'une session morte (relogin/crash) a une vieille signature dans son
 # /proc/<pid>/environ — lui envoyer le signal ne ferait rien à l'écran
-# (piège documenté, même logique que waybar_current_session() de theme-apply.sh).
+# (même logique que waybar_current_session() de theme-apply.sh).
 set -uo pipefail
 
 inst="${HYPRLAND_INSTANCE_SIGNATURE:-}"

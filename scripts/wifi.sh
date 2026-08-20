@@ -1,12 +1,12 @@
 #!/bin/bash
-# scripts/wifi.sh — WiFi via iwd (iwctl) + systemd-networkd
-# UTILITAIRE NON BINDÉ : usage manuel (terminal) — {toggle|status|menu}.
-# La stack réseau est iwd + systemd-networkd (PAS NetworkManager).
+# scripts/wifi.sh — WiFi via iwd (iwctl) + systemd-networkd.
+# Non bindé : usage manuel (terminal) — {toggle|status|menu}.
+# La stack réseau est iwd + systemd-networkd (pas NetworkManager).
 set -u
 
 cmd="${1:-}"
 
-# Guard : iwctl absent (requirements iwd) → message clair
+# Si iwctl est absent (requirements iwd) → message explicite
 if ! command -v iwctl >/dev/null 2>&1; then
     notify-send "WiFi" "iwctl introuvable — installe iwd" -t 3000 2>/dev/null
     exit 1

@@ -19,7 +19,7 @@
 #
 #  Python stdlib uniquement. Ports : backend=8780, llama-server=8781.
 #
-#  Persistance (2026-08-15) :
+#  Persistance :
 #    - Chaque entrée d'historique porte un timestamp epoch `ts` (float).
 #    - L'historique est autosauvé dans sessions/autosave.json (atomique :
 #      tmp + os.replace) à CHAQUE mutation (message user, réponse assistant,
@@ -28,7 +28,7 @@
 #    - /api/chat/reset supprime AUSSI autosave.json (sinon l'ancienne
 #      conversation reviendrait au prochain boot).
 #
-#  Robustesse (2026-08-15) :
+#  Robustesse :
 #    - Vrai streaming SSE depuis llama-server (le job met à jour jobs[id]["text"]
 #      au fil de l'eau → le poll QML affiche le texte progressivement, y compris
 #      pendant les générations vision de 40-60 s).
@@ -89,8 +89,8 @@ PERSONA = cfg["persona"]
 #    ne voit qu'une fenêtre glissante → petit contexte = réponses variées,
 #    pas de boucle de répétition, pas de dépassement de n_ctx 8192).
 #  - dedup_repeats : supprime les réponses assistant consécutives quasi
-#    identiques AVANT l'envoi (une boucle « The Matrix » ×5 ne doit pas
-#    polluer le modèle — bug vu le 15/08 soir).
+#    identiques AVANT l'envoi (une boucle de répétition « The Matrix » ×5
+#    ne doit pas polluer le modèle).
 MAX_CTX_MESSAGES = max(2, int(CTX_CFG.get("max_messages", 12)))
 DEDUP_REPEATS = bool(CTX_CFG.get("dedup_repeats", True))
 REPEAT_SIMILARITY = 0.90  # ratio SequenceMatcher au-delà duquel c'est une répétition
@@ -244,8 +244,8 @@ def vram_free_mb():
 
 
 def ensure_vram():
-    """Si VRAM libre < seuil, décharge le modèle LM Studio (Rin) — lazy coopératif.
-    Retourne (ok, message)."""
+    """Si VRAM libre < seuil, décharge le modèle LM Studio chargé — lazy
+    coopératif. Retourne (ok, message)."""
     if not VRAM_CFG.get("enabled"):
         return True, ""
     free = vram_free_mb()
@@ -352,8 +352,8 @@ SYSTEM_PROMPT = PERSONA["system_prompt"]
 
 def _clean_reply(text):
     """Nettoie la réponse générée : retire les tics « Oh! » en TÊTE de phrase
-    (le modèle 3B commence ~toujours par « Oh! » malgré le prompt — vu en test
-    E2E 2026-08-15 : 3 réponses sur 3). Ne touche JAMAIS le reste du texte.
+    (le modèle 3B commence quasi systématiquement par « Oh! » malgré le prompt,
+    constaté en test E2E). Ne touche JAMAIS le reste du texte.
     Le contenu est conservé tel quel si le pattern n'est pas en tête."""
     if not text:
         return text
@@ -396,8 +396,8 @@ def build_messages():
         last_assistant = ""  # dernière réponse assistant ACCEPTÉE (les user s'intercalent)
         for m in hist:
             if m["role"] == "assistant" and last_assistant:
-                # Répétition non consécutive aussi (boucle « The Matrix » : les
-                # réponses identiques sont séparées par des user « hoh? »/« what »)
+                # Répétition non consécutive aussi (dans une boucle « The Matrix »,
+                # les réponses identiques sont séparées par des messages user courts)
                 if _is_repeat(last_assistant, m["content"]):
                     continue  # réponse répétée → sautée (la 1re occurrence reste)
             if m["role"] == "assistant":
@@ -515,8 +515,8 @@ def run_chat_job(job_id, user_text, image_b64):
         # Nettoie le tic « Oh! » en tête (le modèle 3B le met partout)
         full_text = _clean_reply(full_text)
     if error is None and not full_text.strip():
-        # Réponse VIDE (modèle muet — vu le 15/08 : assistant "" persisté) :
-        # ne pas polluer l'historique avec un message vide, marquer le job.
+        # Réponse VIDE (modèle muet) : ne pas polluer l'historique avec un
+        # message vide, marquer le job.
         error = "réponse vide du modèle (modèle muet ? réessaie)"
         log(f"[job {job_id}] réponse vide — non persistée")
     with jobs_lock:

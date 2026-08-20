@@ -1,5 +1,5 @@
 #!/bin/bash
-# lock-media.sh — now playing pour hyprlock (pollé via cmd[update:2000])
+# lock-media.sh — now playing pour hyprlock (pollé via cmd[update:2000]).
 # Sortie : "♫ titre — artiste" si quelque chose joue, sinon vide → label invisible.
 set -u
 

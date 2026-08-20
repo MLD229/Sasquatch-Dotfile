@@ -1,6 +1,6 @@
 #!/bin/bash
 # media-ctl.sh <toggle|next|prev|stop>
-# Contrôle musique depuis le lock (bindl) : CC API (MPRIS + MPD + web unifiés),
+# Contrôle musique depuis le lock (bindl) : API CC (MPRIS + MPD + web unifiés),
 # fallback playerctl si le serveur CC est down.
 set -u
 

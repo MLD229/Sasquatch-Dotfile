@@ -22,9 +22,9 @@ CC_FIFO_FORMAT = (44100, 1)
 def do_screenshot(mode):
     path = os.path.expanduser("~/.config/scripts/screenshot.sh")
     try:
-        # Synchronous: the UI hides itself until the capture completes, so we
-        # must not return before grim/slurp finishes (or is cancelled by the
-        # user). Timeout guards against a hung slurp/notification daemon.
+        # Synchrone : l'UI se masque jusqu'à la fin de la capture, il ne faut
+        # donc pas retourner avant que grim/slurp soit terminé (ou annulé par
+        # l'utilisateur). Le timeout protège contre un slurp/daemon bloqué.
         rc = subprocess.run(["bash", path, mode], timeout=120,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
         return rc == 0
@@ -285,7 +285,8 @@ def _record_from_fifo(wav, seconds):
 
 
 def do_finder():
-    # Check songrec FIRST: without it, recording 8s just to fail is wasted.
+    # Vérifier songrec D'ABORD : sans lui, enregistrer 8 s pour échouer est
+    # du temps perdu.
     if shutil.which("songrec") is None:
         return {"ok": False, "recognized": False, "error": "songrec requis (pacman -S songrec)"}
     wav = os.path.join(RUNTIME_DIR, "sasquatch-finder-%d.wav" % os.getpid())

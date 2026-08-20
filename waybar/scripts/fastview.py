@@ -27,7 +27,7 @@ et `hyprctl clients -j` n'est relu qu'à 1 Hz pendant qu'un aperçu schématique
 est affiché.
 
 Palette : relue depuis waybar/style.css (bloc SASQUATCH-PALETTE) à chaque
-affichage -> le popup suit le thème dynamique de momo.
+affichage -> le popup suit la palette dynamique du thème.
 """
 
 import atexit

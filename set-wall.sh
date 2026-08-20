@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# set-wall.sh — change le wallpaper ET applique le thème dynamique
+# set-wall.sh — change le wallpaper ET applique le thème dynamique.
 # Usage : ./set-wall.sh <chemin_image>
 #
 # Délègue à apply-wallpaper.sh (même chaîne que le picker Super+Y et que
 # wallpaper.sh au login) : hyprpaper direct + gestion socket stale + thème.
-# Les anciennes commandes `hyprctl hyprpaper unload/preload` sont MORTES dans
+# Ne PAS utiliser hyprctl hyprpaper unload/preload : commandes mortes dans
 # hyprpaper v0.8 ("invalid hyprpaper request") — le wallpaper passe direct.
 set -u
 WALL="${1:-}"

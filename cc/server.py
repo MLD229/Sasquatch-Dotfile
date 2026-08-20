@@ -220,7 +220,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/wallpaper/random":
-            # Bouton 🎲 : pioche un fichier aléatoire du dossier courant.
+            # Bouton aléatoire : pioche un fichier aléatoire du dossier courant.
             self._json(random_wallpaper())
             return
 

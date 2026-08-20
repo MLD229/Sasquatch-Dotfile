@@ -172,10 +172,10 @@ def b_hypr(p):
 
 def b_hyprlock(p, clock=None):
     clock = clock or {}
-    # lock-ja.py : heure + date en hiragana (spec momo 2026-08-16) — le lock
-    # doit rester en japonais même après un changement de wallpaper (theme-apply
-    # régénère CE bloc). Police OBLIGATOIRE : Noto Sans CJK JP (hiragana, pas de
-    # tofu). Pas de Pango dans la sortie cmd (hyprlock le gère mal).
+    # lock-ja.py : heure + date en hiragana — le lock doit rester en japonais
+    # même après un changement de wallpaper (theme-apply régénère CE bloc).
+    # Police OBLIGATOIRE : Noto Sans CJK JP (hiragana, pas de tofu).
+    # Pas de Pango dans la sortie cmd (hyprlock le gère mal).
     date_label = "" if clock.get("lock_date", True) else "# date masquée (réglage horloge)"
     lines = [
         "label {",

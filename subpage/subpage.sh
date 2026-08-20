@@ -11,7 +11,7 @@
 # arrondi) vit DANS le special workspace via la windowrule rules.conf
 # (`workspace special:subpage silent`).
 #
-# ⚠️ ORDRE CRITIQUE (2026-08-20, testé) : mapper une fenêtre avec la
+# Ordre critique (testé) : mapper une fenêtre avec la
 # windowrule `workspace special:subpage silent` pendant que le special est
 # OUVERT le FERME (comportement Hyprland observé 2×). Donc : le cadre doit
 # être mappé AVANT d'ouvrir le special — jamais après.
@@ -20,7 +20,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Le special workspace est-il OUVERT sur un moniteur ?
-# ⚠️ NE PAS tester `hyprctl activeworkspace` : il montre le workspace du
+# Ne PAS tester `hyprctl activeworkspace` : il montre le workspace du
 # moniteur (いち, に...), JAMAIS special:subpage. Source de vérité :
 # `hyprctl monitors -j` → champ specialWorkspace.
 special_open() {
@@ -48,17 +48,17 @@ fi
 # Page fermée → s'assurer que le cadre tourne (le mapping se fait avec le
 # special FERMÉ : la fenêtre se cache dedans), PUIS ouvrir le special.
 #
-# ⚠️ Détection par FENÊTRE (hyprctl clients), PAS par pgrep : un quickshell
+# Détection par FENÊTRE (hyprctl clients), PAS par pgrep : un quickshell
 # lancé avec un chemin relatif (`quickshell -p main.qml` depuis subpage/) ne
 # matche pas un pgrep `[q]uickshell.*subpage/main.qml` → on relançait un
-# SECOND cadre (bug 2026-08-20 : « on ne voit pas les fenêtres » — le 2e
+# SECOND cadre (bug : « on ne voit pas les fenêtres » — le 2e
 # cadre fullscreen flottait AU-DESSUS des apps tiled et les masquait).
 frame_exists() {
     hyprctl clients -j 2>/dev/null | grep -q '"title": "Sasquatch Subpage"'
 }
 if ! frame_exists; then
     quickshell -p "$SCRIPT_DIR/main.qml" >/dev/null 2>&1 &
-    # ⚠️ ATTENDRE le mapping RÉEL de la fenêtre (pas un sleep fixe) :
+    # Attendre le mapping RÉEL de la fenêtre (pas un sleep fixe) :
     # un premier démarrage quickshell peut prendre 5-10 s ; si on toggles le
     # special avant que la fenêtre ne soit mappée, elle se mappe avec le
     # special OUVERT → elle le FERME (piège ordre critique documenté).
@@ -70,12 +70,12 @@ if ! frame_exists; then
     done
 fi
 
-# 🔻 Le cadre doit TOUJOURS être EN DESSOUS des apps du special workspace.
+# Le cadre doit TOUJOURS être EN DESSOUS des apps du special workspace.
 # Sans ça, la FloatingWindow fullscreen passe au-dessus des apps tiled :
 # elle les cache, bloque les clics (« ça ne s'active pas ») et monte jusqu'à
 # la waybar. On force TOUS les cadres en bas de pile z.
-# ⚠️ ORDRE : le repousser APRÈS le toggle, PAS avant — appliqué avant, il
-# déclenche la fermeture du special (observé 2026-08-20). L'ouverture du
+# Ordre : le repousser APRÈS le toggle, PAS avant — appliqué avant, il
+# déclenche la fermeture du special (observé). L'ouverture du
 # special re-z-order le cadre au-dessus des apps (float > tiled) → on le
 # repousse immédiatement après.
 hyprctl dispatch togglespecialworkspace subpage >/dev/null 2>&1

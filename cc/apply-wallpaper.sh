@@ -8,9 +8,9 @@
 #                                   (login : wallpaper.sh, ex-`waypaper --restore`).
 #
 # Chaîne (reproduit waypaper --restore sans la dépendance) :
-#   1. tue les hyprpaper orphelins d'une session passée (bug 2026-08-14 :
-#      un hyprpaper déjà vivant n'était pas remplacé → IPC mort → fond noir,
-#      alors que la palette suivait quand même) ;
+#   1. tue les hyprpaper orphelins d'une session passée (un hyprpaper déjà
+#      vivant n'était pas remplacé → IPC mort → fond noir, alors que la
+#      palette suivait quand même) ;
 #   2. relance hyprpaper dans la session courante ;
 #   3. wallpaper sur TOUS les monitors (preload silencieux pour vieilles
 #      versions ; v0.8 n'en a pas besoin) ;

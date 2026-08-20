@@ -95,9 +95,9 @@ def _start_ffmpeg():
 
 
 def _start_cava():
-    """Create the fifo and spawn cava so /api/viz has real data.
-    Viz._loop already polls for the fifo, so it will start reading as soon
-    as the fifo exists. cava is spawned detached so the server never blocks.
+    """Crée la fifo et lance cava pour que /api/viz ait de vraies données.
+    Viz._loop poll déjà la fifo, il commencera à lire dès qu'elle existe.
+    cava est lancé détaché pour que le serveur ne bloque jamais.
     Un ancien cava orphelin (serveur tué sans /api/close) écrirait dans la
     même fifo → frames entrelacées ; on le purge AVANT de lancer le nôtre.
     ffmpeg (monitor → fifo) doit être lancé AVANT cava pour que la fifo

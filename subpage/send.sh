@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Sasquatch Subpage — envoyer la fenêtre courante DANS la sub page (Super+Shift+S)
 #
-# Comportement (validé momo 2026-08-20) :
+# Comportement :
 #   - la fenêtre active quitte son workspace et part dans special:subpage
 #   - si la page est FERMÉE, on l'ouvre automatiquement (sinon la fenêtre
 #     serait invisible, cachée dans le scratchpad)
 #   - le cadre décoratif doit tourner AVANT le movetoworkspace : il se mappe
 #     dans le special workspace via la windowrule rules.conf (cf. subpage.sh)
 #
-# ⚠️ ORDRE CRITIQUE (cf. subpage.sh) : ne JAMAIS lancer le cadre quand le
-# special est OUVERT (le mapping le FERME). Cas couvert ci-dessous :
+# Ordre critique (cf. subpage.sh) : ne JAMAIS lancer le cadre quand le
+# special est OUVERT (le mapping le FERME). Cas couverts ci-dessous :
 #   - page fermée + cadre absent → lancer le cadre (mapping safe), PUIS bouger
 #   - page ouverte + cadre absent → NE PAS lancer le cadre (bug), bouger direct
 set -uo pipefail
@@ -57,7 +57,7 @@ except Exception:
 }
 
 # Le cadre tourne-t-il ? Détection par FENÊTRE (hyprctl clients), PAS par
-# pgrep (un chemin relatif échappe au pattern — leçon 2026-08-20).
+# pgrep (un chemin relatif échappe au pattern).
 frame_exists() {
     hyprctl clients -j 2>/dev/null | grep -q '"title": "Sasquatch Subpage"'
 }
@@ -81,7 +81,7 @@ if special_open; then
 else
     # Page fermée → s'assurer que le cadre tourne (mapping safe), PUIS bouger
     # la fenêtre (elle se cache dans le scratchpad), PUIS ouvrir la page.
-    # ⚠️ ATTENDRE le mapping RÉEL de la fenêtre (pas un sleep fixe) : un
+    # Attendre le mapping RÉEL de la fenêtre (pas un sleep fixe) : un
     # premier démarrage quickshell peut prendre 5-10 s (cf. subpage.sh).
     if ! frame_exists; then
         quickshell -p "$SCRIPT_DIR/main.qml" >/dev/null 2>&1 &

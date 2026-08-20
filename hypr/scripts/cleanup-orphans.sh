@@ -4,7 +4,7 @@
 # Pourquoi : au relogin / crash / restart d'Hyprland, les process lancés par
 # l'ancienne session gardent leur ancienne HYPRLAND_INSTANCE_SIGNATURE dans
 # /proc/<pid>/environ. Leur compositor est mort → ils ne s'affichent plus, mais
-# ils continuent de tourner et BLOQUENT les nouveaux services :
+# ils continuent de tourner et bloquent les nouveaux services :
 #   - waybar  → theme-apply.sh voit un "waybar vivant" (pgrep) et skip → pas de barre
 #   - fcitx5  → singleton : le nouveau `fcitx5 -d` sort → IME japonais (mozc) mort
 #   - mako    → socket $XDG_RUNTIME_DIR/mako.sock occupé → le nouveau crashe
@@ -13,7 +13,7 @@
 #
 # Ce script tue tout process de l'utilisateur dont la signature Hyprland diffère
 # de l'instance courante. Les process SANS signature (systemd user, dbus,
-# serveurs lancés à la main hors session) sont laissés tranquilles.
+# serveurs lancés à la main hors session) sont épargnés.
 #
 # Usage : lancé par autostart.sh en tête de session (ou à la main dans la session).
 set -u

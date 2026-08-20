@@ -6,9 +6,9 @@
 set -u
 
 # Verrou : sérialise les applys (login + post_command + switch rapide se chevauchent).
-# On ATTEND (flock -w) au lieu de sortir : si momo switch deux wallpapers vite,
-# le second attend que le premier finisse puis applique le sien — avec l'ancien
-# `flock -n || exit 0` le dernier choix était PERDU (jamais appliqué).
+# On ATTEND (flock -w) au lieu de sortir : si deux wallpapers sont appliqués en
+# rafale, le second attend que le premier finisse puis applique le sien — avec
+# l'ancien `flock -n || exit 0` le dernier choix était perdu (jamais appliqué).
 RUNDIR="${XDG_RUNTIME_DIR:-/tmp}"
 exec 9>"$RUNDIR/sasquatch-theme.lock"
 if ! flock -w 20 9; then

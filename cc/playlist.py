@@ -193,7 +193,7 @@ def playlist_play(pos):
 
 
 def playlist_playtoggle():
-    """Bascule lecture/pause (bouton ⏯)."""
+    """Bascule lecture/pause."""
     st = _mpd_cmd("status")
     if not st:
         return {"ok": False, "error": "MPD injoignable"}
