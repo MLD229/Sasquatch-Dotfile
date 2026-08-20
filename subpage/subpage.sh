@@ -72,9 +72,13 @@ fi
 
 # 🔻 Le cadre doit TOUJOURS être EN DESSOUS des apps du special workspace.
 # Sans ça, la FloatingWindow fullscreen passe au-dessus des apps tiled :
-# elle les cache (fond opaque), bloque les clics (« ça ne s'active pas »)
-# et monte jusqu'à la waybar. On force TOUS les cadres en bas de pile z à
-# chaque toggle (un cadre doublon laissé au-dessus = même bug).
+# elle les cache, bloque les clics (« ça ne s'active pas ») et monte jusqu'à
+# la waybar. On force TOUS les cadres en bas de pile z.
+# ⚠️ ORDRE : le repousser APRÈS le toggle, PAS avant — appliqué avant, il
+# déclenche la fermeture du special (observé 2026-08-20). L'ouverture du
+# special re-z-order le cadre au-dessus des apps (float > tiled) → on le
+# repousse immédiatement après.
+hyprctl dispatch togglespecialworkspace subpage >/dev/null 2>&1
 for frame_addr in $(hyprctl clients -j 2>/dev/null | python3 -c "
 import json, sys
 try:
@@ -86,6 +90,4 @@ except Exception:
 "); do
     [ -n "$frame_addr" ] && hyprctl dispatch alterzorder bottom "$frame_addr" >/dev/null 2>&1
 done
-
-hyprctl dispatch togglespecialworkspace subpage >/dev/null 2>&1
 exit 0
