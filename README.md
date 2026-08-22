@@ -11,26 +11,58 @@ Dotfiles personnels — **Hyprland** sur **Arch Linux**. Thème **adaptatif** (l
 Le fond d'écran décide de la palette — barre, terminal, notifications, verrouillage, tout suit.
 
 ![Desktop — horloge flottante](screenshots/adaptative-v2-betta.png)
+
+**Horloge flottante en hiragana** — la palette dorée/bleue est extraite du wallpaper (poissons betta), l'horloge japonaise se positionne et se teinte automatiquement.
+
 ![Terminal — fastfetch](screenshots/adaptative-v2-fastfetch.png)
+
+**Kitty + fastfetch** — terminal et prompt suivent la même palette sombre, logo Arch en aplat blanc.
 
 ### 🧡 Ambiance ambre
 
 ![Waybar ambre](screenshots/ambre-waybar.png)
+
+**Waybar ambre** — barre épurée aux teintes chaudes (orange/rouge), intégrée au fond.
+
 ![Terminal — fastfetch](screenshots/ambre-fastfetch.png)
+
+**Terminal re-teinté** — fastfetch affiche la palette active en surbrillance (bloc SASQUATCH-PALETTE).
+
 ![Sélecteur de fonds d'écran](screenshots/ambre-wallpaper-picker.png)
+
+**Sélecteur de fonds d'écran** (`Super+Y`) — grille de wallpapers + bouton 🎲 aléatoire ; changer l'image re-teinte toute l'interface.
+
 ![Panneau Settings](screenshots/ambre-settings.png)
+
+**Panneau Settings** (`Super+I`) — veille, apparence, horloge, raccourcis éditables, contrôle du système.
 
 ### 🇯🇵 Immersion japonaise
 
 ![Workspaces japonais](screenshots/japonais-piliers.png)
+
+**Workspaces japonais** — `いち`〜`じゅう` renommés à chaud, date du jour en hiragana.
+
 ![Waybar 100 % japonais](screenshots/japonais-waybar.png)
+
+**Waybar 100 % japonais** — labels hiragana + tooltips avec épellation (yomi) et traduction française.
 
 ### 🛠️ Widgets & outils
 
 ![Control Center](screenshots/cc-dashboard.png)
+
+**Control Center** (`Super+G`) — dashboard temps réel (CPU/RAM/GPU/VRAM), now-playing MPD avec pochette, égaliseur cava synchronisé.
+
 ![Control Center — vue compacte](screenshots/cc-compact.png)
+
+**Control Center compact** — vue resserrée : contrôles musique + informations système au premier coup d'œil.
+
 ![Dolphin + playlist MPD](screenshots/dolphin-playlist.png)
+
+**Dolphin + playlist MPD** (`Super+P`) — gestionnaire de fichiers en fond, playlist cliquable avec toggles random/repeat/single.
+
 ![Aide-mémoire raccourcis (rofi)](screenshots/rofi-raccourcis.png)
+
+**Aide-mémoire des raccourcis** (`Super+,`) — tous les binds affichés dans un launcher rofi.
 
 ---
 
