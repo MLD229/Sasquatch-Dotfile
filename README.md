@@ -1,95 +1,142 @@
-# 🪶 Sasquatch-Dotfile
+<div align="center">
+    <h1>【 Sasquatch-Dotfile 】</h1>
+    <h3>Hyprland dotfiles — Arch Linux · thème adaptatif · immersion japonaise</h3>
+</div>
 
-Dotfiles personnels — **Hyprland** sur **Arch Linux**. Thème **adaptatif** (le wallpaper pilote toutes les couleurs), immersion **japonaise**, panneaux **Quickshell** faits main.
+<div align="center">
 
----
+![](https://img.shields.io/github/last-commit/MLD229/Sasquatch-Dotfile?style=for-the-badge&color=FF9E64&logoColor=D9E0EE&labelColor=292324)
+![](https://img.shields.io/github/stars/MLD229/Sasquatch-Dotfile?style=for-the-badge&logo=andela&color=FFB686&logoColor=D9E0EE&labelColor=292324)
+[![](https://img.shields.io/github/repo-size/MLD229/Sasquatch-Dotfile?color=CAC992&label=SIZE&logo=googledrive&style=for-the-badge&logoColor=D9E0EE&labelColor=292324)](https://github.com/MLD229/Sasquatch-Dotfile)
+![](https://img.shields.io/github/issues/MLD229/Sasquatch-Dotfile?style=for-the-badge&color=8BD5CA&logoColor=D9E0EE&labelColor=292324)
 
-## 📸 Galerie
+</div>
+
+<div align="center">
+    <h2>• overview •</h2>
+</div>
+
+<details>
+  <summary>Notable features</summary>
+
+  - **Thème adaptatif** — le fond d'écran pilote toutes les couleurs (waybar, kitty, bordures, hyprlock, mako, rofi, panneaux)
+  - **Immersion japonaise** — waybar 100 % hiragana, workspaces `いち`〜`じゅう`, horloge flottante, hyprlock en japonais
+  - **Panneaux Quickshell faits main** — Control Center (perf + musique + égaliseur), Settings, Sidebar IA 愛子, Playlist MPD
+  - **IA locale avec vision** — llama.cpp CUDA + Qwen2.5-VL, capture de zone → description
+  - **MPD local** — socket user isolé, now-playing partout, cava synchronisé, Shazam intégré
+  - **Raccourcis éditables** depuis le panneau Settings (57 binds, sans toucher aux fichiers)
+
+</details>
+
+<details>
+  <summary>Installation</summary>
+
+```bash
+git clone https://github.com/MLD229/Sasquatch-Dotfile.git
+cd Sasquatch-Dotfile
+bash install.sh
+```
+
+Redémarre ta session après l'installation.
+
+<details>
+  <summary>⚠️ Réseau (machine neuve)</summary>
+
+`install.sh` active `systemd-networkd` + `iwd`, mais il faut un fichier
+`/etc/systemd/network/*.network` pour obtenir une IP. Exemple WiFi minimal :
+
+```ini
+# /etc/systemd/network/20-wlan.network
+[Match]
+Name=wlan0
+[Network]
+DHCP=yes
+```
+
+Sans ça : `iwctl station wlan0 connect <SSID>` associe le WiFi mais aucune IP n'est attribuée.
+</details>
+
+</details>
+
+<details>
+  <summary>Software overview</summary>
+
+| Software | Purpose |
+| ------------- | ------------- |
+| [Hyprland](https://github.com/hyprwm/Hyprland) | The compositor (window manager) |
+| [Waybar](https://github.com/Alexays/Waybar) | Status bar — 🇯🇵 100 % japonais, toggle FR |
+| [Quickshell](https://github.com/Quickshell/Quickshell) | Widget system — Control Center, Settings, Aiko, Playlist, wallpaper picker |
+| [Rofi](https://github.com/lbonn/rofi) | Launcher, powermenu, OSD, aide-mémoire |
+| [Mako](https://github.com/emersion/mako) | Notifications |
+| [Fcitx5 + Mozc](https://github.com/fcitx/fcitx5) | Japanese input method (`Ctrl+Shift+1`) |
+| [Kitty + Fish + Starship](https://github.com/kovidgoyal/kitty) | Terminal / Shell / Prompt |
+| [Hyprlock / Hypridle](https://github.com/hyprwm/hyprlock) | Lock screen (🇯🇵 hiragana + musique) / idle |
+| [MPD + cava + songrec](https://musicpd.org/) | Local music server + equalizer + Shazam |
+| [OpenTabletDriver](https://github.com/OpenTabletDriver/OpenTabletDriver) | Tablet (service user) |
+
+- Liste exhaustive des dépendances : `requirements` (source de vérité, synchro avec install.sh).
+
+</details>
+
+<div align="center">
+    <h2>• screenshots •</h2>
+</div>
 
 ### 🎨 Thème adaptative (v2)
 
-Le fond d'écran décide de la palette — barre, terminal, notifications, verrouillage, tout suit.
+**Le wallpaper pilote toute l'interface — horloge flottante en hiragana, palette dorée/bleue extraite du fond (poissons betta)**
+![image](screenshots/adaptative-v2-betta.png)
 
-![Desktop — horloge flottante](screenshots/adaptative-v2-betta.png)
-
-**Horloge flottante en hiragana** — la palette dorée/bleue est extraite du wallpaper (poissons betta), l'horloge japonaise se positionne et se teinte automatiquement.
-
-![Terminal — fastfetch](screenshots/adaptative-v2-fastfetch.png)
-
-**Kitty + fastfetch** — terminal et prompt suivent la même palette sombre, logo Arch en aplat blanc.
+**Kitty + fastfetch — terminal et prompt synchronisés sur la palette sombre**
+![image](screenshots/adaptative-v2-fastfetch.png)
 
 ### 🧡 Ambiance ambre
 
-![Waybar ambre](screenshots/ambre-waybar.png)
+**Waybar ambre — barre épurée aux teintes chaudes, intégrée au fond**
+![image](screenshots/ambre-waybar.png)
 
-**Waybar ambre** — barre épurée aux teintes chaudes (orange/rouge), intégrée au fond.
+**Terminal re-teinté — fastfetch affiche la palette active (bloc SASQUATCH-PALETTE)**
+![image](screenshots/ambre-fastfetch.png)
 
-![Terminal — fastfetch](screenshots/ambre-fastfetch.png)
+**Sélecteur de fonds d'écran (`Super+Y`) — grille + bouton 🎲 ; changer l'image re-teinte toute l'interface**
+![image](screenshots/ambre-wallpaper-picker.png)
 
-**Terminal re-teinté** — fastfetch affiche la palette active en surbrillance (bloc SASQUATCH-PALETTE).
-
-![Sélecteur de fonds d'écran](screenshots/ambre-wallpaper-picker.png)
-
-**Sélecteur de fonds d'écran** (`Super+Y`) — grille de wallpapers + bouton 🎲 aléatoire ; changer l'image re-teinte toute l'interface.
-
-![Panneau Settings](screenshots/ambre-settings.png)
-
-**Panneau Settings** (`Super+I`) — veille, apparence, horloge, raccourcis éditables, contrôle du système.
+**Panneau Settings (`Super+I`) — veille, apparence, horloge, raccourcis éditables, système**
+![image](screenshots/ambre-settings.png)
 
 ### 🇯🇵 Immersion japonaise
 
-![Workspaces japonais](screenshots/japonais-piliers.png)
+**Workspaces japonais — `いち`〜`じゅう` renommés à chaud, date du jour en hiragana**
+![image](screenshots/japonais-piliers.png)
 
-**Workspaces japonais** — `いち`〜`じゅう` renommés à chaud, date du jour en hiragana.
-
-![Waybar 100 % japonais](screenshots/japonais-waybar.png)
-
-**Waybar 100 % japonais** — labels hiragana + tooltips avec épellation (yomi) et traduction française.
+**Waybar 100 % japonais — labels hiragana + tooltips avec épellation (yomi) et traduction française**
+![image](screenshots/japonais-waybar.png)
 
 ### 🛠️ Widgets & outils
 
-![Control Center](screenshots/cc-dashboard.png)
+**Control Center (`Super+G`) — dashboard temps réel CPU/RAM/GPU/VRAM, now-playing MPD avec pochette, égaliseur cava synchronisé**
+![image](screenshots/cc-dashboard.png)
 
-**Control Center** (`Super+G`) — dashboard temps réel (CPU/RAM/GPU/VRAM), now-playing MPD avec pochette, égaliseur cava synchronisé.
+**Control Center compact — contrôles musique + infos système au premier coup d'œil**
+![image](screenshots/cc-compact.png)
 
-![Control Center — vue compacte](screenshots/cc-compact.png)
+**Dolphin + playlist MPD (`Super+P`) — playlist cliquable, toggles random/repeat/single, recherche**
+![image](screenshots/dolphin-playlist.png)
 
-**Control Center compact** — vue resserrée : contrôles musique + informations système au premier coup d'œil.
+**Aide-mémoire des raccourcis (`Super+,`) — tous les binds dans un launcher rofi**
+![image](screenshots/rofi-raccourcis.png)
 
-![Dolphin + playlist MPD](screenshots/dolphin-playlist.png)
-
-**Dolphin + playlist MPD** (`Super+P`) — gestionnaire de fichiers en fond, playlist cliquable avec toggles random/repeat/single.
-
-![Aide-mémoire raccourcis (rofi)](screenshots/rofi-raccourcis.png)
-
-**Aide-mémoire des raccourcis** (`Super+,`) — tous les binds affichés dans un launcher rofi.
-
----
-
-## ✨ Aperçu
-
-| Composant | Outil |
-|-----------|-------|
-| Compositeur | Hyprland |
-| Barre | Waybar (🇯🇵 100 % japonais, FR toggle) |
-| Launcher / OSD | Rofi |
-| Notifications | Mako |
-| IME japonais | Fcitx5 + Mozc (`Ctrl+Shift+1`) |
-| Terminal / Shell / Prompt | Kitty / Fish / Starship |
-| Fond d'écran | Picker `wp/` (Quickshell, `Super+Y`) + hyprpaper |
-| Verrouillage / Inactivité | Hyprlock (🇯🇵 hiragana + musique) / Hypridle |
-| Sysinfo | Fastfetch |
-| Control Center | Quickshell `cc/` (`Super+G`) |
-| Panneau Settings | Quickshell `settings/` (`Super+I`) |
-| Sidebar chat IA | Quickshell + llama.cpp `aiko/` (`Super+N`) |
-| Playlist MPD | Quickshell `pl/` (`Super+P`) |
-| Tablette graphique | OpenTabletDriver (service user) |
-
----
-
-## ⌨️ Raccourcis clavier (AZERTY)
+<details>
+  <summary>Keybinds</summary>
 
 Source de vérité : `hypr/keybinds.conf` (éditable via Settings → RACCOURCIS).
+
+<details>
+  <summary>Here's an image, just in case:</summary>
+
+![image](screenshots/rofi-raccourcis.png)
+
+</details>
 
 | Touche | Action |
 |--------|--------|
@@ -116,73 +163,53 @@ Source de vérité : `hypr/keybinds.conf` (éditable via Settings → RACCOURCIS
 | **XF86Audio\*** / **XF86MonBrightness\*** | Volume / luminosité + OSD |
 | **Print / Super+Print** | Screenshot plein écran / zone |
 
----
-
-## 🚀 Installation
-
-```bash
-git clone https://github.com/MLD229/Sasquatch-Dotfile.git
-cd Sasquatch-Dotfile
-bash install.sh
-```
-
-Redémarre ta session après l'installation.
-
-<details>
-<summary>⚠️ Réseau (machine neuve)</summary>
-
-`install.sh` active `systemd-networkd` + `iwd`, mais il faut un fichier
-`/etc/systemd/network/*.network` pour obtenir une IP. Exemple WiFi minimal :
-
-```ini
-# /etc/systemd/network/20-wlan.network
-[Match]
-Name=wlan0
-[Network]
-DHCP=yes
-```
-
-Sans ça : `iwctl station wlan0 connect <SSID>` associe le WiFi mais aucune IP n'est attribuée.
 </details>
 
----
+<details>
+  <summary>Thème dynamique</summary>
 
-## 📦 Dépendances
+Le fond d'écran pilote les couleurs de **toute** l'interface : waybar, kitty,
+bordures Hyprland, hyprlock, mako, rofi, CC, settings, fastfetch.
 
-```bash
-# Officiel (pacman)
-sudo pacman -S hyprland hyprlock hypridle hyprpaper \
-xdg-desktop-portal-hyprland xdg-utils xdg-user-dirs \
-waybar mako rofi \
-python-gobject gtk-layer-shell python-pillow python-numpy python-cairo \
-kitty fish starship fastfetch \
-ttf-jetbrains-mono-nerd \
-noto-fonts noto-fonts-emoji noto-fonts-cjk \
-brightnessctl playerctl \
-pipewire pipewire-pulse wireplumber \
-qt5-wayland qt6-wayland libnotify \
-iwd bluez bluez-utils blueman \
-polkit-gnome wl-clipboard cliphist \
-grim slurp jq \
-dolphin pavucontrol firefox \
-papirus-icon-theme kvantum qt5ct \
-eza bat neovim code mpv \
-nvidia-utils libva-nvidia-driver \
-fcitx5 fcitx5-mozc fcitx5-configtool fcitx5-gtk fcitx5-qt \
-libqalculate \
-mpd mpc cava alsa-utils songrec quickshell curl ffmpeg zenity \
-tesseract tesseract-data-fra
+- `scripts/theme-apply.py` extrait la palette (PIL) — fond sombre teinté, texte
+  clair, accent = couleur vive du fond, accent2 = complémentaire.
+- `scripts/theme-apply.sh` orchestre (verrou `flock`, rechargement waybar sans flash).
+- Zones retintées entre markers `SASQUATCH-PALETTE-BEGIN/END` dans 8 fichiers.
+- **Hook auto** : `~/.config/waypaper/config.ini` →
+  `post_command = ~/.config/scripts/theme-apply.sh $wallpaper`
+- Manuelle : `./set-wall.sh <image>` change le wallpaper ET applique le thème.
 
-# AUR (via yay — install.sh le fait automatiquement)
-yay -S brave-bin catppuccin-gtk-theme-mocha bibata-cursor-theme \
-opentabletdriver llama.cpp-cuda
-```
+</details>
 
-> Liste exhaustive : `requirements` (source de vérité, synchro avec install.sh).
+<details>
+  <summary>Modules Quickshell</summary>
 
----
+**🎛️ Control Center — `Super+G`**
+Dashboard temps réel : CPU/RAM/GPU/VRAM/températures/réseau, now-playing MPD
+(pochette, seek, contrôles), **égaliseur cava synchronisé** sur la sortie audio
+réelle, **Music Finder** (8 s de capture PipeWire → Shazam via songrec),
+screenshot (zone/plein écran/fenêtre). Backend Python 100 % stdlib, service
+systemd user permanent (`sasquatch-cc`, logs : `journalctl --user -u sasquatch-cc`).
 
-## 📁 Structure
+**⚙️ Panneau Settings — `Super+I`**
+Sections : **VEILLE** (timeouts hypridle), **APPARENCE** (palette auto/manuelle),
+**HORLOGE** (format waybar + hyprlock), **RACCOURCIS** (57 binds éditables →
+overrides dans `keybinds-user.conf`), **CONTROL PANEL**, **SYSTÈME** (gaps,
+rounding, animations). Sauvegarde automatique dans `settings/settings.json`.
+
+**🤖 Sidebar 愛子 Aiko — `Super+N`**
+Chat IA **locale** avec vision : llama-server (llama.cpp CUDA) + Qwen2.5-VL-3B
+GGUF, backend stdlib (SSE), capture de zone → vision, historique autosave.
+Lazy : ne tourne que si la sidebar est ouverte. Setup : `aiko/setup.sh`.
+
+**🎵 Playlist MPD — `Super+P`**
+Toggles random/repeat/single, liste cliquable, recherche/ajout, dossier musique.
+MPD isolé par utilisateur (socket unix, pas de port TCP partagé).
+
+</details>
+
+<details>
+  <summary>Structure</summary>
 
 ```
 Sasquatch-Dotfile/
@@ -210,68 +237,13 @@ Sasquatch-Dotfile/
 └── wp/            ← Sélecteur de fonds d'écran (Super+Y) : grille + 🎲 aléatoire
 ```
 
----
+</details>
 
-## 🎨 Thème dynamique
-
-Le fond d'écran pilote les couleurs de **toute** l'interface : waybar, kitty,
-bordures Hyprland, hyprlock, mako, rofi, CC, settings, fastfetch.
-
-- `scripts/theme-apply.py` extrait la palette (PIL) — fond sombre teinté, texte
-  clair, accent = couleur vive du fond, accent2 = complémentaire.
-- `scripts/theme-apply.sh` orchestre (verrou `flock`, rechargement waybar sans flash).
-- Zones retintées entre markers `SASQUATCH-PALETTE-BEGIN/END` dans 8 fichiers.
-- **Hook auto** : `~/.config/waypaper/config.ini` →
-  `post_command = ~/.config/scripts/theme-apply.sh $wallpaper`
-- Manuelle : `./set-wall.sh <image>` change le wallpaper ET applique le thème.
-
----
-
-## 🇯🇵 Immersion japonaise
-
-Interface en **hiragana** (kanji/katakana rarement), tooltips = épellation (yomi) + traduction française.
-
-- **Waybar 100 % japonais** : labels courts + tooltips complets (`waybar/ui-ja.json`).
-- **Heure en hiragana** : `clock-ja.py` (じゅうにじ さんじゅうごふん), `wallclock-ja.py`
-  (horloge flottante dans le wallpaper, position + couleur auto).
-- **Workspaces japonais** : `いち..じゅう` renommés à chaud (FR/EN possible).
-- **Hyprlock japonais** : heure + date hiragana + now-playing MPD.
-- Bascule FR/JA : toggle dans le waybar.
-
----
-
-## 🛠️ Modules Quickshell
-
-### 🎛️ Control Center — `Super+G`
-
-Dashboard temps réel : CPU/RAM/GPU/VRAM/températures/réseau, now-playing MPD
-(pochette, seek, contrôles), **égaliseur cava synchronisé** sur la sortie audio
-réelle, **Music Finder** (8 s de capture PipeWire → Shazam via songrec),
-screenshot (zone/plein écran/fenêtre). Backend Python 100 % stdlib, service
-systemd user permanent (`sasquatch-cc`, logs : `journalctl --user -u sasquatch-cc`).
-
-### ⚙️ Panneau Settings — `Super+I`
-
-Sections : **VEILLE** (timeouts hypridle), **APPARENCE** (palette auto/manuelle),
-**HORLOGE** (format waybar + hyprlock), **RACCOURCIS** (57 binds éditables →
-overrides dans `keybinds-user.conf`), **CONTROL PANEL**, **SYSTÈME** (gaps,
-rounding, animations). Sauvegarde automatique dans `settings/settings.json`.
-
-### 🤖 Sidebar 愛子 Aiko — `Super+N`
-
-Chat IA **locale** avec vision : llama-server (llama.cpp CUDA) + Qwen2.5-VL-3B
-GGUF, backend stdlib (SSE), capture de zone → vision, historique autosave.
-Lazy : ne tourne que si la sidebar est ouverte. Setup : `aiko/setup.sh`.
-
-### 🎵 Playlist MPD — `Super+P`
-
-Toggles random/repeat/single, liste cliquable, recherche/ajout, dossier musique.
-MPD isolé par utilisateur (socket unix, pas de port TCP partagé).
-
----
-
-## 🌙 Veille / suspend (NVIDIA)
+<details>
+  <summary>Veille / suspend (NVIDIA)</summary>
 
 Gel GPU au réveil corrigé par `scripts/fix-suspend.sh` (à lancer en `sudo`) :
 `nvidia_drm.modeset=1` (GRUB), `NVreg_PreserveVideoMemoryAllocations=1`
 (modprobe) et services `nvidia-suspend` / `nvidia-resume` / `nvidia-hibernate`.
+
+</details>
