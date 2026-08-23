@@ -2,22 +2,22 @@
 
 /* ── Palette dynamique (wallpaper) ─────────────── */
 /* === SASQUATCH-PALETTE-BEGIN === */
-@define-color background #181415;
-@define-color foreground #d5ced0;
+@define-color background #13141a;
+@define-color foreground #d0d0d4;
 @define-color color0 #45475a;
 @define-color color1 #f38ba8;
 @define-color color2 #a6e3a1;
 @define-color color3 #f9e2af;
-@define-color color4 #dcaaa1;
-@define-color color5 #39404d;
+@define-color color4 #46495c;
+@define-color color5 #53465c;
 @define-color color6 #89dceb;
 @define-color color7 #bac2de;
-@define-color color8 #7f7a7b;
+@define-color color8 #7a7b80;
 @define-color color9 #f38ba8;
 @define-color color10 #a6e3a1;
 @define-color color11 #f9e2af;
-@define-color color12 #dcaaa1;
-@define-color color13 #39404d;
+@define-color color12 #46495c;
+@define-color color13 #53465c;
 @define-color color14 #89dceb;
 @define-color color15 #a6adc8;
 /* === SASQUATCH-PALETTE-END === */
