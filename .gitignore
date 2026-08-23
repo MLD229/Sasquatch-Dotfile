@@ -17,3 +17,6 @@ settings/playlist_folder
 
 # Sasquatch-Files : config locale Obsidian (workspace, graph) — pas à versionner
 Sasquatch-Files/.obsidian/
+
+# debug : outils de diagnostic locaux, jamais versionnés
+scripts/watch-theme.sh
