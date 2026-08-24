@@ -1,6 +1,6 @@
 <div align="center">
     <h1>【 Sasquatch-Dotfile 】</h1>
-    <h3>Hyprland dotfiles — Arch Linux · thème adaptatif · immersion japonaise</h3>
+    <h3>Hyprland dotfiles — Arch Linux · thème adaptatif</h3>
 </div>
 
 <div align="center">
@@ -20,9 +20,9 @@
   <summary>Notable features</summary>
 
   - **Thème adaptatif** — le fond d'écran pilote toutes les couleurs (waybar, kitty, bordures, hyprlock, mako, rofi, panneaux)
-  - **Immersion japonaise** — waybar 100 % hiragana, workspaces `いち`〜`じゅう`, horloge flottante, hyprlock en japonais
+  - **Interface localisée** — waybar et hyprlock en hiragana, workspaces `いち`〜`じゅう`, toggle FR
   - **Panneaux Quickshell faits main** — Control Center (perf + musique + égaliseur), Settings, Sidebar IA 愛子, Playlist MPD
-  - **IA locale avec vision (en développement)** — llama.cpp CUDA + Qwen2.5-VL, capture de zone → description
+  - **IA locale avec vision (optionnelle, en développement)** — llama.cpp + Qwen2.5-VL, capture de zone → description ; CUDA et les dépendances sont **skippables** à l'installation
   - **MPD local** — socket user isolé, now-playing partout, cava synchronisé, Shazam intégré
   - **Raccourcis éditables** depuis le panneau Settings (57 binds, sans toucher aux fichiers)
 
@@ -38,6 +38,11 @@ bash install.sh
 ```
 
 Redémarre ta session après l'installation.
+
+> **IA locale (aiko/, `Super+N`) : optionnelle.** `install.sh` demande
+> confirmation avant `llama.cpp-cuda` (build AUR long, CUDA) — réponds `N`
+> pour la skipper tant que l'IA n'est pas build. Le reste s'installe sans
+> bloquer (un échec de paquet ne stoppe plus le câblage).
 
 <details>
   <summary>⚠️ Réseau (machine neuve)</summary>
@@ -64,13 +69,13 @@ Sans ça : `iwctl station wlan0 connect <SSID>` associe le WiFi mais aucune IP n
 | Software | Purpose |
 | ------------- | ------------- |
 | [Hyprland](https://github.com/hyprwm/Hyprland) | The compositor (window manager) |
-| [Waybar](https://github.com/Alexays/Waybar) | Status bar — 🇯🇵 100 % japonais, toggle FR |
+| [Waybar](https://github.com/Alexays/Waybar) | Status bar — localisée, toggle FR |
 | [Quickshell](https://github.com/Quickshell/Quickshell) | Widget system — Control Center, Settings, Aiko, Playlist, wallpaper picker |
 | [Rofi](https://github.com/lbonn/rofi) | Launcher, powermenu, OSD, aide-mémoire |
 | [Mako](https://github.com/emersion/mako) | Notifications |
-| [Fcitx5 + Mozc](https://github.com/fcitx/fcitx5) | Japanese input method (`Ctrl+Shift+1`) |
+| [Fcitx5 + Mozc](https://github.com/fcitx/fcitx5) | Japanese input method (IME, `Ctrl+Shift+1`) |
 | [Kitty + Fish + Starship](https://github.com/kovidgoyal/kitty) | Terminal / Shell / Prompt |
-| [Hyprlock / Hypridle](https://github.com/hyprwm/hyprlock) | Lock screen (🇯🇵 hiragana + musique) / idle |
+| [Hyprlock / Hypridle](https://github.com/hyprwm/hyprlock) | Lock screen (musique) / idle |
 | [MPD + cava + songrec](https://musicpd.org/) | Local music server + equalizer + Shazam |
 | [OpenTabletDriver](https://github.com/OpenTabletDriver/OpenTabletDriver) | Tablet (service user) |
 
@@ -92,7 +97,7 @@ Sans ça : `iwctl station wlan0 connect <SSID>` associe le WiFi mais aucune IP n
 
 ### 🧡 Ambiance
 
-**Waybar  — barre épurée aux teintes adaptatif, intégrée au fond**
+**Waybar — barre épurée aux teintes adaptatives, intégrée au fond**
 ![image](screenshots/ambre-waybar.png)
 
 **Terminal re-teinté — fastfetch affiche la palette active (bloc SASQUATCH-PALETTE)**
@@ -104,12 +109,12 @@ Sans ça : `iwctl station wlan0 connect <SSID>` associe le WiFi mais aucune IP n
 **Panneau Settings (`Super+I`) — veille, apparence, horloge, raccourcis éditables, système**
 ![image](screenshots/ambre-settings.png)
 
-### 🇯🇵 Immersion japonaise
+### 🇯🇵 Interface localisée
 
-**Workspaces japonais — `いち`〜`じゅう` renommés à chaud, date du jour en hiragana**
+**Workspaces nommés — `いち`〜`じゅう` renommés à chaud, date du jour en hiragana**
 ![image](screenshots/japonais-piliers.png)
 
-**Waybar 100 % japonais — labels hiragana + tooltips avec épellation (yomi) et traduction française**
+**Waybar localisée — labels hiragana + tooltips avec épellation (yomi) et traduction française**
 ![image](screenshots/japonais-waybar.png)
 
 ### 🛠️ Widgets & outils
@@ -201,6 +206,8 @@ rounding, animations). Sauvegarde automatique dans `settings/settings.json`.
 Chat IA **locale** avec vision : llama-server (llama.cpp CUDA) + Qwen2.5-VL-3B
 GGUF, backend stdlib (SSE), capture de zone → vision, historique autosave.
 Lazy : ne tourne que si la sidebar est ouverte. Setup : `aiko/setup.sh`.
+**Optionnelle** : CUDA et les dépendances sont skippables à l'installation
+(l'IA n'est pas encore build — réponds NON au prompt `llama.cpp-cuda`).
 
 **🎵 Playlist MPD — `Super+P`**
 Toggles random/repeat/single, liste cliquable, recherche/ajout, dossier musique.
@@ -218,7 +225,7 @@ Sasquatch-Dotfile/
 ├── cc/            ← Control Center (Super+G) : dashboard perf, now-playing,
 │                   Shazam, screenshot ; service user permanent `sasquatch-cc`
 ├── fastfetch/     ← logo + palette dynamique (bloc SASQUATCH-PALETTE)
-├── fcitx5/        ← IME japonais (bascule Ctrl+Shift+1)
+├── fcitx5/        ← IME japonais (bascule Ctrl+Shift+1, optionnel)
 ├── fish/          ← config.fish (alias, MPD_HOST socket user)
 ├── hypr/          ← hyprland.conf → conf.d/, keybinds.conf, hypridle/hyprlock/
 │                   hyprpaper.conf + scripts (autostart, lock-ja, media-ctl…)
@@ -232,7 +239,7 @@ Sasquatch-Dotfile/
 │                   raccourcis, système — sauvegarde auto
 ├── starship.toml
 ├── themes/        ← GTK (Catppuccin/Papirus) + Qt (Papirus-Dark)
-├── waybar/        ← config 🇯🇵 japonais + style (palette) + scripts (clock-ja,
+├── waybar/        ← config + style (palette) + scripts (clock-ja,
 │                   wallclock-ja, fastview) ; service systemd user
 └── wp/            ← Sélecteur de fonds d'écran (Super+Y) : grille + 🎲 aléatoire
 ```

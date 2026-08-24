@@ -66,6 +66,14 @@ confirm_yes() { # confirm_yes "message"
     [[ ! "$ans" =~ ^[Nn]$ ]]
 }
 
+# Prompt NON par défaut (Entrée = NON) — pour les options skippables (IA locale).
+confirm_no() { # confirm_no "message"
+    if [ "$ASSUME_YES" = 1 ]; then return 0; fi
+    local ans
+    read -rp "  $1 [y/N] " ans
+    [[ "$ans" =~ ^[Yy]$ ]]
+}
+
 # Si --clean : backup complet puis dossier vide (réinstall propre).
 if [ "$CLEAN" = 1 ]; then
     header "Nettoyage de l'ancienne configuration"
@@ -116,7 +124,9 @@ header "Installation des dépendances"
 # Groupes de paquets (même set que requirements — source de vérité).
 #   ESSENTIEL : base desktop — sans eux, pas de session utilisable.
 #   FEATURES  : CC + panneaux Quickshell (Super+G/Y/P/I/N), musique, OCR.
-#   OPTIONNEL : AUR longs/fragiles ou features indépendantes (tablette, Aiko).
+#   OPTIONNEL : AUR longs/fragiles ou features indépendantes (tablette).
+#   IA LOCALE (Aiko) : SKIPPABLE — prompt dédié plus bas, défaut NON
+#   (l'IA n'est pas encore build ; llama.cpp-cuda = build AUR long).
 # Un échec de paquet ne bloque plus le reste (avant, yay -S ... || exit 1
 # → le premier paquet qui échouait annulait le câblage complet : symlinks,
 # services, permissions, hook waypaper, .desktop brave).
@@ -232,8 +242,12 @@ PKGS_FEATURES=(
 PKGS_OPTIONAL=(
     code                    # VS Code — lecteur code/txt (mimeapps, bind $mod+O)
     opentabletdriver        # AUR — daemon tablette XP-Pen (service user activé plus bas)
-    llama.cpp-cuda          # AUR — llama-server CUDA (aiko/, sidebar 愛子 Super+N) — build LONG
     obsidian                # extra — vault Obsidian (Sasquatch-Files, bind Super+H)
+)
+
+# IA locale (aiko/, sidebar 愛子 Super+N) — SKIPPABLE, PAS encore build.
+PKGS_AI=(
+    llama.cpp-cuda          # AUR — llama-server CUDA (aiko/, sidebar 愛子 Super+N) — build LONG
 )
 
 PKGS_FAILED=()
@@ -278,6 +292,17 @@ install_group() {
 install_group "Essentiel" "${PKGS_ESSENTIAL[@]}"
 install_group "Features"  "${PKGS_FEATURES[@]}"
 install_group "Optionnel" "${PKGS_OPTIONAL[@]}"
+
+# ─── IA locale (Aiko) — SKIPPABLE ──────────
+# L'IA n'est pas encore build : llama.cpp-cuda (build AUR long) est proposé
+# avec défaut NON. Répondre y pour l'installer, Entrée/N pour le skipper.
+if [ "$NO_PACKAGES" = 1 ]; then
+    warning "IA locale : llama.cpp-cuda ignoré (--no-packages)"
+elif confirm_no "Installer llama.cpp-cuda (IA locale Aiko — build AUR long) ?"; then
+    install_group "IA locale" "${PKGS_AI[@]}"
+else
+    warning "IA locale skippée — llama.cpp-cuda non installé (lance : yay -S llama.cpp-cuda)"
+fi
 
 # ─── XDG ───────────────────────────────
 header "Initialisation des dossiers XDG"

@@ -104,6 +104,8 @@ opentabletdriver         # AUR — daemon tablette (remplace hid_uclogic absent 
 # Install modèle : bash aiko/setup.sh  → télécharge depuis
 #   https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF
 #   (Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf + mmproj-Q8_0.gguf)
+# ⚠️ SKIPPABLE : l'IA n'est pas encore build — install.sh demande confirmation
+#    (défaut NON). Réinstallable : yay -S llama.cpp-cuda
 llama.cpp-cuda          # AUR — llama-server avec CUDA (requis par aiko/server.py)
 
 # Divers
