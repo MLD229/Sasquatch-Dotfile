@@ -22,7 +22,7 @@
   - **Thème adaptatif** — le fond d'écran pilote toutes les couleurs (waybar, kitty, bordures, hyprlock, mako, rofi, panneaux)
   - **Immersion japonaise** — waybar 100 % hiragana, workspaces `いち`〜`じゅう`, horloge flottante, hyprlock en japonais
   - **Panneaux Quickshell faits main** — Control Center (perf + musique + égaliseur), Settings, Sidebar IA 愛子, Playlist MPD
-  - **IA locale avec vision** — llama.cpp CUDA + Qwen2.5-VL, capture de zone → description
+  - **IA locale avec vision (en développement)** — llama.cpp CUDA + Qwen2.5-VL, capture de zone → description
   - **MPD local** — socket user isolé, now-playing partout, cava synchronisé, Shazam intégré
   - **Raccourcis éditables** depuis le panneau Settings (57 binds, sans toucher aux fichiers)
 
@@ -84,15 +84,15 @@ Sans ça : `iwctl station wlan0 connect <SSID>` associe le WiFi mais aucune IP n
 
 ### 🎨 Thème adaptative (v2)
 
-**Le wallpaper pilote toute l'interface — horloge flottante en hiragana, palette dorée/bleue extraite du fond (poissons betta)**
+**Le wallpaper pilote toute l'interface — horloge flottante... 
 ![image](screenshots/adaptative-v2-betta.png)
 
 **Kitty + fastfetch — terminal et prompt synchronisés sur la palette sombre**
 ![image](screenshots/adaptative-v2-fastfetch.png)
 
-### 🧡 Ambiance ambre
+### 🧡 Ambiance
 
-**Waybar ambre — barre épurée aux teintes chaudes, intégrée au fond**
+**Waybar  — barre épurée aux teintes adaptatif, intégrée au fond**
 ![image](screenshots/ambre-waybar.png)
 
 **Terminal re-teinté — fastfetch affiche la palette active (bloc SASQUATCH-PALETTE)**
