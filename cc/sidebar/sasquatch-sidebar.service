@@ -1,0 +1,24 @@
+[Unit]
+Description=Sasquatch Sidebar - backend HTTP (127.0.0.1:8778)
+# Permanent (pas lié à la fenêtre) : c'est ce qui fait continuer chrono /
+# timer / alarme quand le panneau est fermé.
+After=pipewire.service wireplumber.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u %h/.config/cc/sidebar/server.py
+WorkingDirectory=%h/.config/cc/sidebar
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+# Nettoyage à l'arrêt : l'inhibiteur d'inactivité du mode « anti-veille » ne
+# doit jamais survivre au service (sinon la machine ne dort plus, en silence).
+ExecStopPost=-/usr/bin/pkill -f "systemd-inhibit.*sasquatch-sidebar"
+StandardOutput=journal
+StandardError=journal
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

@@ -237,6 +237,14 @@ PKGS_FEATURES=(
     python-gobject          # fastview.py (waybar/scripts) — bindings GTK Python
     gtk-layer-shell         # fastview.py (waybar/scripts) — GtkLayerShell typelib
     zenity                  # sélecteurs « Parcourir » (wp Super+Y, pl Super+P, cc)
+
+    # ── Slide bar (Super+U, cc/sidebar) ──────────────────────────────────
+    # UI Quickshell + backend Python (port 8778). Les dépendances déjà
+    # listées plus haut couvrent le reste (mako, cliphist, wl-clipboard,
+    # grim, brightnessctl, playerctl, quickshell).
+    hyprsunset              # mode « lumière bleue » (filtre anti-bleu Hyprland)
+    power-profiles-daemon   # mode « gaming » : powerprofilesctl = performance
+
 )
 
 PKGS_OPTIONAL=(
@@ -521,6 +529,20 @@ if systemctl --user enable --now sasquatch-cc 2>/dev/null; then
 else
     warning "Service user sasquatch-cc non activé (pas de session) — cc.sh le lancera au besoin"
 fi
+
+# Service USER sasquatch-sidebar (backend de la slide bar, port 8778).
+# Il porte le chrono / timer / alarme et la to-do : il DOIT tourner même
+# panneau fermé, d'où le service permanent (Restart=always) et pas un
+# process lancé par le panneau.
+link "$DOTDIR/cc/sidebar/sasquatch-sidebar.service" "$SD_USER/sasquatch-sidebar.service"
+systemctl --user daemon-reload 2>/dev/null || true
+if systemctl --user enable --now sasquatch-sidebar 2>/dev/null; then
+    success "sasquatch-sidebar (service user) activé"
+else
+    warning "Service user sasquatch-sidebar non activé — sidebar.sh le démarrera au besoin"
+fi
+# Le service vit dans le repo : le repo est lié dans ~/.config/cc, donc le
+# fichier .service pointe vers le Python du repo via WorkingDirectory.
 
 # Service USER waybar (supervision de la barre). Restart=on-failure → un crash
 # relance la barre tout seul (avant : morte jusqu'au relogin) ; theme-apply.sh

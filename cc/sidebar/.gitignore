@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+sidebar-state.json
+*.bak-*
