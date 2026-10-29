@@ -1,0 +1,29 @@
+[Unit]
+# 愛子 (aiko) — backend HTTP léger. NE GARDE JAMAIS LE MODÈLE.
+#
+# FACULTATIF, NON ACTIVÉ par install.sh. La source de vérité du cycle de vie
+# est aiko.sh (Super+N) : il lance le backend à la demande et le fait sortir à
+# la fermeture. Ce service ne sert qu'à pré-ouvrir le port 8791 AVANT le
+# premier Super+N ; comme le backend sort proprement (os._exit(0)), le service
+# repasse « inactive » à la première fermeture (Restart=on-failure ne relance
+# pas une sortie propre). aiko.sh détecte un service actif et le réutilise —
+# et server.py refuse de toute façon un 2e backend (flock backend.lock).
+Description=Aiko backend (LLM local éphémère)
+Documentation=file://%h/.config/aiko/README.md
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u %h/.config/aiko/server.py
+Restart=on-failure
+RestartSec=2
+# Rien de lourd : la limite est une ceinture de sécurité. Le modèle tourne
+# dans un process enfant séparé (llama-server), tué à la fermeture.
+MemoryMax=512M
+Environment=AIKO_IDLE_SEC=300
+# Logs techniques seulement (jamais le contenu des conversations).
+StandardOutput=append:%h/.cache/aiko-backend.log
+StandardError=append:%h/.cache/aiko-backend.log
+
+[Install]
+WantedBy=default.target

@@ -253,9 +253,17 @@ PKGS_OPTIONAL=(
     obsidian                # extra — vault Obsidian (Sasquatch-Files, bind Super+H)
 )
 
-# IA locale (aiko/, sidebar 愛子 Super+N) — SKIPPABLE, PAS encore build.
+# IA locale (aiko/, sidebar 愛子 Super+N).
+# IMPORTANT — deux binaires, deux vitesses (mesuré sur le 3B, GTX 1660 Ti) :
+#   * llama-cpp (extra, Arch) : CPU SEUL      → 12,8 tok/s
+#   * llama.cpp-cuda (AUR)    : GPU CUDA      → ~80 tok/s
+# Le projet utilise en priorité un build GPU précompilé dans ~/.local/bin
+# (Vulkan, 80 tok/s, installé sans sudo). D'où le défaut NON : installer le
+# paquet AUR allonge énormément l'install et reste moins rapide que le build
+# Vulkan déjà présent. aiko/installer.sh vérifie et explique les deux.
 PKGS_AI=(
-    llama.cpp-cuda          # AUR — llama-server CUDA (aiko/, sidebar 愛子 Super+N) — build LONG
+    llama-cpp               # extra — llama-server, CPU SEUL (12,8 tok/s) : filet de sécurité
+    llama.cpp-cuda          # AUR — llama-server CUDA (~80 tok/s) — build LONG
 )
 
 PKGS_FAILED=()
@@ -302,14 +310,16 @@ install_group "Features"  "${PKGS_FEATURES[@]}"
 install_group "Optionnel" "${PKGS_OPTIONAL[@]}"
 
 # ─── IA locale (Aiko) — SKIPPABLE ──────────
-# L'IA n'est pas encore build : llama.cpp-cuda (build AUR long) est proposé
-# avec défaut NON. Répondre y pour l'installer, Entrée/N pour le skipper.
+# llama-cpp (extra, CPU seul 12,8 tok/s) + llama.cpp-cuda (AUR, build LONG).
+# Défaut NON : aiko tourne déjà avec le build Vulkan de ~/.local/bin
+# (~80 tok/s). Ces paquets ne servent que de filet si ce build disparaît.
+# Vérifier les modèles GGUF : bash $DOTDIR/aiko/installer.sh --check
 if [ "$NO_PACKAGES" = 1 ]; then
-    warning "IA locale : llama.cpp-cuda ignoré (--no-packages)"
-elif confirm_no "Installer llama.cpp-cuda (IA locale Aiko — build AUR long) ?"; then
+    warning "IA locale : llama-cpp/llama.cpp-cuda ignorés (--no-packages)"
+elif confirm_no "Installer llama-cpp (CPU seul) + llama.cpp-cuda (build AUR long) pour Aiko ?"; then
     install_group "IA locale" "${PKGS_AI[@]}"
 else
-    warning "IA locale skippée — llama.cpp-cuda non installé (lance : yay -S llama.cpp-cuda)"
+    warning "IA locale skippée — Aiko exige un llama-server : bash $DOTDIR/aiko/installer.sh"
 fi
 
 # ─── XDG ───────────────────────────────
@@ -557,6 +567,18 @@ else
     warning "Service user waybar non activé (pas de session) — theme-apply.sh le lancera au besoin"
 fi
 
+# ─── Aiko : service FACULTATIF, JAMAIS activé ────────────────────────────
+# Le backend aiko est lancé À LA DEMANDE par aiko.sh (Super+N) et il s'arrête
+# à la fermeture du panneau : c'est ce qui garantit « zéro process aiko »
+# (contrat du projet). Le service existe seulement pour pré-ouvrir le port si
+# on le veut ; il est donc copié mais PAS activé. aiko.sh le détecte
+# (systemctl --user is-active) et le réutilise au lieu de doubler le backend.
+link "$DOTDIR/aiko/aiko.service" "$SD_USER/aiko.service"
+systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user is-enabled --quiet aiko.service && \
+    warning "aiko.service est ACTIVÉ : il ne pré-ouvre le port qu'au login et retombe inactive à la 1re fermeture (désactiver : systemctl --user disable --now aiko)" || \
+    info "aiko.service présent mais NON activé (voulu : aiko.sh gère le cycle de vie)"
+
 # ─── Scripts exécutables ───────────────
 header "Permissions des scripts"
 chmod +x "$DOTDIR"/scripts/*.sh
@@ -590,8 +612,11 @@ if [ ${#PKGS_FAILED[@]} -gt 0 ]; then
 else
     success "Tous les paquets requis sont présents"
 fi
-if ! ls "$DOTDIR"/aiko/models/*.gguf &>/dev/null; then
-    info "Aiko (Super+N) : aucun modèle GGUF — lance : bash $DOTDIR/aiko/setup.sh (téléchargement ~2-4 Go)"
+if ! ls "$HOME"/models/*.gguf &>/dev/null; then
+    info "Aiko (Super+N) : aucun GGUF dans ~/models — lance : bash $DOTDIR/aiko/installer.sh (3B ~1,9 Go, 7B ~4,7 Go)"
+fi
+if [ ! -x "$HOME/.local/bin/llama-server" ] && ! command -v llama-server >/dev/null 2>&1; then
+    info "Aiko (Super+N) : llama-server absent — bash $DOTDIR/aiko/installer.sh (build Vulkan ~80 tok/s, ou paquet CPU seul 12,8 tok/s)"
 fi
 
 echo -e "\n${GREEN}${BOLD}━━━ Sasquatch-Dotfile installé avec succès ! ━━━${NC}"

@@ -1,0 +1,33 @@
+{
+  "_comment": "Profils de modeles aiko. Chemins relatifs a ~/models. Ajouter un profil = une entree.",
+  "default": "rapide",
+  "llama_server_port": 8792,
+  "backend_port": 8791,
+  "idle_seconds": 300,
+  "history_max_chars": 6000,
+  "history_max_turns": 8,
+  "profiles": {
+    "rapide": {
+      "label": "3B",
+      "file": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+      "ctx": 4096,
+      "ngl": 99,
+      "threads": 6,
+      "max_tokens": 700,
+      "temperature": 0.4,
+      "load_timeout": 75,
+      "note": "defaut : le plus rapide a charger/decharger (~1.9 Go)"
+    },
+    "best": {
+      "label": "7B",
+      "file": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+      "ctx": 3072,
+      "ngl": 99,
+      "threads": 6,
+      "max_tokens": 700,
+      "temperature": 0.4,
+      "load_timeout": 110,
+      "note": "meilleur suivi d'instructions, ~4.7 Go : marge VRAM faible sur 6 Go"
+    }
+  }
+}
