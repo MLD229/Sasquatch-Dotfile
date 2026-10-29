@@ -208,9 +208,15 @@ def main():
     check("le mode n'est PAS marqué actif après échec",
           get("/api/state")["modes"].get("lite") is not True)
     sun = post("/api/modes", {"mode": "bluesun", "on": True, "kelvin": 3000})
-    check("lumière bleue → 'hyprsunset non installé' explicite",
-          sun.get("ok") is False and "hyprsunset" in (sun.get("error") or ""),
-          json.dumps(sun.get("error")))
+    if env.get("hyprsunset"):
+        print("       SKIP  hyprsunset non installé (il EST installé ici)")
+        check("lumière bleue démarre (hyprsunset présent)",
+              sun.get("ok") is True and sun.get("pid"), json.dumps(sun)[:90])
+        post("/api/modes", {"mode": "bluesun", "on": False})
+    else:
+        check("lumière bleue → 'hyprsunset non installé' explicite",
+              sun.get("ok") is False and "hyprsunset" in (sun.get("error") or ""),
+              json.dumps(sun.get("error")))
     dnd = post("/api/modes", {"mode": "dnd", "on": True})
     if mako_live:
         print("       SKIP  DND sans mako (mako actif dans la session)")

@@ -230,6 +230,10 @@ PanelWindow {
         root.counts = s.counts || { total: 0, remaining: 0, done: 0 };
         root.alarms = s.alarms || [];
         root.modes = s.modes || {};
+        // La température affichée doit refléter l'état réel (sinon le curseur
+        // reste à 4000 K alors que hyprsunset tourne à 3600 K).
+        if (s.modes && s.modes.kelvin)
+            root.kelvin = s.modes.kelvin;
         // Volume / luminosité : /api/state renvoie des OBJETS
         // ({ok, volume, muted} / {ok, brightness, error}), pas des nombres.
         // L'ancien test `typeof s.volume === "number"` ne matchait jamais →
@@ -322,7 +326,13 @@ PanelWindow {
     function toggleMode(m) {
         if (!root.modeAvailable(m))
             return;
-        root.post("/api/modes", { mode: m, on: !root.modes[m], kelvin: root.kelvin });
+        // État EFFECTIF : pour la lumière bleue, hyprsunset peut déjà tourner
+        // sans que la sidebar l'ait lancé → un clic doit alors l'ÉTEINDRE,
+        // pas le relancer.
+        var actif = !!root.modes[m];
+        if (m === "bluesun")
+            actif = actif || !!root.envTools.hyprsunset_running;
+        root.post("/api/modes", { mode: m, on: !actif, kelvin: root.kelvin });
     }
 
     function startTimer(sec) {
@@ -372,6 +382,18 @@ PanelWindow {
         repeat: true
         onTriggered: root.refreshPalette()
     }
+    // Détection des outils (hyprsunset, mako…) : rafraîchie régulièrement,
+    // sinon un paquet installé APRÈS l'ouverture du panneau restait vu comme
+    // « non installé » jusqu'au prochain lancement.
+    Timer {
+        id: envTimer
+
+        interval: 10000
+        running: true
+        repeat: true
+        onTriggered: root.refreshEnv()
+    }
+
     Timer {
         id: extrasTimer
 
@@ -639,7 +661,9 @@ PanelWindow {
                             Pill {
                                 glyph: "🌙"
                                 label: "Lumière bleue"
-                                on: !!root.modes.bluesun
+                                // ON si la sidebar l'a activé OU si hyprsunset
+                                // tourne déjà (lancé à la main, service…).
+                                on: !!root.modes.bluesun || !!root.envTools.hyprsunset_running
                                 unavailable: !root.modeAvailable("bluesun")
                                 hint: root.modeHint("bluesun")
                                 accentColor: root.accentLift

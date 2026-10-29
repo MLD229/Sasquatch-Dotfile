@@ -385,6 +385,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/env":
             with LOCK:
                 env = MODES.env()
+            # État RÉEL de hyprsunset : il peut tourner sans que la sidebar
+            # l'ait lancé (démarré à la main, ou relancé par le service). Sans
+            # ça, le bouton « Lumière bleue » s'affichait éteint alors que le
+            # filtre était actif.
+            env["hyprsunset_running"] = bool(
+                subprocess.run(["pgrep", "-x", "hyprsunset"],
+                               capture_output=True).returncode == 0)
             env.update({"volume": get_volume(), "brightness": get_brightness()})
             self._json(env)
             return
@@ -502,6 +509,25 @@ def main():
     CLOCK = clockmod.Clock(STATE)
     MODES = modesmod.ModeEngine(STATE)
     save_state()
+
+    # Reprise après redémarrage du backend : si un mode « processus » était
+    # actif (lumière bleue, anti-veille), on le relance. Sans ça, le filtre
+    # restait éteint après un restart du service alors que l'état disait
+    # « actif » — et la sidebar affichait un bouton allumé sans effet.
+    def _reprendre_modes():
+        try:
+            eng = MODES                      # réf. locale (jamais None ici)
+            m = STATE.get("modes") or {}
+            if m.get("bluesun"):
+                res = eng.set("bluesun", True, kelvin=m.get("kelvin"))
+                print("[sidebar] reprise lumière bleue:", res.get("ok"),
+                      flush=True)
+            if m.get("nosleep"):
+                eng.set("nosleep", True)
+        except Exception as exc:          # jamais bloquant au démarrage
+            print("[sidebar] reprise modes échouée:", exc, flush=True)
+
+    threading.Thread(target=_reprendre_modes, daemon=True).start()
     threading.Thread(target=ticker, daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     srv.daemon_threads = True

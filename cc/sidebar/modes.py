@@ -355,9 +355,13 @@ class ModeEngine:
         self._kill_proc("hyprsunset")
         try:
             env = hypr_env()
+            # start_new_session : hyprsunset doit SURVIVRE à un redémarrage du
+            # backend (sinon le filtre s'éteint tout seul et la sidebar, qui lit
+            # le PID, ne le voit plus).
             proc = subprocess.Popen(["hyprsunset", "-t", str(k)],
                                     stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL, env=env)
+                                    stderr=subprocess.DEVNULL, env=env,
+                                    start_new_session=True)
         except OSError as exc:
             return {"ok": False, "error": "lancement hyprsunset: %s" % exc}
         self.state["procs"]["hyprsunset"] = proc.pid
