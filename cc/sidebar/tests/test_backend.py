@@ -189,10 +189,22 @@ def main():
     print("\n[7] MODES — outils absents = état visible, pas de crash")
     env = get("/api/env")
     print("       env : " + json.dumps(env))
+    # Ces contrôles testent le CHEMIN D'ÉCHEC (pas de compositeur, pas de mako).
+    # Dans une session Hyprland vivante, hyprctl répond et mako tourne : les
+    # opérations RÉUSSISSENT, donc l'échec attendu n'a pas lieu. On le dit
+    # (SKIP) au lieu de faire échouer la suite pour une raison d'environnement.
+    hypr_live = bool(env.get("hyprland"))
+    mako_live = bool(env.get("makoctl"))
     mode = post("/api/modes", {"mode": "lite", "on": True})
-    check("lite sans Hyprland → ok:false + message",
-          mode.get("ok") is False and "Hyprland" in (mode.get("error") or ""),
-          json.dumps(mode.get("error")))
+    if hypr_live:
+        print("       SKIP  lite sans Hyprland (session Hyprland active)")
+        check("lite répond sans crash (session réelle)",
+              mode.get("ok") is not None, json.dumps(mode)[:80])
+        post("/api/modes", {"mode": "lite", "on": False})
+    else:
+        check("lite sans Hyprland → ok:false + message",
+              mode.get("ok") is False and "Hyprland" in (mode.get("error") or ""),
+              json.dumps(mode.get("error")))
     check("le mode n'est PAS marqué actif après échec",
           get("/api/state")["modes"].get("lite") is not True)
     sun = post("/api/modes", {"mode": "bluesun", "on": True, "kelvin": 3000})
@@ -200,9 +212,15 @@ def main():
           sun.get("ok") is False and "hyprsunset" in (sun.get("error") or ""),
           json.dumps(sun.get("error")))
     dnd = post("/api/modes", {"mode": "dnd", "on": True})
-    check("DND sans mako → erreur explicite, pas de crash",
-          dnd.get("ok") is False and "mako" in (dnd.get("error") or ""),
-          json.dumps(dnd.get("error")))
+    if mako_live:
+        print("       SKIP  DND sans mako (mako actif dans la session)")
+        check("DND répond sans crash (session réelle)",
+              dnd.get("ok") is not None, json.dumps(dnd)[:80])
+        post("/api/modes", {"mode": "dnd", "on": False})
+    else:
+        check("DND sans mako → erreur explicite, pas de crash",
+              dnd.get("ok") is False and "mako" in (dnd.get("error") or ""),
+              json.dumps(dnd.get("error")))
     nosleep = post("/api/modes", {"mode": "nosleep", "on": True})
     check("anti-veille (inhibiteur système) démarre",
           nosleep.get("ok") is True and nosleep.get("pid"), json.dumps(nosleep))
