@@ -198,7 +198,8 @@ updated: 2026-08-19
 
 **subpage/**
 
-- [[20-Composants/subpage/main-qml]]
+- [[20-Composants/subpage/shell-qml]]
+- [[20-Composants/subpage/state-py]]
 - [[20-Composants/subpage/send-sh]]
 - [[20-Composants/subpage/subpage-sh]]
 - [[20-Composants/subpage]]

@@ -1,7 +1,7 @@
 ---
 tags: [sasquatch-files, fichiers]
 type: fichier
-updated: 2026-08-20
+updated: 2026-10-29
 ---
 
 # subpage/send.sh
@@ -10,16 +10,20 @@ updated: 2026-08-20
 
 **Composant parent** : [[20-Composants/subpage]]
 
-**Lancé par** :
-- [[20-Composants/hypr/keybinds-conf]] — `bind = $mod ALT, S, exec, ~/.config/subpage/send.sh` (Super+Alt+S : envoyer la fenêtre courante DANS la sub page)
+**Déclenché par** :
+- [[20-Composants/hypr/keybinds-conf]] — `bind = $mod ALT, S, exec, ~/.config/subpage/send.sh` (Super+Alt+S)
 
-**Lance / contrôle** :
-- [[20-Composants/subpage/main-qml]] — lance le cadre Quickshell si absent (page fermée, mapping safe)
-- Hyprland : `hyprctl dispatch movetoworkspace special:subpage` (déplace la fenêtre active dans le scratchpad) + `togglespecialworkspace subpage` (ouvre la page si elle était fermée)
+**Utilise** :
+- [[20-Composants/subpage/subpage-sh]] — `status` (page ouverte ?) et `open`
+- Hyprland : `hyprctl dispatch movetoworkspacesilent special:subpage,address:<addr>`
 
-**Garde-fous** : ne bouge ni le cadre (`Sasquatch Subpage`) ni une fenêtre déjà dans `special:subpage`.
+**Rôle** : envoie la **fenêtre active** dans la sub page, sans changer de
+workspace visible (`movetoworkspacesilent`). Si la page est fermée, elle est
+ouverte d'abord et **reste ouverte** (voulu : on veut voir ce qu'on vient
+d'envoyer). Aucune fenêtre active → message clair sur stderr, rien d'autre.
 
-**Ordre critique** (identique à [[20-Composants/subpage/subpage-sh]]) : ne JAMAIS mapper le cadre quand le special est OUVERT (le mapping le FERME). Page ouverte + cadre absent → bouger direct, sans lancer le cadre.
+**Garde-fous** : refuse d'envoyer une fenêtre déjà dans `special:subpage`.
 
-**Installation** :
-- [[10-Fondations/install]] — `chmod +x subpage/*.sh`
+**Aucun vol de focus** : on ne rappelle jamais la fenêtre envoyée (elle part
+dans le scratchpad) et on ne touche pas au focus du workspace courant ; plus
+d'`alterzorder`, plus d'ordre de mapping (la décoration n'est pas une fenêtre).

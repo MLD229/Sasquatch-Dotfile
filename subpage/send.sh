@@ -1,99 +1,59 @@
 #!/usr/bin/env bash
-# Sasquatch Subpage — envoyer la fenêtre courante DANS la sub page (Super+Shift+S)
+# Sasquatch Sub page v2 — envoyer la fenêtre active DANS la sub page
+# (Super+ALT+S)
 #
 # Comportement :
-#   - la fenêtre active quitte son workspace et part dans special:subpage
-#   - si la page est FERMÉE, on l'ouvre automatiquement (sinon la fenêtre
-#     serait invisible, cachée dans le scratchpad)
-#   - le cadre décoratif doit tourner AVANT le movetoworkspace : il se mappe
-#     dans le special workspace via la windowrule rules.conf (cf. subpage.sh)
+#   • la fenêtre active part dans `special:subpage` sans changer de workspace
+#     visible (movetoworkspacesilent) ;
+#   • si la page est fermée, on l'ouvre d'abord — et elle RESTE ouverte (c'est
+#     voulu : on veut voir ce qu'on vient d'envoyer) ;
+#   • si aucune fenêtre active : message clair, rien d'autre ;
+#   • aucun vol de focus : on ne rappelle jamais la fenêtre envoyée (elle part
+#     dans le scratchpad, la reprendre n'aurait aucun sens) et on ne touche pas
+#     au focus du workspace courant.
 #
-# Ordre critique (cf. subpage.sh) : ne JAMAIS lancer le cadre quand le
-# special est OUVERT (le mapping le FERME). Cas couverts ci-dessous :
-#   - page fermée + cadre absent → lancer le cadre (mapping safe), PUIS bouger
-#   - page ouverte + cadre absent → NE PAS lancer le cadre (bug), bouger direct
+# Plus d'`alterzorder`, plus d'ordre de mapping : la décoration est un layer de
+# fond, jamais une fenêtre du workspace (cf. subpage.sh / shell.qml).
+
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
-# Le special workspace est-il OUVERT sur un moniteur ? (source de vérité :
-# `hyprctl monitors -j` → champ specialWorkspace — PAS activeworkspace)
-special_open() {
-    python3 - <<'EOF'
-import json, subprocess, sys
-try:
-    out = subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True, timeout=3)
-    for m in json.loads(out.stdout):
-        sw = m.get("specialWorkspace") or {}
-        if sw.get("name") == "special:subpage":
-            sys.exit(0)
-    sys.exit(1)
-except Exception:
-    sys.exit(1)
-EOF
-}
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    HYPRLAND_INSTANCE_SIGNATURE="$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -1)"
+    export HYPRLAND_INSTANCE_SIGNATURE
+fi
 
-# Fenêtre active : titre + workspace
-active_info() {
-    hyprctl activewindow -j 2>/dev/null || echo "{}"
-}
+# ── Fenêtre active : adresse + workspace ──────────────────────────────────
+active_json="$(hyprctl activewindow -j 2>/dev/null)" || active_json="{}"
 
-# Pousser TOUS les cadres « Sasquatch Subpage » en bas de la pile z.
-# L'ouverture du special re-z-order le cadre (float) AU-DESSUS des apps
-# tiled → il les cache (« on ne voit pas les fenêtres »). À appeler APRÈS
-# chaque toggle/movetoworkspace (jamais avant : il ferme le special).
-push_frame_down() {
-    for frame_addr in $(hyprctl clients -j 2>/dev/null | python3 -c "
+read -r addr ws < <(printf '%s' "$active_json" | "${PYTHON:-python3}" -c '
 import json, sys
 try:
-    for c in json.load(sys.stdin):
-        if c.get('title') == 'Sasquatch Subpage':
-            print(c.get('address', ''))
-except Exception:
-    pass
-"); do
-        [ -n "$frame_addr" ] && hyprctl dispatch alterzorder bottom "$frame_addr" >/dev/null 2>&1
-    done
-}
+    win = json.load(sys.stdin)
+except ValueError:
+    win = {}
+addr = win.get("address") or ""
+ws = (win.get("workspace") or {}).get("name") or ""
+print(addr, ws if ws else "-")
+' 2>/dev/null)
 
-# Le cadre tourne-t-il ? Détection par FENÊTRE (hyprctl clients), PAS par
-# pgrep (un chemin relatif échappe au pattern).
-frame_exists() {
-    hyprctl clients -j 2>/dev/null | grep -q '"title": "Sasquatch Subpage"'
-}
-
-active_title="$(active_info | python3 -c "import json,sys; print(json.load(sys.stdin).get('title',''))" 2>/dev/null)"
-active_ws="$(active_info | python3 -c "import json,sys; print((json.load(sys.stdin).get('workspace') or {}).get('name',''))" 2>/dev/null)"
-
-# Garde-fous : ne pas bouger le cadre lui-même, ni une fenêtre déjà dedans
-if [ "$active_title" = "Sasquatch Subpage" ]; then
-    exit 0
+if [ -z "${addr:-}" ] || [ "$addr" = "0x0" ]; then
+    echo "subpage: aucune fenêtre active — rien à envoyer." >&2
+    exit 1
 fi
-if [ "$active_ws" = "special:subpage" ]; then
+
+if [ "${ws:-}" = "special:subpage" ]; then
+    echo "subpage: la fenêtre active est déjà dans la page." >&2
     exit 0
 fi
 
-if special_open; then
-    # Page ouverte → bouger direct (le cadre est censé tourner ; s'il est
-    # absent, on ne le lance PAS ici : mapping sur special ouvert = fermeture)
-    hyprctl dispatch movetoworkspace special:subpage >/dev/null 2>&1
-    push_frame_down
-else
-    # Page fermée → s'assurer que le cadre tourne (mapping safe), PUIS bouger
-    # la fenêtre (elle se cache dans le scratchpad), PUIS ouvrir la page.
-    # Attendre le mapping RÉEL de la fenêtre (pas un sleep fixe) : un
-    # premier démarrage quickshell peut prendre 5-10 s (cf. subpage.sh).
-    if ! frame_exists; then
-        quickshell -p "$SCRIPT_DIR/main.qml" >/dev/null 2>&1 &
-        for _ in $(seq 1 30); do
-            if frame_exists; then
-                break
-            fi
-            sleep 0.4
-        done
-    fi
-    hyprctl dispatch movetoworkspace special:subpage >/dev/null 2>&1
-    hyprctl dispatch togglespecialworkspace subpage >/dev/null 2>&1
-    push_frame_down
+# ── Page fermée → l'ouvrir d'abord (elle reste ouverte ensuite) ───────────
+if ! "$SCRIPT_DIR/subpage.sh" status >/dev/null 2>&1; then
+    "$SCRIPT_DIR/subpage.sh" open || exit 1
 fi
-exit 0
+
+# Envoi silencieux : la fenêtre quitte son workspace pour le scratchpad sans
+# que l'écran courant ne bascule.
+hyprctl dispatch movetoworkspacesilent "special:subpage,address:$addr" >/dev/null

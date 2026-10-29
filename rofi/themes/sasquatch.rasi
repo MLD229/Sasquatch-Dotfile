@@ -10,30 +10,34 @@
     spacing:          0px;
 }
 
-/* ── Window ─────────────────────────────────────────── */
+/* ── Window ───────────────────────────────────────────
+   Fond quasi opaque : lisible sur un wallpaper clair comme
+   sombre (le flou de Hyprland reste visible sur les bords). */
 window {
-    width:            620px;
+    width:            680px;
     location:         center;
     anchor:           center;
-    background-color: var(bg-window);
+    background-color: rgba(1, 22, 26, 0.97);
     border-radius:    20px;
     border:           1px;
     border-color:     var(border);
-    padding:          12px;
+    padding:          14px;
 }
 
 /* ── Main Box ───────────────────────────────────────── */
 mainbox {
     background-color: transparent;
     spacing:          10px;
-    children:         [ inputbar, listview ];
+    /* PAS de `children:` explicite ici : avec [inputbar, listview] le modi
+       natif « calc » (plugin rofi-calc) perd sa ligne « Result: … » — mesuré.
+       L'ordre par défaut (inputbar, message, listview) l'affiche. */
 }
 
 /* ── Input Bar ──────────────────────────────────────── */
 inputbar {
-    background-color: var(bg-input);
-    border-radius:    14px;
-    padding:          10px 14px;
+    background-color: rgba(1, 37, 44, 0.95);
+    border-radius:    12px;
+    padding:          11px 14px;
     spacing:          8px;
     children:         [ prompt, textbox-prompt-colon, entry ];
 }
@@ -49,7 +53,7 @@ textbox-prompt-colon {
     text-color:       var(accent-dim);
     str:              "›";
     expand:           false;
-    margin:           0px 4px 0px 0px;
+    margin:           0px 6px 0px 0px;
 }
 
 entry {
@@ -61,8 +65,8 @@ entry {
 listview {
     background-color: transparent;
     columns:          1;
-    lines:            8;
-    spacing:          4px;
+    lines:            11;
+    spacing:          3px;
     scrollbar:        false;
     dynamic:          true;
 }
@@ -70,7 +74,7 @@ listview {
 /* ── List Element ───────────────────────────────────── */
 element {
     background-color: transparent;
-    border-radius:    12px;
+    border-radius:    10px;
     padding:          8px 12px;
     spacing:          10px;
     orientation:      horizontal;
@@ -82,9 +86,12 @@ element alternate.normal {
     text-color: var(fg);
 }
 
+/* Sélection : teal plein + texte blanc gras = contraste net
+   sur n'importe quel fond derrière la fenêtre. */
 element selected.normal {
-    background-color: var(bg-selected);
+    background-color: rgba(6, 102, 120, 0.90);
     text-color:       var(fg-selected);
+    font:             "JetBrainsMono Nerd Font Bold 11";
 }
 
 element normal.urgent,
@@ -93,18 +100,20 @@ element alternate.urgent {
 }
 
 element selected.urgent {
-    background-color: var(urgent-bg);
+    background-color: rgba(243, 139, 168, 0.85);
     text-color:       var(fg-selected);
+    font:             "JetBrainsMono Nerd Font Bold 11";
 }
 
 element normal.active,
 element alternate.active {
-    text-color: var(accent);
+    text-color: var(fg);
 }
 
 element selected.active {
-    background-color: var(bg-selected);
+    background-color: rgba(6, 102, 120, 0.90);
     text-color:       var(fg-selected);
+    font:             "JetBrainsMono Nerd Font Bold 11";
 }
 
 /* ── Icon ───────────────────────────────────────────── */
@@ -122,7 +131,7 @@ element-text {
 
 /* ── Message ────────────────────────────────────────── */
 message {
-    background-color: var(bg-input);
+    background-color: rgba(1, 37, 44, 0.95);
     border-radius:    12px;
     padding:          8px 12px;
     margin:           4px 0px 0px 0px;

@@ -1,7 +1,7 @@
 ---
 tags: [sasquatch-files, fichiers]
 type: fichier
-updated: 2026-08-19
+updated: 2026-10-29
 ---
 
 # scripts/calc.sh
@@ -10,10 +10,10 @@ updated: 2026-08-19
 
 **Composant parent** : [[20-Composants/scripts]]
 
-**Appels** : `qalc` (libqalculate), `rofi` (thème [[20-Composants/rofi/themes/sasquatch-rasi]]), `wl-copy`
+**Appels** : `rofi` + plugin `rofi-calc` (`~/.local/lib/rofi/libcalc.so`), qui appelle `qalc` (libqalculate), `wl-copy`
 
 **Référencé par** :
-- [[20-Composants/hypr/keybinds-conf]] — `bind = $mod, C`
-- [[20-Composants/rofi]] — menu rofi live (modi calc)
+- [[20-Composants/hypr/keybinds-conf]] — `bind = $mod, U` (calculatrice, déplacée de Super+C)
+- [[20-Composants/rofi]] — modi `calc` natif du plugin (résultat pendant la frappe)
 - [[10-Fondations/requirements]] — libqalculate
 - [[10-Fondations/install]] — installe libqalculate

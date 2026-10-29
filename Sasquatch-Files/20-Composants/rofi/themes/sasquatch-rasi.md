@@ -18,5 +18,5 @@ updated: 2026-08-19
 - [[20-Composants/rofi/scripts/powermenu-sh]] — menu alimentation
 - [[20-Composants/scripts/keybinds-reminder-sh]] — aide-mémoire (Super+,)
 - [[20-Composants/scripts/clipboard-sh]] — presse-papier (Super+V)
-- [[20-Composants/scripts/calc-sh]] — calculatrice (Super+C)
+- [[20-Composants/scripts/calc-sh]] — calculatrice (Super+U)
 - [[20-Composants/waybar/config]] — presse-papier au clic (module cliphist)

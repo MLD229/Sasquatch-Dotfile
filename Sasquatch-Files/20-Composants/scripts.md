@@ -14,7 +14,7 @@ updated: 2026-08-19
 - [[20-Composants/scripts/bluetooth-manager-sh]] — toggle blueman-manager (Super+B, wrapper anti-crash scan BLE)
 - [[20-Composants/scripts/bluetooth-sh]] — Bluetooth CLI (bluetoothctl, non bindé)
 - [[20-Composants/scripts/brightness-sh]] — luminosité (brightnessctl) + OSD
-- [[20-Composants/scripts/calc-sh]] — calculatrice rofi live (qalc, Super+C)
+- [[20-Composants/scripts/calc-sh]] — calculatrice rofi live (plugin rofi-calc, Super+U)
 - [[20-Composants/scripts/clipboard-sh]] — presse-papier (cliphist + rofi, Super+V)
 - [[20-Composants/scripts/fix-suspend-sh]] — veille NVIDIA (GRUB modeset, sudo manuel)
 - [[20-Composants/scripts/keybinds-reminder-sh]] — aide-mémoire des raccourcis (rofi, Super+,)
@@ -32,5 +32,5 @@ updated: 2026-08-19
 - [[10-Fondations/theme-dynamique]] — theme-apply.py/.sh, moteur de la palette
 
 **Référencé par** :
-- [[20-Composants/hypr/keybinds-conf]] — binds des scripts (Super+C/V/J, Print, XF86*…)
+- [[20-Composants/hypr/keybinds-conf]] — binds des scripts (Super+U/V/J, Print, XF86*…)
 - [[20-Composants/rofi]] — thèmes sasquatch.rasi / osd.rasi utilisés par les menus
