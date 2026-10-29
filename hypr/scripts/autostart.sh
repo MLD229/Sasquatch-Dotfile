@@ -15,6 +15,16 @@
 # échouent silencieusement depuis le backend. On propage l'env de la session
 # au user manager systemd, puis on redémarre le service pour qu'il en hérite.
 systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE DISPLAY XDG_CURRENT_DESKTOP 2>/dev/null || true
+
+# ── Daemon du stylet (opentabletdriver → otd-daemon) ────────────────────────
+# Le paquet lie son service dans graphical-session.target.wants, MAIS ce target
+# n'est jamais atteint ici (Hyprland n'est pas lancé via uwsm, et le target
+# refuse tout démarrage manuel : « may be requested by dependency only »).
+# Résultat : `enable` ne suffisait pas, le daemon ne revenait pas au login et
+# il fallait lancer `otd-daemon` à la main pour avoir le stylet.
+# On le démarre donc explicitement ici ; l'env Wayland est déjà importé juste
+# au-dessus, ce dont le service a besoin (ConditionEnvironment=WAYLAND_DISPLAY).
+systemctl --user start opentabletdriver 2>/dev/null || true
 systemctl --user restart sasquatch-cc 2>/dev/null || true
 
 # ── Wallpaper ────────────────────────────────
