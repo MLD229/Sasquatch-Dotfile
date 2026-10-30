@@ -25,7 +25,7 @@ ColumnLayout {
             ctx.reset();
             var cx = width/2, cy = height/2, r = width/2 - 8;
             ctx.lineWidth = 8;
-            ctx.strokeStyle = Qt.rgba(1,1,1,0.1);
+            ctx.strokeStyle = Qt.rgba(1,1,1,0.075);
             ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
             ctx.strokeStyle = gauge.strokeColor;
             ctx.beginPath();

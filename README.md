@@ -149,7 +149,8 @@ Source de vérité : `hypr/keybinds.conf` (éditable via Settings → RACCOURCIS
 | **Super + ,** | Aide-mémoire des raccourcis (toggle) |
 | **Super + T / W / E / O** | Terminal / Brave / Dolphin / VS Code |
 | **Super + G / I / N** | Control Center / Settings / Sidebar Aiko |
-| **Super + C / V** | Calculatrice rofi (qalc) / Presse-papier (cliphist) |
+| **Super + U / V** | Calculatrice rofi (qalc) / Presse-papier (cliphist) |
+| **Super + C** | Sidebar Quickshell (slide bar) |
 | **Super + B** | Bluetooth (blueman, wrapper anti-crash) |
 | **Super + L / Escape** | Verrouiller / Powermenu |
 | **Super + Q / Shift+M** | Fermer la fenêtre / Quitter la session |

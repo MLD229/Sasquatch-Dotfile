@@ -67,11 +67,14 @@ PanelWindow {
     // AUCUN hex ici : tout dérive de /api/palette à l'exécution.
     //   shade(c, k) : k>1 éclaircit (Qt.lighter), k<1 fonce (Qt.darker)
     //   glass(c, k, a) : même teinte avec l'alpha du niveau de verre
-    // Échelle d'opacité (brief A) :
-    //   panneau 0.62-0.72 (le plus clair + le plus opaque, c'est le fond)
-    //   cartes  0.46      (plus transparentes : on voit le fond à travers)
-    //   héro    0.34      (bloc TEMPS, la pièce qui respire)
-    //   boutons 0.78      (verre FUMÉ plus foncé)
+    // Échelle d'opacité (brief A, resserrée 2026-10-30 pour plus de verre) :
+    //   panneau 0.27-0.34 (le plus opaque, c'est le fond)
+    //   cartes  0.18      (plus transparentes : on voit le fond à travers)
+    //   héro    0.11      (bloc TEMPS, la pièce qui respire)
+    //   boutons 0.46      (verre FUMÉ plus foncé)
+    // Baissés de ~25 % relatifs (0.36/0.46/0.24/0.15/0.62/0.50 avant) : les
+    // bordures (glassBorder) et les reflets (glassHighlight) restent inchangés,
+    // c'est ce qui garde les formes lisibles quand les surfaces s'effacent.
     function shade(c, k) {
         return k >= 1 ? Qt.lighter(c, k) : Qt.darker(c, 1 / k);
     }
@@ -95,12 +98,12 @@ PanelWindow {
         return Qt.rgba(m.r, m.g, m.b, a);
     }
 
-    readonly property color glassBg: root.glassTint(root.cBgSolid, 0.10, 0.36)
-    readonly property color glassBgDeep: root.glassTint(Qt.darker(root.cBgSolid, 1.25), 0.05, 0.46)
-    readonly property color glassCard: root.glassTint(root.cCard, 0.17, 0.24)
-    readonly property color glassHero: root.glassTint(root.cCard, 0.24, 0.15)
-    readonly property color glassBtn: root.glassTint(Qt.darker(root.cCard, 1.75), 0.07, 0.62)
-    readonly property color glassInset: root.glassTint(Qt.darker(root.cBg, 1.4), 0.04, 0.50)
+    readonly property color glassBg: root.glassTint(root.cBgSolid, 0.10, 0.27)
+    readonly property color glassBgDeep: root.glassTint(Qt.darker(root.cBgSolid, 1.25), 0.05, 0.34)
+    readonly property color glassCard: root.glassTint(root.cCard, 0.17, 0.18)
+    readonly property color glassHero: root.glassTint(root.cCard, 0.24, 0.11)
+    readonly property color glassBtn: root.glassTint(Qt.darker(root.cCard, 1.75), 0.07, 0.46)
+    readonly property color glassInset: root.glassTint(Qt.darker(root.cBg, 1.4), 0.04, 0.37)
     // Accent utilisable en APLAT : mélangé au texte pour rester visible même
     // quand la palette renvoie un accent très sombre (wallpaper N&B → #0c0c0c).
     readonly property color accentLift: root.mixN(root.cAccent, root.cText, 0.30)

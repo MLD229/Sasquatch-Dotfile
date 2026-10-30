@@ -3,7 +3,7 @@
 Panneau latéral droit (overlay) : modes système, to-do persistante,
 chrono / timer / alarme, plus volume / luminosité / player / presse-papier.
 
-    ~/.config/cc/sidebar/sidebar.sh        # toggle (Super+U)
+    ~/.config/cc/sidebar/sidebar.sh        # toggle (Super+C)
 
 ## Carte des fichiers
 
@@ -16,7 +16,7 @@ chrono / timer / alarme, plus volume / luminosité / player / presse-papier.
 | `server.py` | backend HTTP **8778** : todo, temps, modes, système |
 | `clock.py` | moteur chrono / timer / alarme (horloge absolue) |
 | `modes.py` | modes avec sauvegarde / restauration de l'état d'avant |
-| `sidebar.sh` | toggle (Super+U) |
+| `sidebar.sh` | toggle (Super+C) |
 | `sasquatch-sidebar.service` | service systemd **user** du backend |
 | `install.sh` | symlink + service + contrôles |
 | `tests/` | qmllint, tests temps déterministes, tests HTTP, chargement QML |
@@ -96,14 +96,14 @@ Survit à la fermeture du panneau **et** au redémarrage du serveur/session.
 
     bash ~/Sasquatch-Dotfile/sidebar/install.sh
 
-Puis, pour l'ouvrir : `Super+U` (ou `~/.config/cc/sidebar/sidebar.sh`).
+Puis, pour l'ouvrir : `Super+C` (ou `~/.config/cc/sidebar/sidebar.sh`).
 
 Bind ajouté dans `~/.config/hypr/keybinds.conf` :
 
     bind = $mod, U, exec, ~/.config/cc/sidebar/sidebar.sh
 
 `Super+S` et `Super+Alt+S` étaient déjà pris (sub page / sub page send) →
-`Super+U` a été choisi (libre, vérifié).
+`Super+C` est le bind actuel (Super+U est passé à la calculatrice, 2026-10-29).
 
 ## Prérequis optionnel
 
@@ -113,10 +113,10 @@ Sans lui, la sidebar fonctionne : le mode est simplement marqué indisponible.
 
 ## Fermeture / focus
 
-* `Échap` ferme ; la croix aussi ; `Super+U` referme.
+* `Échap` ferme ; la croix aussi ; `Super+C` referme.
 * Fermeture sur clic hors panneau via `HyprlandFocusGrab`
   (protocole `hyprland_focus_grab_v1`). Si le compositeur ne l'implémente pas,
-  Quickshell émet un `WARN` et la fermeture reste possible par Échap/Super+U.
+  Quickshell émet un `WARN` et la fermeture reste possible par Échap/Super+C.
 * Le panneau est `focusable` pour la saisie (todo, HH:MM) ; à la fermeture le
   process Quickshell se termine (`Qt.quit` après l'animation), donc le focus
   retourne à la fenêtre précédente côté Hyprland — rien à rendre à la main.
@@ -127,7 +127,7 @@ Sans lui, la sidebar fonctionne : le mode est simplement marqué indisponible.
 
 Puis à la main :
 
-    ~/.config/cc/sidebar/sidebar.sh          # Super+U : le panneau glisse
+    ~/.config/cc/sidebar/sidebar.sh          # Super+C : le panneau glisse
     # onglet Timer → 5 min → fermer le panneau → attendre : notification + son
     # mode Allégé → vérifier : hyprctl getoption animations:enabled → 0
     #                puis désactiver → la valeur d'origine revient

@@ -7,8 +7,8 @@ Rectangle {
 
     property string glyph: ""
     property color glyphColor: "#cdd6f4"                 // cText
-    property color baseColor: Qt.rgba(1,1,1,0.06)
-    property color hoverColor: Qt.rgba(1,1,1,0.12)
+    property color baseColor: Qt.rgba(1,1,1,0.045)
+    property color hoverColor: Qt.rgba(1,1,1,0.09)
     property int fontSize: 0                             // 0 = défaut système
     signal clicked()
 

@@ -7,9 +7,9 @@ import QtQuick.Layouts
 Rectangle {
     id: tile
     radius: 16
-    color: Qt.rgba(1,1,1,0.05)
+    color: Qt.rgba(1,1,1,0.04)
     border.width: 1
-    border.color: Qt.rgba(1,1,1,0.06)
+    border.color: Qt.rgba(1,1,1,0.045)
 
     default property alias content: contentItem.children
     property string title: ""

@@ -58,7 +58,7 @@ python au prochain `Super+N`, négligeable devant le panneau.
 | Deux `server.py` en même temps ? | impossible : `flock` exclusif sur `$XDG_RUNTIME_DIR/aiko/backend.lock`, le second sort avec un message clair (code 0) |
 | Deux pressions de Super+N en même temps ? | sérialisées par un `flock` sur `$XDG_RUNTIME_DIR/aiko/toggle.lock` |
 | Deux panneaux aiko ? | impossible : le toggle ferme l'existant ; un résidu est tué avant l'ouverture |
-| aiko + `cc/sidebar` (Super+U) ensemble ? | vérifié en session réelle : les deux panneaux ouverts en même temps (aiko à **80,9 tok/s** à côté), puis fermeture d'aiko → le panneau de droite reste ouvert. Les motifs `pgrep` ne se croisent pas (`aiko/shell.qml` ≠ `sidebar/shell.qml`) |
+| aiko + `cc/sidebar` (Super+C) ensemble ? | vérifié en session réelle : les deux panneaux ouverts en même temps (aiko à **80,9 tok/s** à côté), puis fermeture d'aiko → le panneau de droite reste ouvert. Les motifs `pgrep` ne se croisent pas (`aiko/shell.qml` ≠ `sidebar/shell.qml`) |
 | Fermeture quand c'est le **service** qui tient le backend ? | `aiko.sh` fait `systemctl --user stop aiko` — **jamais** `pkill -KILL` : un SIGKILL est vu comme un échec par systemd et `Restart=on-failure` relance le backend (vécu : `status=9/KILL` → « Scheduled restart job », NRestarts=1). Mesuré après correctif : `Stopped`, `ExecMainStatus=0`, `NRestarts=0`, journal propre |
 | 8791 déjà pris par autre chose ? | `aiko.sh` refuse d'ouvrir + notification expliquant quoi regarder ; `server.py` sort en code 2 (**pas de traceback**) |
 | 8792 déjà pris ? | le chat renvoie une erreur qui **nomme le port et son occupant** (`ss -ltnp`), le backend reste debout |
@@ -201,7 +201,7 @@ Ports : **8791** = backend aiko, **8792** = llama-server (loopback seulement).
   digest statique de quelques lignes (bouton `contexte`).
 - Aucun grab clavier : le panneau demande le focus (OnDemand) mais ne le
   capture pas — sur Hyprland 0.56.2 un grab actif bloquait hyprlock. Ça vaut
-  aussi pour la coexistence avec `cc/sidebar` (Super+U, droite) : deux
+  aussi pour la coexistence avec `cc/sidebar` (Super+C, droite) : deux
   `PanelWindow` séparés, aucun ne confisque le clavier à l'autre.
 - `qmllint` 1.0 (Arch) **sort en 255 sans aucun message** — cause identifiée :
   la ligne `pragma ComponentBehavior: Bound`. Preuve minimale : un fichier

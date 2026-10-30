@@ -208,7 +208,7 @@ FloatingWindow {
             Layout.preferredWidth: Math.min(1000, root.width - 40 - root.sidebarW - 14)
             Layout.preferredHeight: root.ccH
             radius: 22
-            color: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.42)
+            color: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.30)
             border.width: 1
             border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.4)
 
@@ -350,7 +350,7 @@ FloatingWindow {
                     Rectangle {
                         width: 90; height: 90
                         radius: 12
-                        color: Qt.rgba(1,1,1,0.08)
+                        color: Qt.rgba(1,1,1,0.06)
                         clip: true
                         Image {
                             anchors.fill: parent
@@ -415,7 +415,7 @@ FloatingWindow {
                             Layout.fillWidth: true
                             height: 8
                             radius: 4
-                            color: Qt.rgba(1,1,1,0.1)
+                            color: Qt.rgba(1,1,1,0.075)
                             Rectangle {
                                 radius: 4
                                 color: root.cAccent
@@ -458,8 +458,8 @@ FloatingWindow {
                             IconButton {
                                 width: 36; height: 36
                                 glyph: (root.music && root.music.playing) ? "⏸" : "▶"
-                                baseColor: Qt.rgba(1,1,1,0.09)
-                                hoverColor: Qt.rgba(1,1,1,0.16)
+                                baseColor: Qt.rgba(1,1,1,0.07)
+                                hoverColor: Qt.rgba(1,1,1,0.12)
                                 glyphColor: root.cText
                                 onClicked: root.api("POST", "/api/music/toggle", null, function() {})
                             }
@@ -488,7 +488,7 @@ FloatingWindow {
                                 Layout.preferredWidth: 90
                                 height: 8
                                 radius: 4
-                                color: Qt.rgba(1,1,1,0.1)
+                                color: Qt.rgba(1,1,1,0.075)
                                 Rectangle {
                                     radius: 4
                                     color: root.cAccent2
@@ -558,7 +558,7 @@ FloatingWindow {
                                 Layout.fillWidth: true
                                 height: 30
                                 radius: 8
-                                color: shotMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
+                                color: shotMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
                                 Behavior on color { ColorAnimation { duration: 120 } }
                                 Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 10; color: root.cText }
                                 MouseArea {
@@ -580,7 +580,7 @@ FloatingWindow {
                         Layout.fillWidth: true
                         height: 28
                         radius: 8
-                        color: findMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
+                        color: findMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Text {
                             anchors.centerIn: parent
@@ -634,13 +634,13 @@ FloatingWindow {
                             placeholderText: "mot-clé…"
                             color: root.cText
                             font.pixelSize: 11
-                            background: Rectangle { radius: 8; color: Qt.rgba(1,1,1,0.08) }
+                            background: Rectangle { radius: 8; color: Qt.rgba(1,1,1,0.06) }
                             // Enter triggers the search (mirrors the 🔍 button)
                             Keys.onReturnPressed: root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function() {})
                         }
                         Rectangle {
                             width: 30; height: 26; radius: 8
-                            color: imgMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
+                            color: imgMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
                             Behavior on color { ColorAnimation { duration: 120 } }
                             Text { anchors.centerIn: parent; text: "🔍"; font.pixelSize: 12; color: root.cText }
                             MouseArea {
@@ -670,7 +670,7 @@ FloatingWindow {
                         Layout.fillWidth: true
                         height: 32
                         radius: 8
-                        color: transMa.containsMouse ? Qt.rgba(1,1,1,0.14) : Qt.rgba(1,1,1,0.07)
+                        color: transMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Text {
                             anchors.centerIn: parent
@@ -741,7 +741,7 @@ FloatingWindow {
                             color: root.cText
                             selectByMouse: true
                             background: Rectangle {
-                                color: Qt.rgba(1,1,1,0.05)
+                                color: Qt.rgba(1,1,1,0.04)
                                 radius: 8
                             }
                             padding: 8
@@ -766,7 +766,7 @@ FloatingWindow {
             Layout.preferredWidth: root.sidebarW
             Layout.preferredHeight: root.ccH
             radius: 22
-            color: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.42)
+            color: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.30)
             border.width: 1
             border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.4)
 
@@ -789,7 +789,7 @@ FloatingWindow {
                     Layout.fillHeight: true
                     Layout.minimumHeight: 60
                     radius: 12
-                    color: Qt.rgba(1,1,1,0.10)
+                    color: Qt.rgba(1,1,1,0.075)
                     Rectangle {
                         anchors.bottom: parent.bottom
                         anchors.left: parent.left
@@ -832,7 +832,7 @@ FloatingWindow {
                     Layout.fillHeight: true
                     Layout.minimumHeight: 60
                     radius: 12
-                    color: Qt.rgba(1,1,1,0.10)
+                    color: Qt.rgba(1,1,1,0.075)
                     Rectangle {
                         anchors.bottom: parent.bottom
                         anchors.left: parent.left
