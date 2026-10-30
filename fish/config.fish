@@ -15,6 +15,7 @@ set -gx MPD_HOST "$HOME/.local/share/mpd/socket"
 
 # ── Path ─────────────────────────────────────
 fish_add_path ~/.local/bin
+fish_add_path ~/.npm-global/bin
 fish_add_path ~/.cargo/bin
 
 # ── Aliases ──────────────────────────────────
@@ -39,3 +40,9 @@ alias yayr 'yay -Rns'
 if status is-interactive
     fastfetch
 end
+
+# Added by LM Studio CLI (lms)
+# $HOME (et non /home/momo) : le dotfile doit rester portable d'un compte à l'autre.
+set -gx PATH $PATH $HOME/.lmstudio/bin
+# End of LM Studio CLI section
+

@@ -20,3 +20,10 @@ Sasquatch-Files/.obsidian/
 
 # debug : outils de diagnostic locaux, jamais versionnés
 scripts/watch-theme.sh
+# éditeurs : fichiers d'échange Kate (kate-swp) laissés à la racine du dépôt
+*.kate-swp
+# Obsidian ouvert directement sur la racine du dépôt (config locale)
+/.obsidian/
+
+# subpage : captures et sorties des preuves (tests/verify.sh)
+subpage/tests/out/
