@@ -1,9 +1,9 @@
-// shell.qml — Sasquatch Sub page v2.1 : LA PAGE elle-même (surface layer-shell).
+// shell.qml — Sasquatch Sub page v2.3 : LA PAGE (deux surfaces layer-shell).
 //
 // Lancement : ~/.config/subpage/subpage.sh   (Super+S, toggle)
 //
 // ══════════════════════════════════════════════════════════════════════════
-// CE QUE CETTE SURFACE EST — ET CE QU'ELLE N'EST PLUS
+// CE QUE CES SURFACES SONT — ET CE QU'ELLES NE SONT PLUS
 // ══════════════════════════════════════════════════════════════════════════
 // La sub page est un special workspace Hyprland (`special:subpage`). Avant,
 // le cadre était une FloatingWindow plein écran mappée DANS ce workspace : il
@@ -12,82 +12,65 @@
 // ouvert le FERMAIT), et Hyprland floutait toute sa surface transparente →
 // écran entier flou, apps illisibles, coins en carrés flous.
 //
-// v2 : plus de fenêtre du tout. Une surface layer-shell qui ne vit PAS dans un
-// workspace :
-//   • elle n'est jamais mappée dans le workspace → aucune windowrule, aucun
-//     piège d'ordre : on peut lancer la décoration avant OU après le toggle ;
-//   • aucun blur demandé (aucune layerrule sur ce namespace) → contenu NET ;
+// v2 : plus de fenêtre du tout. Des surfaces layer-shell qui ne vivent PAS
+// dans un workspace :
+//   • elles ne sont jamais mappées dans le workspace → aucune windowrule,
+//     aucun piège d'ordre : on peut lancer la décoration avant OU après ;
+//   • aucun blur demandé (aucune layerrule sur ces namespaces) → contenu NET ;
 //   • keyboardFocus None / focusable false → aucun grab clavier, aucun vol de
-//     focus (la leçon hyprlock : un grab clavier casse le mot de passe) ;
-//   • niveau `top` (et non `background`, cf. §1 : mesuré, background est
-//     invisible sous l'overlay du special workspace).
+//     focus (la leçon hyprlock : un grab clavier casse le mot de passe).
 //
-// v2.2 — RIEN NE S'ASSOMBRIT, RIEN N'EST CADRÉ.
-// La page ne peint plus de fond du tout : ni voile, ni coins (les « carrés
-// bleus » ont été retirés). Il ne reste que l'étiquette サブページ. La surface
-// existe donc uniquement pour (a) matérialiser la page et (b) capter les clics
-// d'une page vide, pour qu'un clic au centre ne tombe pas sur le bureau caché.
+// v2.2 — RIEN NE S'ASSOMBRIT, RIEN N'EST CADRÉ (ni voile, ni coins).
 //
-// ══════════════════════════════════════════════════════════════════════════
-// DESSIN (v2.2) : une étiquette seule, dans la gouttière du haut, sans blur
-// compositeur (aucune layerrule : le flou d'une surface layer viendrait de là,
-// cf. le bug « écran entier flou » — on ne demande donc rien).
+// v2.3 — DEUX SURFACES (demande momo : « un petit ton chaud de fond, pas
+// par-dessus les pages, juste assez pour voir que la page est ouverte ») :
+//   1. `subpage-bg`  (WlrLayer.Background) : la TEINTE CHAUDE, derrière tout.
+//      Un layer `background` est dessiné SOUS le plan des fenêtres : la teinte
+//      colore le bureau et les zones vides de la page, JAMAIS les fenêtres de
+//      la page (elles restent nettes et devant). Mesuré : une teinte α=0.35
+//      sur ce layer ne modifie pas un pixel opaque d'une fenêtre.
+//   2. `subpage`     (WlrLayer.Top) : l'étiquette サブページ + la région
+//      d'entrée. C'est aussi le repère « la page existe » de subpage.sh
+//      (`hyprctl layers` → namespace: subpage).
+// Le ton chaud est DÉRIVÉ DES TOKENS (accent + warn), jamais un hex en dur :
+// il suit donc le wallpaper comme le reste du thème.
 //
-// SOURIS : la région d'entrée couvre TOUTE la surface quand la page est
-// ouverte (mask = le voile). Sans ça un clic au centre tombait sur le bureau
-// caché (Discord…) alors que l'utilisateur croyait cliquer dans la page. Les
+// Pourquoi le layer `background` fonctionne ici alors qu'il « était
+// invisible » en v2.1 : en v2.1 la surface background portait le CADRE et
+// était donc jugée sur sa visibilité ; une teinte n'a pas besoin d'être
+// au-dessus des fenêtres — au contraire, c'est exactement ce qu'on veut.
+// (Vérifié le 2026-10-30 : namespace subpage-bg mappé 0 42 1920 1038, teinte
+// visible sur le bureau, fenêtres intactes.)
+//
+// SOURIS : la région d'entrée du layer `top` couvre TOUTE la surface quand la
+// page est ouverte. Sans ça un clic au centre tombait sur le bureau caché
+// (Discord…) alors que l'utilisateur croyait cliquer dans la page. Les
 // fenêtres envoyées dans le special sont dessinées au-dessus de ce layer :
-// elles restent cliquables normalement (Hyprland rend l'overlay du special
-// après les layers `top`).
+// elles restent cliquables normalement. Le layer `background` ne prend aucun
+// input utile (focusable: false) : il ne peut pas voler un clic.
 //
-// Visibilité : elle suit l'état RÉEL de Hyprland, en continu, via state.py
-// (`hyprctl monitors -j` → specialWorkspace.name). Fermer la page par
-// n'importe quel biais (autre keybind, hyprctl à la main) fait disparaître la
-// décoration sans passer par les scripts.
+// Visibilité : les deux surfaces suivent l'état RÉEL de Hyprland, en continu,
+// via state.py (`hyprctl monitors -j` → specialWorkspace.name). Fermer la page
+// par n'importe quel biais fait disparaître teinte + étiquette.
 //
-// Échap ne peut PAS fermer la page : la surface ne prend aucun focus clavier.
+// Échap ne peut PAS fermer la page : aucune surface ne prend de focus clavier.
 // Fermeture = Super+S (subpage.sh).
 
 // PAS de `pragma ComponentBehavior: Bound` ici : inutile (aucun delegate) et
 // il fait planter le qmllint de Qt 6.10 (rc=255, aucun message) alors que le
 // même fichier sans le pragma se vérifie normalement.
+//
+// ShellRoot : conteneur sans surface visible qui autorise PLUSIEURS fenêtres
+// dans un seul fichier (sinon la racine QML ne peut porter qu'un objet).
 import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 
-PanelWindow {
-    id: root
+ShellRoot {
+    id: shell
 
-    // ── 1. Contrat de surface ────────────────────────────────────────────
-    // ⚠️ TOP, pas BACKGROUND — mesuré, pas supposé : un layer background/bottom
-    // est dessiné SOUS le plan des fenêtres, or Hyprland dessine la sub page
-    // comme un OVERLAY au-dessus du workspace courant (specialWorkspace). Une
-    // surface background devient donc invisible dès que la page est ouverte
-    // (capture 10-open-clean : aucune décoration, écran net, mais rien à
-    // l'écran). Un layer `top` est au-dessus du plan des fenêtres → visible,
-    // tout en restant SOUS les notifications (overlay) et sous la waybar.
-    WlrLayershell.layer: WlrLayer.Top
-    WlrLayershell.namespace: "subpage"
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusiveZone: 0          // overlay : ne réserve aucune place
-    focusable: false          // ne demande jamais le focus
-    aboveWindows: false       // ne passe PAS au-dessus d'un plein écran (un jeu la masque)
-    color: "transparent"      // le fond est dessiné par le voile (§5)
-
-    anchors {
-        top: true
-        bottom: true
-        left: true
-        right: true
-    }
-    // Hyprland place un layer `top` SOUS la zone réservée par la waybar
-    // (reserved[1] = 42) : aucune marge à ajouter ici, sinon on double l'écart.
-    margins.top: 0
-
-    // ── 2. État : la sub page est-elle ouverte ? ─────────────────────────
-    // Source de vérité unique : state.py (hyprctl monitors -j). Aucun état
-    // stocké sur disque, aucun calcul depuis activeworkspace.
+    // ── État de la page : source de vérité unique (state.py) ─────────────
     property bool specialOpen: false
     property string specialMonitor: ""
     property bool everOpened: false
@@ -96,15 +79,39 @@ PanelWindow {
                                           ? Quickshell.env("SUBPAGE_DIR") + "/state.py"
                                           : Quickshell.shellPath("state.py")
 
-    visible: root.specialOpen
+    // ── Palette : ~/.config/cc/qml/Palette.qml (généré par theme-apply.py) ─
+    // Repli = palette par défaut du dotfile (olive), COMMENTÉ ici pour rester
+    // lisible. Aucune couleur « à la main » : tout ce qui est peint descend de
+    // ces deux propriétés.
+    property color cAccent: "#90906f"     // repli : accent olive de Palette.qml
+    property color cTextDim: "#7c7c7a"    // repli : textDim de Palette.qml
+    property color cWarn: "#f9e2af"       // repli : warn de Palette.qml
 
-    // La surface suit le moniteur où le special est réellement ouvert.
-    screen: {
-        const mons = Quickshell.screens;
-        for (let i = 0; i < mons.length; i++)
-            if (root.specialMonitor !== "" && mons[i].name === root.specialMonitor)
-                return mons[i];
-        return mons.length > 0 ? mons[0] : null;
+    function paletteValue(source, key) {
+        const re = new RegExp("property\\s+color\\s+" + key + "\\s*:\\s*\"(#[0-9a-fA-F]+)\"");
+        const found = re.exec(source || "");
+        return found ? found[1] : "";
+    }
+
+    function applyPalette(source) {
+        const accent = shell.paletteValue(source, "accent");
+        const textDim = shell.paletteValue(source, "textDim");
+        const warn = shell.paletteValue(source, "warn");
+        if (accent !== "")
+            shell.cAccent = accent;
+        if (textDim !== "")
+            shell.cTextDim = textDim;
+        if (warn !== "")
+            shell.cWarn = warn;
+    }
+
+    FileView {
+        id: paletteFile
+        path: Quickshell.env("HOME") + "/.config/cc/qml/Palette.qml"
+        watchChanges: true
+        printErrors: false
+        onLoaded: shell.applyPalette(text())
+        onFileChanged: reload()
     }
 
     function applyStateLine(line) {
@@ -112,23 +119,23 @@ PanelWindow {
         if (text === "")
             return;
         if (text.indexOf("open") === 0) {
-            root.specialMonitor = text.substring(4).trim();
-            root.specialOpen = true;
-            root.everOpened = true;
+            shell.specialMonitor = text.substring(4).trim();
+            shell.specialOpen = true;
+            shell.everOpened = true;
         } else if (text.indexOf("closed") === 0) {
-            root.specialMonitor = "";
-            root.specialOpen = false;
+            shell.specialMonitor = "";
+            shell.specialOpen = false;
         }
     }
 
-    // Suivi continu (150 ms) : ~1 hyprctl, négligeable, et la décoration se
-    // synchronise même si la page est fermée autrement.
+    // Suivi continu (150 ms) : ~1 hyprctl, négligeable, et les surfaces se
+    // synchronisent même si la page est fermée autrement.
     Process {
         id: stateWatcher
         running: true
-        command: ["python3", root.stateScript, "--watch"]
+        command: ["python3", shell.stateScript, "--watch"]
         stdout: SplitParser {
-            onRead: line => root.applyStateLine(line)
+            onRead: line => shell.applyStateLine(line)
         }
         onExited: {
             console.warn("[subpage] state.py --watch s'est arrêté → relance");
@@ -144,86 +151,128 @@ PanelWindow {
 
     // Nettoyage : page fermée depuis > 5 s (fermeture par un autre biais) →
     // on s'arrête au lieu de sonder Hyprland pour rien. subpage.sh tue aussi
-    // la décoration explicitement ; ce timer couvre les autres chemins.
+    // les surfaces explicitement ; ce timer couvre les autres chemins.
     Timer {
         interval: 5000
         repeat: false
-        running: root.everOpened && !root.specialOpen
+        running: shell.everOpened && !shell.specialOpen
         onTriggered: Qt.quit()
     }
 
-    // ── 3. Palette : ~/.config/cc/qml/Palette.qml (theme-apply.py) ───────
-    // Valeurs de secours = palette par défaut du dotfile.
-    property color cAccent: "#066678"
-    property color cTextDim: "#6a8388"
-
-    function paletteValue(source, key) {
-        const re = new RegExp("property\\s+color\\s+" + key + "\\s*:\\s*\"(#[0-9a-fA-F]+)\"");
-        const found = re.exec(source || "");
-        return found ? found[1] : "";
+    // Écran : celui où le special est réellement ouvert.
+    function monitorFor(name) {
+        const mons = Quickshell.screens;
+        for (let i = 0; i < mons.length; i++)
+            if (name !== "" && mons[i].name === name)
+                return mons[i];
+        return mons.length > 0 ? mons[0] : null;
     }
 
-    function applyPalette(source) {
-        const accent = root.paletteValue(source, "accent");
-        const textDim = root.paletteValue(source, "textDim");
-        if (accent !== "")
-            root.cAccent = accent;
-        if (textDim !== "")
-            root.cTextDim = textDim;
+    // ══════════════════════════════════════════════════════════════════════
+    // 1. TEINTE CHAUDE — layer BACKGROUND (derrière les fenêtres de la page)
+    // ══════════════════════════════════════════════════════════════════════
+    // Teinte = mélange accent (60 %) + warn (40 %) : « warn » est le token
+    // chaud de la palette (crème). Ainsi la teinte reste chaude ET suit le
+    // thème (une palette rouge la réchauffe, une palette bleue la tempère).
+    // α = 0.13 : mesuré « petit ton », perceptible sans voiler (0.35 = trop).
+    readonly property color cWarmBase: Qt.rgba(
+        shell.cAccent.r * 0.6 + shell.cWarn.r * 0.4,
+        shell.cAccent.g * 0.6 + shell.cWarn.g * 0.4,
+        shell.cAccent.b * 0.6 + shell.cWarn.b * 0.4,
+        1.0)
+    readonly property color cWarmTint: Qt.rgba(cWarmBase.r, cWarmBase.g, cWarmBase.b, 0.13)
+
+    PanelWindow {
+        id: backdrop
+
+        WlrLayershell.layer: WlrLayer.Background
+        WlrLayershell.namespace: "subpage-bg"
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        exclusiveZone: 0            // aucun espace réservé
+        focusable: false            // ne prend jamais le focus
+        aboveWindows: false
+        // La teinte est peinte par la couleur de la surface elle-même : pas
+        // d'enfant Rectangle (rien d'autre à dessiner, aucun blur demandé).
+        color: shell.cWarmTint
+
+        visible: shell.specialOpen
+        screen: shell.monitorFor(shell.specialMonitor)
+
+        anchors {
+            top: true
+            bottom: true
+            left: true
+            right: true
+        }
+        margins.top: 0
     }
 
-    FileView {
-        path: Quickshell.env("HOME") + "/.config/cc/qml/Palette.qml"
-        watchChanges: true
-        printErrors: false
-        onLoaded: root.applyPalette(text())
-        onFileChanged: reload()
-    }
+    // ══════════════════════════════════════════════════════════════════════
+    // 2. PAGE — layer TOP : étiquette + région d'entrée
+    // ══════════════════════════════════════════════════════════════════════
+    // ⚠️ TOP (mesuré) : Hyprland dessine la sub page comme un OVERLAY au-dessus
+    // du workspace courant ; ce layer reste sous les notifications (overlay) et
+    // sous la waybar, mais au-dessus du plan des fenêtres → l'étiquette est
+    // visible et les clics d'une page vide sont absorbés.
+    PanelWindow {
+        id: page
 
-    // ── 4. Géométrie / couleurs du dessin ────────────────────────────────
-    readonly property int edgeMargin: 10      // marge de l'étiquette
-    readonly property int armLength: 56       // ancienne longueur de bras (décalage de l'étiquette)
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.namespace: "subpage"
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        exclusiveZone: 0          // overlay : ne réserve aucune place
+        focusable: false          // ne demande jamais le focus
+        aboveWindows: false       // ne passe PAS au-dessus d'un plein écran (un jeu la masque)
+        color: "transparent"      // aucun fond ici : la teinte est sur subpage-bg
 
-    // v2.2 — plus rien ne s'assombrit : ni voile, ni coins, ni calque.
-    // La surface ne peint plus aucun fond (elle ne sert qu'à exister comme
-    // page et à capter les clics). L'accent reste pour l'étiquette seule.
-    readonly property color cStroke: Qt.lighter(root.cAccent, 1.9)
+        anchors {
+            top: true
+            bottom: true
+            left: true
+            right: true
+        }
+        // Hyprland place un layer `top` SOUS la zone réservée par la waybar
+        // (reserved[1] = 42) : aucune marge à ajouter ici, sinon on double
+        // l'écart avec la teinte de fond.
+        margins.top: 0
 
-    // ── 5. Zone de page invisible (v2.2) ─────────────────────────────────
-    // Plus de voile : la page ne doit RIEN assombrir. Ce rectangle reste
-    // plein panneau mais transparent : c'est lui qui définit la région
-    // d'entrée (§8), donc la surface qui capte les clics d'une page vide.
-    Rectangle {
-        id: veil
-        anchors.fill: parent
-        color: "transparent"
-    }
+        visible: shell.specialOpen
+        screen: shell.monitorFor(shell.specialMonitor)
 
-    // v2.2 : les quatre coins en L sont supprimés (les « carrés bleus »).
-    // Rien n'est dessiné à leur place.
+        // ── Géométrie / couleur du dessin ────────────────────────────────
+        readonly property int edgeMargin: 10   // marge de l'étiquette
+        readonly property int armLength: 56    // ancienne longueur de bras (décalage)
+        // Accent éclairci : lisible sur la teinte chaude comme sur un wallpaper
+        // sombre. Dérivé du token, jamais un hex.
+        readonly property color cStroke: Qt.lighter(shell.cAccent, 1.9)
 
-    // ── 7. Étiquette, dans la GOUTTIÈRE du haut ─────────────────────────
-    // Placée dans le vide entre le bord et les apps (gapsout:16 de rules.conf) :
-    // elle ne recouvre donc jamais le contenu d'une fenêtre.
-    Text {
-        id: label
-        text: "サブページ"
-        font.pixelSize: 12
-        font.letterSpacing: 1
-        color: root.cStroke
-        opacity: 0.95
-        x: root.edgeMargin + root.armLength + 10
-        y: 2
-    }
+        // ── Zone de page invisible ───────────────────────────────────────
+        // Transparent par design : ce rectangle définit la région d'entrée
+        // (§8), donc la surface qui capte les clics d'une page vide.
+        Rectangle {
+            id: veil
+            anchors.fill: parent
+            color: "transparent"
+        }
 
-    // ── 8. Région d'entrée = TOUTE la surface (la page capte les clics) ──
-    // Une couche `top`, c'est au-dessus du plan des fenêtres : sans région
-    // d'entrée plein écran, un clic au centre tombait sur le bureau caché
-    // (Discord…). Avec, le clic est absorbé par la page (surface non focusable
-    // ⇒ aucun client ne reçoit de focus).
-    // Les fenêtres du special, elles, sont dessinées AU-DESSUS de ce layer :
-    // elles reçoivent toujours leurs clics.
-    mask: Region {
-        item: veil
+        // ── Étiquette, dans la GOUTTIÈRE du haut ─────────────────────────
+        // Placée dans le vide entre le bord et les apps (gapsout:16 de
+        // rules.conf) : elle ne recouvre donc jamais le contenu d'une fenêtre.
+        Text {
+            id: label
+            text: "サブページ"
+            font.pixelSize: 12
+            font.letterSpacing: 1
+            color: page.cStroke
+            opacity: 0.95
+            x: page.edgeMargin + page.armLength + 10
+            y: 2
+        }
+
+        // ── Région d'entrée = TOUTE la surface (la page capte les clics) ──
+        mask: Region {
+            item: veil
+        }
     }
 }
+

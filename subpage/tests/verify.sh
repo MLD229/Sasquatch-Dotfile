@@ -21,6 +21,9 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# Motif de pkill CROCHETÉ : sans le crochet, le motif matche la ligne de commande
+# de l'agent qui lance le test et le tue lui-même (SIGINT/SIGTERM, mesuré).
+DECO_PAT="$(printf '%s' "$SCRIPT_DIR/shell.qml" | sed 's#^/#[/]#')"
 cd "$SCRIPT_DIR" || exit 1
 PY="${PYTHON:-python3}"
 OUT="$SCRIPT_DIR/tests/out"
@@ -158,7 +161,7 @@ step "5. Aucun vol de focus par la décoration"
 hyprctl dispatch focuswindow "address:$test_addr" >/dev/null
 sleep 0.4
 focus_before="$(active_addr)"
-pkill -f "$SCRIPT_DIR/shell.qml" 2>/dev/null
+pkill -f "$DECO_PAT" 2>/dev/null
 sleep 0.7
 ./subpage.sh open >/dev/null    # ne relance QUE la décoration (page déjà ouverte)
 for _ in $(seq 1 20); do
@@ -177,7 +180,7 @@ grim "$OUT/30-avec-decoration.png"
 
 # ── 6. Région dessinée = coins + étiquette ───────────────────────────────
 step "6. Aucun remplissage plein écran"
-pkill -f "$SCRIPT_DIR/shell.qml" 2>/dev/null
+pkill -f "$DECO_PAT" 2>/dev/null
 sleep 0.7
 grim "$OUT/31-sans-decoration.png"
 "$PY" - "$OUT/30-avec-decoration.png" "$OUT/31-sans-decoration.png" <<'EOF'
@@ -250,7 +253,7 @@ WAYLAND_DEBUG=1 setsid quickshell -n -p "$SCRIPT_DIR/shell.qml" > "$OUT/wayland-
 sleep 1.6
 hyprctl dispatch togglespecialworkspace subpage >/dev/null
 sleep 1.2
-pkill -f "$SCRIPT_DIR/shell.qml" 2>/dev/null
+pkill -f "$DECO_PAT" 2>/dev/null
 sleep 0.4
 hyprctl dispatch togglespecialworkspace subpage >/dev/null
 "$PY" - "$OUT/wayland-debug.log" <<'PYCODE'
