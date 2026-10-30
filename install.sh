@@ -183,6 +183,7 @@ PKGS_ESSENTIAL=(
 
     waybar
     rofi
+    rofi-calc         # plugin modi « calc » du launcher (Super = apps + calcul)
     mako
 
     hyprland
@@ -267,6 +268,7 @@ PKGS_AI=(
 )
 
 PKGS_FAILED=()
+LINKS_SKIPPED=()   # liens refusés/écrasés-non : à rappeler dans le récapitulatif
 
 # Installe un groupe SANS bloquer : échec → warning + collecte + CONTINUE.
 install_group() {
@@ -359,7 +361,7 @@ link() {
             rm -rf "$dst"
         else
             read -rp "  ⚠ '$dst' existe déjà. Écraser ? [y/N] " confirm
-            [[ "$confirm" =~ ^[Yy]$ ]] || { warning "Ignoré : $dst"; return; }
+            [[ "$confirm" =~ ^[Yy]$ ]] || { warning "Ignoré : $dst"; LINKS_SKIPPED+=("$dst"); return; }
             rm -rf "$dst"
         fi
     fi
@@ -589,7 +591,8 @@ chmod +x "$DOTDIR"/aiko/*.sh              # Sidebar 愛子 Aiko (aiko.sh, setup.
 chmod +x "$DOTDIR"/settings/*.sh          # Panneau Settings (settings.sh)
 chmod +x "$DOTDIR"/pl/*.sh                # Playlist MPD (pl.sh)
 chmod +x "$DOTDIR"/wp/*.sh                # Wallpaper picker Quickshell (wp.sh)
-chmod +x "$DOTDIR"/subpage/*.sh           # Sub page scratchpad (subpage.sh)
+chmod +x "$DOTDIR"/subpage/*.sh "$DOTDIR"/subpage/*.py   # Sub page (subpage.sh, send.sh, state.py)
+chmod +x "$DOTDIR"/subpage/tests/*.sh                   # Preuves de la sub page (verify.sh)
 chmod +x "$DOTDIR"/set-wall.sh
 success "Scripts rendus exécutables"
 
@@ -604,6 +607,36 @@ else
     success "Fish déjà défini (ou absent)"
 fi
 
+# ─── Vérification du lanceur rofi (Super) ────────────────────────────────
+# Le lanceur ne doit jamais échouer en silence : sur une machine fraîche, un
+# ~/.config/rofi déjà présent (refusé à l'écrasement) ou un plugin calc absent
+# donne un Super qui ne fait rien, alors que tout le reste du rice marche.
+header "Lanceur rofi (Super)"
+_rofi_ok=1
+for f in "$CONFIG/rofi/scripts/launcher.sh" "$CONFIG/rofi/themes/sasquatch.rasi" "$CONFIG/rofi/themes/colors.rasi"; do
+    if [ -e "$f" ]; then success "présent : ${f#"$HOME"/}"; else warning "MANQUANT : $f"; _rofi_ok=0; fi
+done
+[ -x "$CONFIG/rofi/scripts/launcher.sh" ] || { warning "launcher.sh non exécutable"; _rofi_ok=0; }
+if command -v rofi >/dev/null 2>&1; then
+    success "binaire rofi : $(rofi -version 2>/dev/null | head -1)"
+else
+    warning "binaire rofi ABSENT (paquet rofi)"; _rofi_ok=0
+fi
+_calc=""
+for d in /usr/lib/rofi /usr/lib64/rofi "$HOME/.local/lib/rofi"; do
+    [ -f "$d/libcalc.so" ] && { _calc="$d"; break; }
+done
+if [ -n "$_calc" ]; then
+    success "plugin rofi-calc : $_calc/libcalc.so (Super = apps + calculatrice)"
+else
+    warning "plugin rofi-calc ABSENT : le lanceur s'ouvrira en apps seules → sudo pacman -S rofi-calc"
+fi
+if [ "$_rofi_ok" = 1 ]; then
+    success "Lanceur rofi opérationnel"
+else
+    warning "→ le raccourci Super ne fera rien tant que ces points ne sont pas réglés"
+fi
+
 # ─── Récapitulatif ─────────────────────
 header "Récapitulatif"
 if [ ${#PKGS_FAILED[@]} -gt 0 ]; then
@@ -611,6 +644,10 @@ if [ ${#PKGS_FAILED[@]} -gt 0 ]; then
     warning "  → Relance : yay -S --needed --noconfirm ${PKGS_FAILED[*]}"
 else
     success "Tous les paquets requis sont présents"
+fi
+if [ ${#LINKS_SKIPPED[@]} -gt 0 ]; then
+    warning "Liens NON créés (${#LINKS_SKIPPED[@]}) — relance en acceptant l'écrasement ou avec --yes :"
+    for _l in "${LINKS_SKIPPED[@]}"; do warning "  • $_l"; done
 fi
 if ! ls "$HOME"/models/*.gguf &>/dev/null; then
     info "Aiko (Super+N) : aucun GGUF dans ~/models — lance : bash $DOTDIR/aiko/installer.sh (3B ~1,9 Go, 7B ~4,7 Go)"
