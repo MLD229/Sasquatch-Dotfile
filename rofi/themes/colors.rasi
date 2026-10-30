@@ -1,22 +1,24 @@
 /* === SASQUATCH-PALETTE-BEGIN === */
 * {
     /* ── Backgrounds ────────────────────────────────── */
-    bg-window:   rgba(1, 29, 34, 0.85);
-    bg-input:    rgba(1, 37, 44, 0.80);
-    bg-selected: rgba(6, 102, 120, 0.25);
-    urgent-bg:   rgba(243, 139, 168, 0.25);
+    bg-window:   rgba(19, 19, 40, 0.62);
+    bg-input:    rgba(22, 26, 55, 0.55);
+    bg-osd:      rgba(19, 19, 40, 0.88);
+    bg-selected: rgba(110, 47, 172, 0.90);
+    urgent-bg:   rgba(243, 139, 168, 0.85);
 
     /* ── Foregrounds ────────────────────────────────── */
-    fg:          rgba(193, 216, 221, 1.0);
-    fg-dim:      rgba(106, 131, 136, 1.0);
+    fg:          rgba(208, 208, 217, 1.0);
+    fg-dim:      rgba(122, 122, 137, 1.0);
     fg-selected: rgba(255, 255, 255, 1.0);
 
     /* ── Accents ────────────────────────────────────── */
-    accent:      rgba(6, 102, 120, 1.0);
-    accent-dim:  rgba(6, 102, 120, 0.75);
+    accent:      rgba(140, 157, 208, 1.0);
+    accent-dim:  rgba(140, 157, 208, 0.75);
+    accent2:     rgba(110, 47, 172, 1.0);
     urgent:      rgba(243, 139, 168, 1.0);
 
     /* ── Border ─────────────────────────────────────── */
-    border:      rgba(6, 102, 120, 0.50);
+    border:      rgba(140, 157, 208, 0.50);
 }
 /* === SASQUATCH-PALETTE-END === */

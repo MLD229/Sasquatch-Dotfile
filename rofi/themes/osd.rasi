@@ -11,7 +11,7 @@ window {
     location: center;
     anchor: center;
     y-offset: 160px;
-    background-color: var(bg-window);
+    background-color: var(bg-osd);
     border-radius: 16px;
     border: 1px;
     border-color: var(border);

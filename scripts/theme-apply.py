@@ -280,29 +280,53 @@ def b_mako(p):
     ])
 
 def b_rofi(p):
+    """.rasi couleurs du lanceur. ALPHAS : la fenêtre est volontairement
+    translucide (0.62) — le flou du compositeur reste visible derrière ;
+    les anciennes valeurs (0.85/0.80) étaient de fait IGNORÉES par
+    sasquatch.rasi (teal en dur) : elles sont maintenant consommées."""
     def dec(h, a):
         r, g, b = int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16)
         return "rgba(%d, %d, %d, %s)" % (r, g, b, a)
+
+    # Accent « texte » : l'extraction peut rendre un accent très sombre
+    # (wallpaper désaturé → ACCENT #222124) ; en couleur de texte (prompt,
+    # curseur) il disparaît sur la fenêtre. On remonte sa luminance SANS
+    # toucher à l'accent des autres composants (waybar/kitty gardent le brut).
+    acc = p["ACCENT"]
+    if _lum(_rgb(acc)) < 0.32:
+        acc = _hx(_to_lum(_rgb(acc), 0.62))
+
+    # accent2 = seconde teinte de la palette ; repli sur accent s'il manque.
+    acc2 = p.get("ACCENT2") or acc
+
+    # Sélection : fond accent2 opaque (lisible), texte choisi par luminance
+    # → blanc sur accent2 sombre, sombre sur accent2 clair (cas mesuré :
+    # #afb1b2, où du blanc serait illisible).
+    sel_fg = dec(p["BG"], "1.0") if _lum(_rgb(acc2)) > 0.55 \
+        else "rgba(255, 255, 255, 1.0)"
+
     return "\n".join([
         "* {",
         "    /* ── Backgrounds ────────────────────────────────── */",
-        "    bg-window:   %s;" % dec(p["BG"], "0.85"),
-        "    bg-input:    %s;" % dec(p["BG_ALT"], "0.80"),
-        "    bg-selected: %s;" % dec(p["ACCENT"], "0.25"),
-        "    urgent-bg:   %s;" % dec(p["RED"], "0.25"),
+        "    bg-window:   %s;" % dec(p["BG"], "0.62"),
+        "    bg-input:    %s;" % dec(p["BG_ALT"], "0.55"),
+        "    bg-osd:      %s;" % dec(p["BG"], "0.88"),
+        "    bg-selected: %s;" % dec(acc2, "0.90"),
+        "    urgent-bg:   %s;" % dec(p["RED"], "0.85"),
         "",
         "    /* ── Foregrounds ────────────────────────────────── */",
         "    fg:          %s;" % dec(p["FG"], "1.0"),
         "    fg-dim:      %s;" % dec(p["FG_DIM"], "1.0"),
-        "    fg-selected: rgba(255, 255, 255, 1.0);",
+        "    fg-selected: %s;" % sel_fg,
         "",
         "    /* ── Accents ────────────────────────────────────── */",
-        "    accent:      %s;" % dec(p["ACCENT"], "1.0"),
-        "    accent-dim:  %s;" % dec(p["ACCENT"], "0.75"),
+        "    accent:      %s;" % dec(acc, "1.0"),
+        "    accent-dim:  %s;" % dec(acc, "0.75"),
+        "    accent2:     %s;" % dec(acc2, "1.0"),
         "    urgent:      %s;" % dec(p["RED"], "1.0"),
         "",
         "    /* ── Border ─────────────────────────────────────── */",
-        "    border:      %s;" % dec(p["ACCENT"], "0.50"),
+        "    border:      %s;" % dec(acc, "0.50"),
         "}",
     ])
 

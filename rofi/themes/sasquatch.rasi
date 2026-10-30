@@ -11,13 +11,14 @@
 }
 
 /* ── Window ───────────────────────────────────────────
-   Fond quasi opaque : lisible sur un wallpaper clair comme
-   sombre (le flou de Hyprland reste visible sur les bords). */
+   Fond translucide piloté par la palette (colors.rasi : bg-window α 0.62) :
+   le flou/le wallpaper respire derrière, le texte reste lisible (fg plein).
+   Avant : rgba(1, 22, 26, 0.97) en dur → aucune transparence possible. */
 window {
     width:            680px;
     location:         center;
     anchor:           center;
-    background-color: rgba(1, 22, 26, 0.97);
+    background-color: var(bg-window);
     border-radius:    20px;
     border:           1px;
     border-color:     var(border);
@@ -35,7 +36,7 @@ mainbox {
 
 /* ── Input Bar ──────────────────────────────────────── */
 inputbar {
-    background-color: rgba(1, 37, 44, 0.95);
+    background-color: var(bg-input);
     border-radius:    12px;
     padding:          11px 14px;
     spacing:          8px;
@@ -86,10 +87,12 @@ element alternate.normal {
     text-color: var(fg);
 }
 
-/* Sélection : teal plein + texte blanc gras = contraste net
-   sur n'importe quel fond derrière la fenêtre. */
+/* Sélection : fond accent2 de la palette (colors.rasi, α 0.90) + texte
+   fg-selected — le générateur choisit un texte clair ou sombre selon la
+   luminance d'accent2. Avant : teal rgba(6,102,120,0.90) en dur, qui ne
+   suivait pas le thème. */
 element selected.normal {
-    background-color: rgba(6, 102, 120, 0.90);
+    background-color: var(bg-selected);
     text-color:       var(fg-selected);
     font:             "JetBrainsMono Nerd Font Bold 11";
 }
@@ -100,7 +103,7 @@ element alternate.urgent {
 }
 
 element selected.urgent {
-    background-color: rgba(243, 139, 168, 0.85);
+    background-color: var(urgent-bg);
     text-color:       var(fg-selected);
     font:             "JetBrainsMono Nerd Font Bold 11";
 }
@@ -111,7 +114,7 @@ element alternate.active {
 }
 
 element selected.active {
-    background-color: rgba(6, 102, 120, 0.90);
+    background-color: var(bg-selected);
     text-color:       var(fg-selected);
     font:             "JetBrainsMono Nerd Font Bold 11";
 }
@@ -131,7 +134,7 @@ element-text {
 
 /* ── Message ────────────────────────────────────────── */
 message {
-    background-color: rgba(1, 37, 44, 0.95);
+    background-color: var(bg-input);
     border-radius:    12px;
     padding:          8px 12px;
     margin:           4px 0px 0px 0px;
