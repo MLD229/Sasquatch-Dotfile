@@ -30,28 +30,30 @@ if [ -z "$WALL" ] || [ ! -f "$WALL" ]; then
     esac
 fi
 
-# Skip si la palette n'a pas changé ET que waybar tourne déjà (même wallpaper
-# appliqué précédemment — évite pkill+relance waybar à chaque login).
-# Le fichier $RUNDIR/sasquatch-theme-last est écrit après chaque apply réussi.
+# Skip si la palette n'a pas changé ET que la barre tourne déjà (même wallpaper
+# appliqué précédemment — évite de refaire palette + rechargements à chaque
+# login). Le fichier $RUNDIR/sasquatch-theme-last est écrit après chaque apply.
 # NB : skip keyé sur le chemin, pas le contenu (ré-export du même nom = skip —
 # edge case accepté).
 LAST="$RUNDIR/sasquatch-theme-last"
 
-# Un waybar ne compte pour le skip idempotent que s'il appartient à l'instance
-# Hyprland COURANTE. Un orphelin d'une session morte (relogin/crash) est vivant
-# pour pgrep mais invisible à l'écran → sans ce test, la nouvelle session
-# resterait sans barre (le skip penserait que la barre tourne déjà).
-waybar_current_session() {
+# v4 (2026-10-31) : le skip regardait un waybar vivant. Waybar n'est plus la
+# barre de la session (barre verticale Quickshell, service sasquatch-bar) : la
+# condition teste maintenant QUICKSHELL. Un processus d'une session morte
+# (relogin/crash) est vivant pour pgrep mais invisible à l'écran → on exige la
+# même signature d'instance Hyprland, sinon la nouvelle session resterait sans
+# palette (le skip croirait la barre déjà là).
+bar_current_session() {
     local inst="${HYPRLAND_INSTANCE_SIGNATURE:-}" pid sig
     [ -n "$inst" ] || return 1
-    for pid in $(pgrep -x waybar 2>/dev/null); do
+    for pid in $(pgrep -x quickshell 2>/dev/null); do
         sig=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^HYPRLAND_INSTANCE_SIGNATURE=//p' | head -1)
         [ "$sig" = "$inst" ] && return 0
     done
     return 1
 }
 
-if [ -f "$WALL" ] && [ "$WALL" = "$(cat "$LAST" 2>/dev/null)" ] && waybar_current_session; then
+if [ -f "$WALL" ] && [ "$WALL" = "$(cat "$LAST" 2>/dev/null)" ] && bar_current_session; then
     echo "theme-apply: inchangé ($WALL)"
     exit 0
 fi
@@ -85,7 +87,16 @@ hyprctl reload >/dev/null 2>&1
 # doublon, même pendant la course du login (service encore en retry
 # Restart=on-failure ; un `waybar &` direct donnerait 2 barres). Fallback direct
 # uniquement si le service n'existe pas du tout (install.sh pas relancé).
-if systemctl --user is-active --quiet waybar; then
+if [ -e "$HOME/.config/systemd/user/sasquatch-bar.service" ]; then
+    # 2026-10-31 : waybar est REMPLACÉE par la barre verticale Quickshell
+    # (cc/bar). Le paquet, le dossier waybar/ et son unité restent dans le
+    # dotfile (retour arrière possible), mais PLUS RIEN ne doit la lancer :
+    # ce bloc était justement le lanceur de waybar au login et après chaque
+    # changement de wallpaper — c'est ce qui la faisait « revenir ».
+    if systemctl --user is-active --quiet waybar; then
+        systemctl --user stop waybar >/dev/null 2>&1 || true
+    fi
+elif systemctl --user is-active --quiet waybar; then
     systemctl --user reload waybar >/dev/null 2>&1 || true
 elif systemctl --user list-unit-files waybar.service >/dev/null 2>&1; then
     systemctl --user start waybar >/dev/null 2>&1 || true

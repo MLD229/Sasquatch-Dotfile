@@ -556,18 +556,77 @@ fi
 # Le service vit dans le repo : le repo est lié dans ~/.config/cc, donc le
 # fichier .service pointe vers le Python du repo via WorkingDirectory.
 
-# Service USER waybar (supervision de la barre). Restart=on-failure → un crash
-# relance la barre tout seul (avant : morte jusqu'au relogin) ; theme-apply.sh
-# recharge le CSS via `systemctl --user reload waybar` (SIGUSR2, zéro flash).
-# Le user manager expose WAYLAND_DISPLAY + HYPRLAND_INSTANCE_SIGNATURE →
-# waybar du service est reconnu par waybar_current_session() (skip idempotent).
+# Service USER waybar — LIÉ, JAMAIS ACTIVÉ (2026-10-31, v4 §10).
+#
+# La barre verticale Quickshell (cc/bar, Super+J) remplace waybar. L'unité
+# reste présente dans ~/.config/systemd/user (retour arrière possible en une
+# commande) mais install.sh ne l'active plus JAMAIS et l'arrête si elle
+# tourne : deux barres se superposeraient.
+#
+# Ce que install.sh NE fait plus :
+#   - `systemctl --user enable waybar` (l'ancienne version activait l'unité
+#     avant de la désactiver plus bas : deux écritures pour un résultat nul) ;
+#   - l'info « waybar déjà activée », qui laissait croire à une activation.
+#
+# Retour arrière (une seule commande, écrite dans cc/bar/README.md §8) :
+#   systemctl --user enable --now waybar && systemctl --user stop sasquatch-bar
 link "$DOTDIR/waybar/waybar.service" "$SD_USER/waybar.service"
 systemctl --user daemon-reload 2>/dev/null || true
-if systemctl --user enable --now waybar 2>/dev/null; then
-    success "waybar (service user) activé"
-else
-    warning "Service user waybar non activé (pas de session) — theme-apply.sh le lancera au besoin"
+if systemctl --user is-active --quiet waybar 2>/dev/null; then
+    if systemctl --user stop waybar 2>/dev/null; then
+        success "waybar arrêtée (seule la barre verticale doit tourner)"
+    else
+        warning "waybar tourne encore — deux barres risquent de se superposer"
+    fi
 fi
+if systemctl --user is-enabled --quiet waybar 2>/dev/null; then
+    # `disable` enlève le lien de démarrage automatique, pas le fichier
+    # d'unité ; on re-lie juste après pour qu'il reste là (piège v1 #7).
+    systemctl --user disable waybar 2>/dev/null && \
+        info "waybar retirée du démarrage automatique (unité toujours liée)" || \
+        warning "waybar : désactivation impossible (à faire à la main)"
+    link "$DOTDIR/waybar/waybar.service" "$SD_USER/waybar.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+fi
+info "waybar n'est plus lancée par theme-apply.sh ni par apply-lang.sh (gardes en place)"
+
+# ─── Barre verticale Quickshell (cc/bar, Super+J) ────────────────────────
+# Remplace waybar : barre verticale gauche, palette du wallpaper via le
+# backend CC (8765, service sasquatch-cc), config versionnée bar.json.
+# Le service ne fait tourner QUE la surface QML (pas de backend à elle).
+header "Barre verticale Quickshell (cc/bar)"
+link "$DOTDIR/cc/bar/bar.service" "$SD_USER/sasquatch-bar.service"
+chmod +x "$DOTDIR/cc/bar/bar.sh" "$DOTDIR/cc/bar/appindex.py"
+systemctl --user daemon-reload 2>/dev/null || true
+# Dépendances de la barre (toutes déjà dans les listes de paquets ci-dessus) :
+#   quickshell (surface), rofi (module search), playerctl/brightnessctl (via
+#   backend CC), python3 (appindex.py, stdlib seulement), grim (captures).
+for _bin in quickshell rofi python3 brightnessctl playerctl; do
+    if command -v "$_bin" >/dev/null 2>&1; then
+        success "barre : $_bin présent"
+    else
+        warning "barre : $_bin MANQUANT — la barre tourne en mode dégradé"
+    fi
+done
+if systemctl --user enable --now sasquatch-bar 2>/dev/null; then
+    success "sasquatch-bar (service user) activé"
+else
+    warning "sasquatch-bar non activé (pas de session) — bar.sh la lance au besoin"
+fi
+# Gardes des scripts de thème / de langue : ils ne doivent plus JAMAIS lancer
+# waybar (c'était le lanceur du login et de chaque changement de wallpaper :
+# c'est ce qui la faisait « revenir »). Vérification, pas de correction
+# silencieuse : si une garde manque, on le dit.
+_guards_ok=1
+for _s in "$DOTDIR/scripts/theme-apply.sh" "$DOTDIR/scripts/apply-lang.sh"; do
+    if grep -q "barre verticale" "$_s" 2>/dev/null; then
+        success "garde waybar présente : ${_s#"$DOTDIR"/}"
+    else
+        warning "garde waybar ABSENTE dans ${_s#"$DOTDIR"/} — ce script peut relancer waybar"
+        _guards_ok=0
+    fi
+done
+[ "$_guards_ok" = "1" ] && info "aucun script ne (re)lance waybar (sasquatch-bar est la seule barre)"
 
 # ─── Aiko : service FACULTATIF, JAMAIS activé ────────────────────────────
 # Le backend aiko est lancé À LA DEMANDE par aiko.sh (Super+N) et il s'arrête

@@ -46,8 +46,10 @@ ShellRoot {
         //   right : droite + haut + bas → verticale, pleine hauteur (miroir)
         //   top   : haut + gauche + droite → bande horizontale, pleine largeur
         anchors {
-            left: !Config.sideRight
-            right: Config.sideRight
+            // v5c : en horizontal il faut DEUX ancrages opposés, sinon la
+            // surface reste à 40 px de large (bug « top » : rien de visible).
+            left: Config.horizontal || !Config.sideRight
+            right: Config.horizontal || Config.sideRight
             top: true
             bottom: Config.vertical
         }
@@ -80,8 +82,19 @@ ShellRoot {
         // fond aussi transparent (brief v2 §3). Valeur : bar.json.blurRadius.
         // v5b : bar.blur = false par défaut → rayon 0, donc AUCUNE bande
         // floutée sur la hauteur de la barre.
+        // v5c : BackgroundEffect n'a QUE blurRegion (pas de `enabled` : la
+        // propriété n'existe pas et fait planter le chargement). Pour couper le
+        // flou on vise une région de taille nulle quand blur=false.
+        // Région nulle : le flou n'a alors aucune surface à traiter.
+        Item {
+            id: zoneSansFlou
+            width: 0
+            height: 0
+            visible: false
+        }
+
         BackgroundEffect.blurRegion: Region {
-            item: barBg
+            item: Config.blur ? barBg : zoneSansFlou
             radius: Config.blur ? Config.blurRadius : 0
         }
 
@@ -307,8 +320,10 @@ ShellRoot {
         // v5b : l'infobulle suit le bord de la barre (gauche, droite) et passe
         // SOUS la barre quand elle est en haut (son y écran est alors ignoré).
         anchors {
-            left: !Config.sideRight
-            right: Config.sideRight
+            // v5c : en horizontal il faut DEUX ancrages opposés, sinon la
+            // surface reste à 40 px de large (bug « top » : rien de visible).
+            left: Config.horizontal || !Config.sideRight
+            right: Config.horizontal || Config.sideRight
             top: true
         }
         readonly property int maxWidth: 300

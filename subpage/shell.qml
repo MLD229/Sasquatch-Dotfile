@@ -55,6 +55,13 @@
 //
 // Échap ne peut PAS fermer la page : aucune surface ne prend de focus clavier.
 // Fermeture = Super+S (subpage.sh).
+//
+// v2.4 — CONTOUR (v5a §1) : un seul Rectangle décoratif, 1 px, transparent au
+// centre, à 16 px du bord (= gapsout:16 de hypr/conf.d/rules.conf, donc posé
+// dans la gouttière, jamais sur le contenu). Couleur dérivée de cStroke
+// (accent éclairci) : aucun hex. `visible: shell.specialOpen`. Il n'est PAS
+// dans le mask : la région d'entrée reste `veil` seule → le cadre ne capte
+// aucun clic et ne dépend pas du masque.
 
 // PAS de `pragma ComponentBehavior: Bound` ici : inutile (aucun delegate) et
 // il fait planter le qmllint de Qt 6.10 (rc=255, aucun message) alors que le
@@ -267,6 +274,23 @@ ShellRoot {
             opacity: 0.95
             x: page.edgeMargin + page.armLength + 10
             y: 2
+        }
+
+        // ── Contour de la page (v5a §1) ──────────────────────────────────
+        // Décoratif pur : 1 px, centre transparent, aucun blur, aucun
+        // remplissage. Marges = gapsout:16 (rules.conf) → le trait tombe dans
+        // la gouttière, jamais sur une fenêtre. ABSENT du mask ci-dessous :
+        // il ne capte aucun clic (la région d'entrée reste `veil`).
+        Rectangle {
+            id: frame
+            anchors.fill: parent
+            anchors.margins: 16
+            color: "transparent"
+            border.width: 1
+            radius: 13
+            border.color: Qt.rgba(page.cStroke.r, page.cStroke.g,
+                                  page.cStroke.b, 0.55)
+            visible: shell.specialOpen
         }
 
         // ── Région d'entrée = TOUTE la surface (la page capte les clics) ──
