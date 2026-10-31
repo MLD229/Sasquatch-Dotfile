@@ -32,6 +32,7 @@ from player import (now_playing as player_now_playing, toggle as player_toggle,
 from web_bridge import handle_web_post as web_bridge_post
 from actions import do_screenshot, do_translate, do_imgsearch, do_finder
 from palette import read_palette
+import sysinfo
 from wallpaper import (list_wallpapers, set_folder, apply_wallpaper,
                        pick_path, thumbnail, random_wallpaper)
 from playlist import (playlist_status, playlist_list, playlist_toggle,
@@ -184,6 +185,24 @@ class Handler(BaseHTTPRequestHandler):
             self._json(metrics.get_stats())
             return
 
+        # ── Tableau de bord (v6) : profil système, mises à jour, tâches ──
+        if path == "/api/sysinfo":
+            self._json(sysinfo.sysinfo())
+            return
+
+        if path == "/api/updates":
+            self._json(sysinfo.updates())
+            return
+
+        if path == "/api/tasks":
+            self._json(sysinfo.tasks())
+            return
+
+        if path == "/api/weather":
+            q = urllib.parse.parse_qs(parsed.query)
+            self._json(sysinfo.weather((q.get("city") or [None])[0]))
+            return
+
         if path == "/api/viz":
             # Lazy cava : le serveur est PERMANENT (service systemd) → cava/
             # ffmpeg ne tournent que si le CC est visible et poll le viz.
@@ -308,6 +327,12 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         body = self._body_json()
+
+        if path == "/api/tasks":
+            self._json(sysinfo.tasks(
+                action=(body.get("action") or "list"),
+                text=body.get("text"), id=body.get("id")))
+            return
 
         if path == "/api/music/toggle":
             self._json({"ok": player_toggle()})

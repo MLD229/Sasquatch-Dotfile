@@ -46,6 +46,8 @@ FloatingWindow {
     // true while a screenshot request is in flight; blocks double-click.
     property bool shotBusy: false
     property var stats: ({})
+    // Page affichée : "home" (dashboard) | "sys" (perf+musique) | "tools" (outils)
+    property string page: "home"
     property var music: ({playing: false, paused: false, title: null, artist: null, volume: 0, elapsed: 0, duration: 0})
     property var sysVol: ({volume: 0, muted: false})
     property var sysBright: ({brightness: 0})
@@ -270,8 +272,67 @@ FloatingWindow {
                 }
             }
 
+            // ---------- NAV : Accueil / Système / Outils ----------
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Repeater {
+                    model: [
+                        { k: "home",  t: "Accueil" },
+                        { k: "sys",   t: "Système" },
+                        { k: "tools", t: "Outils" }
+                    ]
+                    delegate: Rectangle {
+                        required property var modelData
+                        height: 28
+                        width: navLabel.implicitWidth + 26
+                        radius: 14
+                        color: root.page === modelData.k
+                               ? Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.85)
+                               : Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
+                        Text {
+                            id: navLabel
+                            anchors.centerIn: parent
+                            text: modelData.t
+                            font.pixelSize: 11
+                            font.bold: root.page === modelData.k
+                            color: root.page === modelData.k ? "#101018" : root.cText
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: root.page = modelData.k
+                        }
+                    }
+                }
+                Item { Layout.fillWidth: true }
+                IconButton {
+                    width: 30; height: 30
+                    glyph: "⚙"
+                    fontSize: 14
+                    glyphColor: root.cTextDim
+                    onClicked: Quickshell.execDetached(["/home/momo/.config/settings/settings.sh"])
+                }
+            }
+
+            // ---------- PAGE ACCUEIL : dashboard (sysinfo / updates / weather / tasks) ----------
+            Dashboard {
+                visible: root.page === "home"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                cCard: root.cCard
+                cText: root.cText
+                cTextDim: root.cTextDim
+                cAccent: root.cAccent
+                cAccent2: root.cAccent2
+                cWarn: root.cWarn
+                cGood: root.cGood
+                cHot: root.cHot
+            }
+
             // ---------- RANGÉE 1: PERFORMANCE ----------
             Tile {
+                visible: root.page === "sys"
                 Layout.fillWidth: true
                 Layout.preferredHeight: 220
                 Layout.minimumHeight: 150
@@ -336,6 +397,7 @@ FloatingWindow {
 
             // ---------- RANGÉE 2: MUSIQUE ----------
             Tile {
+                visible: root.page === "sys"
                 Layout.fillWidth: true
                 Layout.preferredHeight: 165
                 Layout.minimumHeight: 130
@@ -535,6 +597,7 @@ FloatingWindow {
 
             // ---------- RANGÉE 3: 3 tuiles ----------
             RowLayout {
+                visible: root.page === "tools"
                 Layout.fillWidth: true
                 Layout.preferredHeight: 110
                 Layout.minimumHeight: 85
@@ -656,6 +719,7 @@ FloatingWindow {
 
             // ---------- RANGÉE 4: TRADUCTION ----------
             Tile {
+                visible: root.page === "tools"
                 Layout.fillWidth: true
                 Layout.preferredHeight: 170
                 Layout.minimumHeight: 120
