@@ -1,0 +1,89 @@
+{
+    "bar": {
+        "enabled": true,
+        "position": "left",
+        "width": 40,
+        "marginTop": 8,
+        "marginBottom": 8,
+        "marginLeft": 6,
+        "marginRight": 6,
+        "exclusiveZone": true,
+        "radius": 14,
+        "spacing": 8,
+        "blockInset": 4,
+        "blur": false,
+        "blurRadius": 10,
+        "persistentWorkspaces": 10
+    },
+    "modules": [
+        "search",
+        "workspaces",
+        "netRate",
+        "clock",
+        "volume",
+        "pinnedApps",
+        "runningApps",
+        "quickToggles",
+        "settings"
+    ],
+    "clock": {
+        "hourFormat": "HH",
+        "minuteFormat": "mm",
+        "period": "AP",
+        "calendarIcon": true
+    },
+    "apps": [
+        {
+            "id": "spotify",
+            "desktop": "spotify.desktop",
+            "class": "Spotify",
+            "enabled": true
+        },
+        {
+            "id": "discord",
+            "desktop": "discord.desktop",
+            "class": "discord",
+            "enabled": true
+        },
+        {
+            "id": "terminal",
+            "desktop": "kitty.desktop",
+            "class": "kitty",
+            "enabled": true
+        },
+        {
+            "id": "fichiers",
+            "desktop": "org.kde.dolphin",
+            "class": "org.kde.dolphin",
+            "enabled": true
+        },
+        {
+            "id": "org.kde.krita",
+            "desktop": "org.kde.krita.desktop",
+            "class": "krita",
+            "enabled": true
+        }
+    ],
+    "popups": {
+        "calendar": true,
+        "volume": true,
+        "network": true,
+        "notifications": true
+    },
+    "appearance": {
+        "panelAlpha": 0.0,
+        "blockAlpha": 0.0,
+        "cardAlpha": 0.99,
+        "hoverAlpha": 0.16,
+        "activeAlpha": 0.3,
+        "borderAlpha": 0.0,
+        "borderHoverAlpha": 0.18,
+        "iconSize": 15,
+        "appIconSize": 19,
+        "clockSize": 15,
+        "netSize": 9
+    },
+    "runningApps": {
+        "maxVisible": 3
+    }
+}
