@@ -1,0 +1,24 @@
+[Unit]
+Description=Sasquatch Bar - barre verticale Quickshell (cc/bar/shell.qml)
+After=graphical-session.target sasquatch-cc.service
+Wants=sasquatch-cc.service
+
+[Service]
+Type=simple
+# Chemins portables : %h/.config/cc est le symlink vers le dépôt des dotfiles.
+ExecStart=/usr/bin/quickshell -p %h/.config/cc/bar/shell.qml
+WorkingDirectory=%h/.config/cc/bar
+# Restart=on-failure + SuccessExitStatus=SIGTERM : un crash relance la barre,
+# mais un arrêt volontaire (Super+J via bar.sh = SIGTERM) est considéré comme
+# une sortie propre — sinon le service relancerait la barre juste après le
+# toggle et Super+J ne pourrait plus la masquer.
+Restart=on-failure
+SuccessExitStatus=SIGTERM
+RestartSec=2
+Environment=QML_DISABLE_DISK_CACHE=1
+
+[Install]
+# default.target, comme sasquatch-cc / sasquatch-sidebar : sur ce poste
+# graphical-session.target n'est PAS actif (Hyprland n'est pas câblé dessus),
+# donc un WantedBy=graphical-session.target ne démarrerait jamais la barre.
+WantedBy=default.target

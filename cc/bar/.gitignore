@@ -1,0 +1,9 @@
+# Index .desktop généré au démarrage par appindex.py (regénérable, pas de
+# versionnage : il dépend des paquets installés sur la machine).
+appindex.json
+__pycache__/
+*.pyc
+
+# Captures de vérification (preuves de livraison, pas du code) : régénérables
+# par tests/run-all.sh et tests/verify-v2.sh, 2,6 Mo de PNG inutiles dans git.
+tests/artifacts/

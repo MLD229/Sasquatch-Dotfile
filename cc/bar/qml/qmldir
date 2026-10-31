@@ -1,0 +1,17 @@
+module SasquatchBar
+singleton Config 1.0 Config.qml
+singleton BarPalette 1.0 BarPalette.qml
+singleton Backend 1.0 Backend.qml
+singleton AppIndex 1.0 AppIndex.qml
+singleton PinWriter 1.0 PinWriter.qml
+singleton Tip 1.0 Tip.qml
+singleton Hypr 1.0 Hypr.qml
+singleton Ui 1.0 Ui.qml
+Pill 1.0 Pill.qml
+BarIcon 1.0 BarIcon.qml
+IconButton 1.0 IconButton.qml
+AppIcon 1.0 AppIcon.qml
+Badge 1.0 Badge.qml
+HitButton 1.0 HitButton.qml
+WheelZone 1.0 WheelZone.qml
+Section 1.0 Section.qml
