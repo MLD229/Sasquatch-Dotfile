@@ -33,15 +33,20 @@ for i in $(seq 1 20); do
     sleep 0.05
 done
 
+# Dépendances vérifiées AVANT la sélection : sans tesseract, faire choisir
+# une zone puis échouer est du temps perdu (et un « échec » incompréhensible).
+for dep in slurp grim tesseract; do
+    if ! command -v "$dep" >/dev/null 2>&1; then
+        echo "$dep non installé" >&2
+        notify-send "Sasquatch CC" "$dep requis (OCR indisponible)" -t 4000 2>/dev/null
+        exit 3
+    fi
+done
+
 geom="$(slurp 2>/dev/null)" || exit 1
 [[ -z "$geom" ]] && exit 1
 
 grim -g "$geom" "$TMP_PNG" || exit 1
-
-if ! command -v tesseract >/dev/null 2>&1; then
-    notify-send "Sasquatch CC" "tesseract requis (pacman -S tesseract tesseract-data-fra)" -t 3000 2>/dev/null
-    exit 1
-fi
 
 # Langue OCR : réglage panneau Settings (Super+I) — settings.json cc.ocr_lang
 OCR_LANG="fra"

@@ -30,7 +30,8 @@ from player import (now_playing as player_now_playing, toggle as player_toggle,
                     next_track as player_next, prev_track as player_prev,
                     stop as player_stop, seek as player_seek, fetch_art)
 from web_bridge import handle_web_post as web_bridge_post
-from actions import do_screenshot, do_translate, do_imgsearch, do_finder
+from actions import (do_screenshot, do_translate, do_imgsearch, do_finder,
+                     tools_health)
 from palette import read_palette
 import sysinfo
 from wallpaper import (list_wallpapers, set_folder, apply_wallpaper,
@@ -201,6 +202,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/weather":
             q = urllib.parse.parse_qs(parsed.query)
             self._json(sysinfo.weather((q.get("city") or [None])[0]))
+            return
+
+        if path == "/api/tools/health":
+            # Dépendances des 4 outils (page « Outils ») : l'UI affiche
+            # « non installé : X » au lieu d'un bouton qui ne fait rien.
+            self._json(tools_health())
             return
 
         if path == "/api/viz":
@@ -442,8 +449,11 @@ class Handler(BaseHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed.query)
             mode = qs.get("mode", ["area"])[0]
             if mode not in ("area", "full", "window"):
-                mode = "area"
-            self._json({"ok": do_screenshot(mode)})
+                # Avant : « area » par défaut → un mode fautif lançait slurp
+                # (sélection interactive) au lieu de répondre une erreur.
+                self._json({"ok": False, "error": "mode invalide"}, 400)
+                return
+            self._json(do_screenshot(mode))
             return
         if path == "/api/translate":
             # Synchrone : l'UI est masquée pendant la sélection OCR, on ne

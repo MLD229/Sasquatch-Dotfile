@@ -52,6 +52,11 @@ FloatingWindow {
     property var sysVol: ({volume: 0, muted: false})
     property var sysBright: ({brightness: 0})
     property var vizVals: []
+    // Page « Outils » : dépendances externes (/api/tools/health) + retour
+    // d'action, pour qu'un bouton ne reste jamais muet.
+    property var toolHealth: ({})
+    property string shotStatus: ""
+    property string imgStatus: ""
     // Sidebar volume/luminosité (colonne à côté du panel)
     property int sidebarW: 110
     property int ccH: Math.min(780, root.height - 40)
@@ -86,6 +91,30 @@ FloatingWindow {
         }
     }
 
+    // Outil disponible ? (avant la 1re réponse /health : on laisse actif,
+    // aucun bouton ne se retrouve bloqué par un backend non à jour)
+    function toolOk(k) {
+        var h = root.toolHealth ? root.toolHealth[k] : null;
+        return !h || h.ok !== false;
+    }
+    // « non installé : grim, slurp  ·  pacman -S grim slurp »
+    function toolWhy(k) {
+        var h = root.toolHealth ? root.toolHealth[k] : null;
+        if (!h || h.ok !== false) return "";
+        return "non installé : " + h.resume + (h.hint ? "  ·  " + h.hint : "");
+    }
+
+    // Recherche image : le texte déclenche une requête directe ; vide → le
+    // serveur fait l'OCR de la sélection (d'où le timeout long).
+    function searchImage() {
+        if (!root.toolOk("imgsearch")) return;
+        imgStatus = "recherche…";
+        root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function(res) {
+            imgStatus = (res && res.ok) ? "lancée ✓"
+                                        : ("⚠ " + ((res && res.error) || "échec"));
+        }, 130000);
+    }
+
     function quit() {
         // Le serveur backend est un service systemd user (sasquatch-cc) :
         // il vit en permanence, le CC ne fait que se fermer. NE PAS appeler
@@ -107,6 +136,10 @@ FloatingWindow {
             shotBusy = false;
             suppressQuit = false;
             visible = true;
+            // Retour visible : un échec (sélection annulée, outil manquant)
+            // ne doit pas laisser le bouton muet.
+            shotStatus = (res && res.ok) ? "capturé ✓"
+                                         : ("⚠ " + ((res && res.error) || "capture impossible"));
         }, 120000);
     }
 
@@ -184,6 +217,14 @@ FloatingWindow {
     Timer {
         interval: 1000; running: true; repeat: true; triggeredOnStart: true
         onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "hh:mm")
+    }
+    // Dépendances de la page Outils : `command -v` côté serveur, relu
+    // toutes les 60 s (installer un paquet se voit sans relancer le CC).
+    Timer {
+        interval: 60000; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: root.api("GET", "/api/tools/health", null, function(res) {
+            if (res) root.toolHealth = res;
+        });
     }
 
     // ---------- veil (léger : le verre doit laisser voir le desktop flouté) ----------
@@ -433,6 +474,7 @@ FloatingWindow {
                                 Layout.fillWidth: true
                                 height: 30
                                 radius: 8
+                                opacity: root.toolOk("capture") ? 1 : 0.45
                                 color: shotMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
                                 Behavior on color { ColorAnimation { duration: 120 } }
                                 Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 10; color: root.cText }
@@ -440,10 +482,22 @@ FloatingWindow {
                                     id: shotMa
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onClicked: root.takeScreenshot(modelData.mode)
+                                    onClicked: {
+                                        if (!root.toolOk("capture")) return;
+                                        root.takeScreenshot(modelData.mode);
+                                    }
                                 }
                             }
                         }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.toolOk("capture") ? root.shotStatus
+                                                     : ("⚠ " + root.toolWhy("capture"))
+                        visible: text.length > 0
+                        font.pixelSize: 9
+                        color: root.toolOk("capture") ? root.cTextDim : root.cHot
+                        elide: Text.ElideRight
                     }
                 }
 
@@ -455,6 +509,7 @@ FloatingWindow {
                         Layout.fillWidth: true
                         height: 28
                         radius: 8
+                        opacity: root.toolOk("finder") ? 1 : 0.45
                         color: findMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Text {
@@ -468,6 +523,7 @@ FloatingWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             onClicked: {
+                                if (!root.toolOk("finder")) return;
                                 if (findLabel.busy) return;  // block re-click while recording
                                 findLabel.busy = true;
                                 findLabel.resultText = "";
@@ -488,9 +544,11 @@ FloatingWindow {
                         id: findLabel
                         property bool busy: false
                         property string resultText: ""
-                        text: resultText
+                        // Sans songrec, dire POURQUOI au lieu d'un bouton mort.
+                        text: root.toolOk("finder") ? resultText
+                                                    : ("⚠ " + root.toolWhy("finder"))
                         font.pixelSize: 10
-                        color: root.cTextDim
+                        color: root.toolOk("finder") ? root.cTextDim : root.cHot
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
@@ -511,7 +569,7 @@ FloatingWindow {
                             font.pixelSize: 11
                             background: Rectangle { radius: 8; color: Qt.rgba(1,1,1,0.06) }
                             // Enter triggers the search (mirrors the 🔍 button)
-                            Keys.onReturnPressed: root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function() {})
+                            Keys.onReturnPressed: root.searchImage()
                         }
                         Rectangle {
                             width: 30; height: 26; radius: 8
@@ -522,9 +580,18 @@ FloatingWindow {
                                 id: imgMa
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function() {})
+                                onClicked: root.searchImage()
                             }
                         }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.toolOk("imgsearch") ? root.imgStatus
+                                                       : ("⚠ " + root.toolWhy("imgsearch"))
+                        visible: text.length > 0
+                        font.pixelSize: 9
+                        color: root.toolOk("imgsearch") ? root.cTextDim : root.cHot
+                        elide: Text.ElideRight
                     }
                 }
             }
@@ -546,6 +613,7 @@ FloatingWindow {
                         Layout.fillWidth: true
                         height: 32
                         radius: 8
+                        opacity: root.toolOk("translate") ? 1 : 0.45
                         color: transMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Text {
@@ -559,6 +627,7 @@ FloatingWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             onClicked: {
+                                if (!root.toolOk("translate")) return;
                                 if (transOrig.busy) return;
                                 transOrig.busy = true;
                                 transOrig.detected = "";
@@ -583,6 +652,17 @@ FloatingWindow {
                                 }, 120000);
                             }
                         }
+                    }
+
+                    // Dépendance manquante : message explicite au-dessus du
+                    // résultat (jamais un bouton qui ne fait rien).
+                    Text {
+                        Layout.fillWidth: true
+                        visible: !root.toolOk("translate")
+                        text: "⚠ " + root.toolWhy("translate")
+                        font.pixelSize: 9
+                        color: root.cHot
+                        elide: Text.ElideRight
                     }
 
                     // Texte détecté (original OCR)

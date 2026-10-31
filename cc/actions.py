@@ -20,16 +20,28 @@ CC_FIFO_FORMAT = (44100, 1)
 
 
 def do_screenshot(mode):
+    """{"ok": bool, "error": str|None} — l'UI peut dire POURQUOI ça a échoué
+    (script absent, grim/slurp manquant, sélection annulée) au lieu d'un
+    bouton muet."""
     path = os.path.expanduser("~/.config/scripts/screenshot.sh")
+    if mode not in ("area", "full", "window"):
+        return {"ok": False, "error": "mode inconnu"}
+    if not os.path.exists(path):
+        return {"ok": False, "error": "screenshot.sh absent (~/.config/scripts)"}
+    manque = [c for c in ("grim", "slurp", "wl-copy") if shutil.which(c) is None]
+    if manque:
+        return {"ok": False, "error": "non installé : " + ", ".join(manque)}
     try:
         # Synchrone : l'UI se masque jusqu'à la fin de la capture, il ne faut
         # donc pas retourner avant que grim/slurp soit terminé (ou annulé par
         # l'utilisateur). Le timeout protège contre un slurp/daemon bloqué.
         rc = subprocess.run(["bash", path, mode], timeout=120,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
-        return rc == 0
+        return {"ok": rc == 0, "error": None if rc == 0 else "capture annulée"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "capture : délai dépassé (120 s)"}
     except Exception:
-        return False
+        return {"ok": False, "error": "capture impossible"}
 
 
 def _close_cc_window():
@@ -53,6 +65,10 @@ def do_translate():
                              capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "OCR timeout (120 s)"}
+    # ocr.sh sort en 3 quand une dépendance manque : message précis dans l'UI
+    # plutôt que « sélection annulée » trompeur.
+    if out.returncode == 3:
+        return {"ok": False, "error": (out.stderr or "").strip() or "dépendance OCR manquante"}
     if out.returncode != 0:
         return {"ok": False, "error": "sélection annulée ou capture échouée"}
     text = (out.stdout or "").strip()
@@ -67,26 +83,37 @@ def do_translate():
 def do_imgsearch(q):
     """Recherche image DuckDuckGo. `q` non vide → recherche directe ;
     sinon OCR de la sélection puis recherche du texte détecté."""
-    if q:
-        url = "https://duckduckgo.com/?q=" + urllib.parse.quote(q) + "&iax=images&ia=images"
+    def _open(url):
+        if shutil.which("xdg-open") is None:
+            return {"ok": False, "error": "xdg-open non installé (xdg-utils)"}
         try:
             subprocess.Popen(["xdg-open", url], start_new_session=True,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
-            pass
-        return {"ok": True, "mode": "text"}
+            return {"ok": False, "error": "impossible d'ouvrir le navigateur"}
+        return {"ok": True}
+
+    if q:
+        url = "https://duckduckgo.com/?q=" + urllib.parse.quote(q) + "&iax=images&ia=images"
+        res = _open(url)
+        return {"ok": res["ok"], "error": res["error"], "mode": "text"}
     _close_cc_window()
+    manque = [c for c in ("grim", "slurp", "tesseract") if shutil.which(c) is None]
+    if manque:
+        return {"ok": False, "mode": "image",
+                "error": "non installé : " + ", ".join(manque)}
     try:
         out = subprocess.run(["bash", os.path.join(SCRIPT_DIR, "ocr.sh")],
                              capture_output=True, text=True, timeout=120)
         text = (out.stdout or "").strip()
-        if text:
-            url = "https://duckduckgo.com/?q=" + urllib.parse.quote(text) + "&iax=images&ia=images"
-            subprocess.Popen(["xdg-open", url], start_new_session=True,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
-    return {"ok": True, "mode": "image"}
+        if not text:
+            return {"ok": False, "mode": "image",
+                    "error": (out.stderr or "").strip() or "aucun texte détecté"}
+        url = "https://duckduckgo.com/?q=" + urllib.parse.quote(text) + "&iax=images&ia=images"
+        res = _open(url)
+        return {"ok": res["ok"], "error": res["error"], "mode": "image"}
+    except Exception as exc:
+        return {"ok": False, "mode": "image", "error": "recherche impossible (%s)" % exc}
 
 
 def _monitor_source():
@@ -340,3 +367,42 @@ def do_finder():
             os.remove(wav)
         except Exception:
             pass
+
+
+# ── Santé des outils (page « Outils » du CC) ───────────────────────────────
+# Chaque outil dépend de commandes externes. Sans elles le bouton ne peut
+# rien faire : l'UI doit afficher « non installé : X » (route /api/tools/health)
+# au lieu de rester muette. `command -v` = shutil.which.
+TOOL_DEPS = {
+    "capture":   (("grim", "grim"), ("slurp", "slurp"), ("wl-copy", "wl-clipboard")),
+    "finder":    (("songrec", "songrec"),),
+    "imgsearch": (("xdg-open", "xdg-utils"), ("grim", "grim"), ("slurp", "slurp"),
+                  ("tesseract", "tesseract")),
+    "translate": (("grim", "grim"), ("slurp", "slurp"), ("tesseract", "tesseract")),
+}
+
+TOOL_SCRIPTS = {
+    "capture": "~/.config/scripts/screenshot.sh",
+    "imgsearch": os.path.join(SCRIPT_DIR, "ocr.sh"),
+    "translate": os.path.join(SCRIPT_DIR, "ocr.sh"),
+}
+
+
+def tools_health():
+    """{outil: {ok, manque: [{cmd, paquet}], resume, hint}} — léger (which)."""
+    out = {}
+    for name, deps in TOOL_DEPS.items():
+        manque = [{"cmd": c, "paquet": p} for c, p in deps if shutil.which(c) is None]
+        script = TOOL_SCRIPTS.get(name)
+        if script and not os.path.exists(os.path.expanduser(script)):
+            manque.append({"cmd": os.path.basename(script), "paquet": None})
+        out[name] = {"ok": not manque, "manque": manque}
+    # Reconnaissance : il faut au moins UN enregistreur audio.
+    if not any(shutil.which(c) for c in ("ffmpeg", "pw-record", "arecord")):
+        out["finder"]["manque"].append({"cmd": "ffmpeg", "paquet": "ffmpeg"})
+        out["finder"]["ok"] = False
+    for v in out.values():
+        v["resume"] = ", ".join(m["cmd"] for m in v["manque"])
+        paquets = sorted({m["paquet"] for m in v["manque"] if m["paquet"]})
+        v["hint"] = ("pacman -S " + " ".join(paquets)) if paquets else ""
+    return out
