@@ -159,8 +159,22 @@ ShellRoot {
             // Part de libre ajoutée à CHAQUE écart entre groupes (0 si le
             // contenu remplit déjà la barre : les groupes ne se chevauchent
             // jamais, ils dépassent au pire à l'extrémité).
-            readonly property real extra: Math.max(0, stack.freeSpace / 3)
+            // v5d (mode haut) : les modules PRENNENT la longueur au lieu de
+            // laisser des vides entre les groupes. En horizontal, l'espace libre
+            // est réparti dans la LARGEUR des modules ; en vertical (gauche /
+            // droite) rien ne change : c'est l'écart entre groupes qui absorbe.
+            readonly property real extra: Config.horizontal
+                                           ? 0 : Math.max(0, stack.freeSpace / 3)
             readonly property real gap: stack.groupGap + stack.extra
+            readonly property real natTotal: topGroup.nat + infoGroup.nat
+                                             + appsGroup.nat + botGroup.nat
+            readonly property int nbModules: Config.modules.length
+            readonly property real gapsTotal: 3 * Config.spacing
+                                              + Math.max(0, stack.nbModules - 4) * Config.spacing
+            readonly property real extraModule: Config.horizontal
+                ? Math.max(0, (stack.mainLen - stack.natTotal - stack.gapsTotal)
+                              / Math.max(1, stack.nbModules))
+                : 0
             // Centrage sur le petit axe : la bande fait Config.width, un bloc
             // fait Config.block, donc la même marge des deux côtés.
             readonly property real cross: Config.horizontal
@@ -168,7 +182,7 @@ ShellRoot {
                                           : Math.round((stack.width - Config.block) / 2)
 
             Component.onCompleted: {
-                if (stack.freeSpace < 0)
+                if (stack.freeSpace < 0 && !Config.horizontal)
                     console.warn("bar: contenu " + Math.round(stack.used)
                                  + " px > place utile " + Math.round(stack.mainLen)
                                  + " px (position " + Config.position
@@ -180,6 +194,17 @@ ShellRoot {
                 id: topGroup
                 flow: Config.horizontal ? Flow.LeftToRight : Flow.TopToBottom
                 spacing: Config.spacing
+                // Somme des largeurs NATURELLES des modules de ce groupe
+                // (indépendante de l'étirement, donc aucun cycle de liaison).
+                readonly property real nat: {
+                    var t = 0;
+                    for (var k = 0; k < children.length; k++) {
+                        var c = children[k];
+                        if (c && c.natW !== undefined)
+                            t += c.natW;
+                    }
+                    return t;
+                }
                 // Largeur = largeur NATURELLE du Flow (défaut Qt : width =
                 // implicitWidth) : somme des enfants en horizontal, colonne de
                 // Config.block en vertical. Aucune auto-référence width <->
@@ -193,10 +218,12 @@ ShellRoot {
                     model: shell.modulesIn("top")
                     delegate: Loader {
                         required property string modelData
-                        // Horizontal : largeur NATURELLE du module, hauteur =
-                        // une case (la variante « une ligne » du module).
+                        // Largeur NATURELLE du module : sert de base au calcul
+                        // d'étirement (ne dépend pas de la largeur imposée).
+                        readonly property real natW: item ? Math.ceil(item.implicitWidth) : 0
+                        // Horizontal : naturelle + part de l'espace libre (v5d).
                         width: Config.horizontal
-                               ? (item ? Math.ceil(item.implicitWidth) : 0)
+                               ? (natW + stack.extraModule)
                                : Config.block
                         height: Config.horizontal
                                 ? Config.caseH
@@ -211,6 +238,17 @@ ShellRoot {
                 id: infoGroup
                 flow: Config.horizontal ? Flow.LeftToRight : Flow.TopToBottom
                 spacing: Config.spacing
+                // Somme des largeurs NATURELLES des modules de ce groupe
+                // (indépendante de l'étirement, donc aucun cycle de liaison).
+                readonly property real nat: {
+                    var t = 0;
+                    for (var k = 0; k < children.length; k++) {
+                        var c = children[k];
+                        if (c && c.natW !== undefined)
+                            t += c.natW;
+                    }
+                    return t;
+                }
                 readonly property real main: Config.horizontal ? width : height
                 x: Config.horizontal ? topGroup.main + stack.gap : stack.cross
                 y: Config.horizontal ? stack.cross : topGroup.main + stack.gap
@@ -219,8 +257,9 @@ ShellRoot {
                     model: shell.modulesIn("info")
                     delegate: Loader {
                         required property string modelData
+                        readonly property real natW: item ? Math.ceil(item.implicitWidth) : 0
                         width: Config.horizontal
-                               ? (item ? Math.ceil(item.implicitWidth) : 0)
+                               ? (natW + stack.extraModule)
                                : Config.block
                         height: Config.horizontal
                                 ? Config.caseH
@@ -235,6 +274,17 @@ ShellRoot {
                 id: appsGroup
                 flow: Config.horizontal ? Flow.LeftToRight : Flow.TopToBottom
                 spacing: Config.spacing
+                // Somme des largeurs NATURELLES des modules de ce groupe
+                // (indépendante de l'étirement, donc aucun cycle de liaison).
+                readonly property real nat: {
+                    var t = 0;
+                    for (var k = 0; k < children.length; k++) {
+                        var c = children[k];
+                        if (c && c.natW !== undefined)
+                            t += c.natW;
+                    }
+                    return t;
+                }
                 readonly property real main: Config.horizontal ? width : height
                 x: Config.horizontal ? infoGroup.x + infoGroup.main + stack.gap : stack.cross
                 y: Config.horizontal ? stack.cross : infoGroup.y + infoGroup.main + stack.gap
@@ -243,8 +293,9 @@ ShellRoot {
                     model: shell.modulesIn("apps")
                     delegate: Loader {
                         required property string modelData
+                        readonly property real natW: item ? Math.ceil(item.implicitWidth) : 0
                         width: Config.horizontal
-                               ? (item ? Math.ceil(item.implicitWidth) : 0)
+                               ? (natW + stack.extraModule)
                                : Config.block
                         height: Config.horizontal
                                 ? Config.caseH
@@ -259,6 +310,17 @@ ShellRoot {
                 id: botGroup
                 flow: Config.horizontal ? Flow.LeftToRight : Flow.TopToBottom
                 spacing: Config.spacing
+                // Somme des largeurs NATURELLES des modules de ce groupe
+                // (indépendante de l'étirement, donc aucun cycle de liaison).
+                readonly property real nat: {
+                    var t = 0;
+                    for (var k = 0; k < children.length; k++) {
+                        var c = children[k];
+                        if (c && c.natW !== undefined)
+                            t += c.natW;
+                    }
+                    return t;
+                }
                 readonly property real main: Config.horizontal ? width : height
                 x: Config.horizontal ? appsGroup.x + appsGroup.main + stack.gap : stack.cross
                 y: Config.horizontal ? stack.cross : appsGroup.y + appsGroup.main + stack.gap
@@ -267,8 +329,9 @@ ShellRoot {
                     model: shell.modulesIn("bottom")
                     delegate: Loader {
                         required property string modelData
+                        readonly property real natW: item ? Math.ceil(item.implicitWidth) : 0
                         width: Config.horizontal
-                               ? (item ? Math.ceil(item.implicitWidth) : 0)
+                               ? (natW + stack.extraModule)
                                : Config.block
                         height: Config.horizontal
                                 ? Config.caseH
