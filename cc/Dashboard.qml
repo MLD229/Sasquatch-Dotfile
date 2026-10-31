@@ -24,6 +24,29 @@ Item {
     property var tasks: ({items: [], total: 0, done: 0})
     property string newTask: ""
 
+    // ── Lecteur musique ───────────────────────────────────────────────
+    // Les DONNÉES viennent de main.qml (un seul poller /api/music/status à
+    // 1 s pour tout le CC) ; les ACTIONS remontent par le signal musicCmd
+    // → root.api. Aucun timer ni abonnement dupliqué ici.
+    property var music: ({})
+    property var sysVol: ({volume: 0, muted: false})
+    property var vizVals: []
+    signal musicCmd(string path, var body)
+
+    readonly property bool isPlaying: !!(dash.music && dash.music.playing)
+    // Carte complète seulement quand ça joue ; sinon compacte (pas de vide).
+    readonly property bool musicExpanded: dash.isPlaying
+    readonly property string artUrl: (dash.music && dash.music.art)
+                                      ? "http://127.0.0.1:8765" + dash.music.art : ""
+    readonly property string trackTitle: (dash.music && dash.music.title)
+                                         ? dash.music.title : "Aucune musique en cours"
+    readonly property string trackArtist: (dash.music && dash.music.artist) ? dash.music.artist : ""
+
+    function mmss(s) {
+        s = Math.max(0, Math.round(s || 0));
+        return Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
+    }
+
     // Heure locale, rafraîchie chaque seconde.
     property date now: new Date()
     Timer { interval: 1000; running: true; repeat: true; onTriggered: dash.now = new Date() }
@@ -78,8 +101,12 @@ Item {
 
     // Carte translucide de base.
     component Carte: Rectangle {
+        id: carte
         property string titre: ""
         radius: 16
+        // Hauteur naturelle = contenu (marges internes 14 comprises) : une
+        // carte peut donc s'auto-dimensionner sans hauteur magique.
+        implicitHeight: inner.implicitHeight + 28
         color: Qt.rgba(dash.cCard.r, dash.cCard.g, dash.cCard.b, 0.55)
         border.width: 1
         border.color: Qt.rgba(dash.cText.r, dash.cText.g, dash.cText.b, 0.06)
@@ -89,17 +116,17 @@ Item {
             anchors.fill: parent
             anchors.margins: 14
             spacing: 10
-        }
-        Text {
-            text: parent.titre
-            visible: text.length > 0
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.margins: 14
-            font.pixelSize: 10
-            font.letterSpacing: 1.2
-            font.capitalization: Font.AllUppercase
-            color: dash.cTextDim
+            // Le titre fait partie de la colonne (avant, il était ancré
+            // par-dessus le contenu et chevauchait la 1re ligne des cartes
+            // « calendrier » et « musique »). Invisible → ne prend pas de place.
+            Text {
+                text: carte.titre
+                visible: text.length > 0
+                font.pixelSize: 10
+                font.letterSpacing: 1.2
+                font.capitalization: Font.AllUppercase
+                color: dash.cTextDim
+            }
         }
     }
 
@@ -198,6 +225,235 @@ Item {
                     }
                 }
                 Item { Layout.fillHeight: true }
+            }
+
+            // ═════════ MUSIQUE (déplacée de la page « Système ») ═════════
+            // Pochette · titre/artiste/album · prev/play/stop/next · timeline
+            // (seek) · volume système · visualiseur. Compacte quand rien ne
+            // joue : seuls la pochette, le titre et 3 boutons restent.
+            Carte {
+                titre: "MUSIQUE"
+                Layout.fillWidth: true
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Rectangle {
+                        Layout.preferredWidth: dash.musicExpanded ? 76 : 42
+                        Layout.preferredHeight: dash.musicExpanded ? 76 : 42
+                        radius: 10
+                        clip: true
+                        color: Qt.rgba(dash.cText.r, dash.cText.g, dash.cText.b, 0.06)
+                        Image {
+                            anchors.fill: parent
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            // Clé de cache = la piste, PAS l'heure : le statut
+                            // est re-pollé chaque seconde, une URL datée
+                            // re-téléchargerait la pochette en boucle.
+                            cache: false
+                            source: dash.artUrl
+                            visible: dash.artUrl !== ""
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            text: "🎵"
+                            font.pixelSize: dash.musicExpanded ? 26 : 16
+                            color: dash.cTextDim
+                            visible: dash.artUrl === ""
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        // preferred 0 + minimum 0 : la colonne se contente de
+                        // la place restante au lieu de pousser le contenu
+                        // (la durée/le % débordaient hors de la carte).
+                        Layout.preferredWidth: 0
+                        Layout.minimumWidth: 0
+                        spacing: 2
+
+                        Text {
+                            Layout.fillWidth: true
+                            // minimum 0 = peut rétrécir (elide) au lieu
+                            // d'imposer sa largeur au parent
+                            Layout.minimumWidth: 0
+                            text: dash.trackTitle
+                            font.pixelSize: 13
+                            font.bold: true
+                            color: dash.cText
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            visible: text.length > 0
+                            text: dash.trackArtist
+                            font.pixelSize: 11
+                            color: dash.cTextDim
+                            elide: Text.ElideRight
+                        }
+                        // Album + source (navigateur YouTube, MPD…) sur UNE ligne :
+                        // deux lignes séparées coûtaient 15 px de haut, pris sur
+                        // la carte PROFIL (elle passait sous son bord).
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            visible: dash.musicExpanded && text.length > 0
+                            text: {
+                                var a = (dash.music && dash.music.album) ? dash.music.album : "";
+                                var src = (dash.music && (dash.music.source === "mpris"
+                                                          || dash.music.source === "web"))
+                                          ? "via " + (dash.music.player ? dash.music.player : "navigateur")
+                                          : "";
+                                if (a && src) return a + " · " + src;
+                                return a || src;
+                            }
+                            font.pixelSize: 9
+                            color: dash.cTextDim
+                            elide: Text.ElideRight
+                        }
+
+                        // ── Barre de progression (seek au clic) ──
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: dash.musicExpanded
+                            spacing: 6
+                            Text {
+                                text: dash.mmss(dash.music ? dash.music.elapsed : 0)
+                                font.pixelSize: 9; color: dash.cTextDim
+                            }
+                            Rectangle {
+                                id: musicBar
+                                Layout.fillWidth: true
+                                height: 6
+                                radius: 3
+                                color: Qt.rgba(dash.cText.r, dash.cText.g, dash.cText.b, 0.10)
+                                Rectangle {
+                                    radius: 3
+                                    height: parent.height
+                                    color: dash.cAccent
+                                    width: {
+                                        var d = (dash.music && dash.music.duration) ? dash.music.duration : 0;
+                                        var e = (dash.music && dash.music.elapsed) ? dash.music.elapsed : 0;
+                                        return d > 0 ? musicBar.width * Math.min(1, e / d) : 0;
+                                    }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: function(mouse) {
+                                        var d = (dash.music && dash.music.duration) ? dash.music.duration : 0;
+                                        if (d <= 0) return;
+                                        dash.musicCmd("/api/music/seek",
+                                                      ({pos: Math.round((mouse.x / width) * d)}));
+                                    }
+                                }
+                            }
+                            Text {
+                                text: dash.mmss(dash.music ? dash.music.duration : 0)
+                                font.pixelSize: 9; color: dash.cTextDim
+                            }
+                        }
+
+                        // ── Commandes + visualiseur ──
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+
+                            IconButtonMini {
+                                glyph: "📃"
+                                size: 22
+                                visible: dash.musicExpanded
+                                onClicked: dash.musicCmd("/api/playlist/open", null)
+                            }
+                            IconButtonMini {
+                                glyph: "⏮"
+                                size: dash.musicExpanded ? 28 : 26
+                                onClicked: dash.musicCmd("/api/music/prev", null)
+                            }
+                            IconButtonMini {
+                                glyph: dash.isPlaying ? "⏸" : "▶"
+                                size: dash.musicExpanded ? 32 : 28
+                                onClicked: dash.musicCmd("/api/music/toggle", null)
+                            }
+                            IconButtonMini {
+                                glyph: "⏹"
+                                size: 26
+                                visible: dash.musicExpanded
+                                onClicked: dash.musicCmd("/api/music/stop", null)
+                            }
+                            IconButtonMini {
+                                glyph: "⏭"
+                                size: dash.musicExpanded ? 28 : 26
+                                onClicked: dash.musicCmd("/api/music/next", null)
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        // ── Volume système (la sidebar garde la barre épaisse) ──
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: dash.musicExpanded
+                            spacing: 8
+                            IconButtonMini {
+                                glyph: (dash.sysVol && dash.sysVol.muted) ? "🔇" : "🔊"
+                                size: 22
+                                onClicked: dash.musicCmd("/api/system/volume",
+                                                         ({mute: !(dash.sysVol && dash.sysVol.muted)}))
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 6
+                                radius: 3
+                                color: Qt.rgba(dash.cText.r, dash.cText.g, dash.cText.b, 0.10)
+                                Rectangle {
+                                    radius: 3
+                                    height: parent.height
+                                    color: dash.cAccent2
+                                    width: parent.width * ((dash.sysVol && dash.sysVol.volume)
+                                                           ? dash.sysVol.volume / 100 : 0)
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: function(mouse) {
+                                        var ratio = Math.max(0, Math.min(1, mouse.x / width));
+                                        dash.musicCmd("/api/system/volume",
+                                                      ({v: Math.round(ratio * 100)}));
+                                    }
+                                }
+                            }
+                            Text {
+                                text: (dash.sysVol && dash.sysVol.volume ? Math.round(dash.sysVol.volume) : 0) + "%"
+                                font.pixelSize: 9
+                                color: dash.cTextDim
+                            }
+
+                            // Visualiseur cava : données déjà pollées par
+                            // main.qml (/api/viz), aucune requête ici.
+                            RowLayout {
+                                spacing: 2
+                                Layout.preferredHeight: 18
+                                Layout.alignment: Qt.AlignBottom
+                                Repeater {
+                                    model: 12
+                                    delegate: Rectangle {
+                                        Layout.preferredWidth: 3
+                                        Layout.preferredHeight: {
+                                            var v = (dash.vizVals && dash.vizVals.length > index)
+                                                    ? dash.vizVals[index] : 0;
+                                            return Math.max(2, v * 18);
+                                        }
+                                        Layout.alignment: Qt.AlignBottom
+                                        radius: 1
+                                        color: dash.cAccent
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -448,14 +704,20 @@ Item {
         }
     }
 
-    // Petit bouton rond réutilisé (⟳ ‹ ›)
+    // Petit bouton rond réutilisé (⟳ ‹ › ⏮ ▶ ⏭)
     component IconButtonMini: Rectangle {
         id: mini
         property string glyph: ""
+        property int size: 24
         signal clicked()
-        width: 24; height: 24; radius: 12
+        width: mini.size; height: mini.size; radius: mini.size / 2
         color: Qt.rgba(dash.cText.r, dash.cText.g, dash.cText.b, 0.08)
-        Text { anchors.centerIn: parent; text: mini.glyph; font.pixelSize: 13; color: dash.cText }
+        Text {
+            anchors.centerIn: parent
+            text: mini.glyph
+            font.pixelSize: Math.round(mini.size * 0.55)
+            color: dash.cText
+        }
         MouseArea { anchors.fill: parent; onClicked: mini.clicked() }
     }
 }

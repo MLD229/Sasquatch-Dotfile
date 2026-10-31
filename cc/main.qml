@@ -328,6 +328,14 @@ FloatingWindow {
                 cWarn: root.cWarn
                 cGood: root.cGood
                 cHot: root.cHot
+                // Lecteur musique : données fournies par les pollers uniques
+                // d'ici (aucun timer en double dans le Dashboard).
+                music: root.music
+                sysVol: root.sysVol
+                vizVals: root.vizVals
+                onMusicCmd: function(path, body) {
+                    root.api("POST", path, body, function() {});
+                }
             }
 
             // ---------- RANGÉE 1: PERFORMANCE ----------
@@ -395,205 +403,9 @@ FloatingWindow {
                 }
             }
 
-            // ---------- RANGÉE 2: MUSIQUE ----------
-            Tile {
-                visible: root.page === "sys"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 165
-                Layout.minimumHeight: 130
-                Layout.fillHeight: true
-                contentMargins: 14
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 14
-
-                    Rectangle {
-                        width: 90; height: 90
-                        radius: 12
-                        color: Qt.rgba(1,1,1,0.06)
-                        clip: true
-                        Image {
-                            anchors.fill: parent
-                            fillMode: Image.PreserveAspectCrop
-                            // Stable cache-buster keyed on the track itself, NOT
-                            // Date.now(): music is re-polled every second, so a
-                            // time-based URL would re-download the full artwork
-                            // once per second. `art` est fourni par le serveur :
-                            // MPRIS (thumbnail navigateur/YouTube) ou MPD.
-                            source: (root.music && root.music.art) ? "http://127.0.0.1:8765" + root.music.art : ""
-                            cache: false
-                            asynchronous: true
-                        }
-                        Text {
-                            anchors.centerIn: parent
-                            text: "🎵"
-                            font.pixelSize: 28
-                            visible: !root.music || !root.music.art
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        spacing: 6
-
-                        Text {
-                            text: (root.music && root.music.title) ? root.music.title : "Aucune musique en cours"
-                            font.pixelSize: 14
-                            font.bold: true
-                            color: root.cText
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: (root.music && root.music.artist) ? root.music.artist : ""
-                            font.pixelSize: 11
-                            color: root.cTextDim
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: (root.music && root.music.album) ? root.music.album : ""
-                            font.pixelSize: 10
-                            color: root.cTextDim
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        // Badge source : montre d'où vient la musique (navigateur
-                        // YouTube, MPD…).
-                        Text {
-                            text: (root.music && (root.music.source === "mpris" || root.music.source === "web")) ? ("via " + ((root.music.player) ? root.music.player : "navigateur")) : ""
-                            font.pixelSize: 10
-                            font.bold: true
-                            color: root.cAccent
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-
-                        Rectangle {
-                            id: timeline
-                            Layout.fillWidth: true
-                            height: 8
-                            radius: 4
-                            color: Qt.rgba(1,1,1,0.075)
-                            Rectangle {
-                                radius: 4
-                                color: root.cAccent
-                                height: parent.height
-                                width: {
-                                    var d = (root.music && root.music.duration) ? root.music.duration : 0;
-                                    var e = (root.music && root.music.elapsed) ? root.music.elapsed : 0;
-                                    return d > 0 ? parent.width * Math.min(1, e / d) : 0;
-                                }
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: function(mouse) {
-                                    var d = (root.music && root.music.duration) ? root.music.duration : 0;
-                                    if (d <= 0) return;
-                                    var pos = Math.round((mouse.x / width) * d);
-                                    root.api("POST", "/api/music/seek", {pos: pos}, function() {});
-                                }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
-
-                            // Playlist : ouvre/ferme le panneau MPD (Super+P,
-                            // pl/pl.sh via le serveur — il a l'env Hyprland).
-                            IconButton {
-                                width: 32; height: 32
-                                glyph: "📃"
-                                glyphColor: root.cText
-                                onClicked: root.api("POST", "/api/playlist/open", null, function() {})
-                            }
-                            IconButton {
-                                width: 32; height: 32
-                                glyph: "⏮"
-                                glyphColor: root.cText
-                                onClicked: root.api("POST", "/api/music/prev", null, function() {})
-                            }
-                            IconButton {
-                                width: 36; height: 36
-                                glyph: (root.music && root.music.playing) ? "⏸" : "▶"
-                                baseColor: Qt.rgba(1,1,1,0.07)
-                                hoverColor: Qt.rgba(1,1,1,0.12)
-                                glyphColor: root.cText
-                                onClicked: root.api("POST", "/api/music/toggle", null, function() {})
-                            }
-                            IconButton {
-                                width: 32; height: 32
-                                glyph: "⏹"
-                                glyphColor: root.cText
-                                onClicked: root.api("POST", "/api/music/stop", null, function() {})
-                            }
-                            IconButton {
-                                width: 32; height: 32
-                                glyph: "⏭"
-                                glyphColor: root.cText
-                                onClicked: root.api("POST", "/api/music/next", null, function() {})
-                            }
-
-                            IconButton {
-                                width: 26; height: 26
-                                glyph: (root.sysVol && root.sysVol.muted) ? "🔇" : "🔊"
-                                fontSize: 11
-                                glyphColor: root.cText
-                                onClicked: root.api("POST", "/api/system/volume", {mute: !(root.sysVol && root.sysVol.muted)}, function() {})
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: 90
-                                height: 8
-                                radius: 4
-                                color: Qt.rgba(1,1,1,0.075)
-                                Rectangle {
-                                    radius: 4
-                                    color: root.cAccent2
-                                    height: parent.height
-                                    width: parent.width * ((root.sysVol && root.sysVol.volume) ? root.sysVol.volume/100 : 0)
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: function(mouse) {
-                                        var ratio = Math.max(0, Math.min(1, mouse.x / width));
-                                        root.api("POST", "/api/system/volume", {v: Math.round(ratio*100)}, function() {});
-                                    }
-                                }
-                            }
-
-                            RowLayout {
-                                spacing: 2
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 30
-                                Layout.minimumHeight: 30
-                                Layout.maximumHeight: 30
-                                // Collé en bas de la rangée : les barres
-                                // poussent vers le haut comme un égaliseur.
-                                Layout.alignment: Qt.AlignBottom
-                                Repeater {
-                                    model: 20
-                                    delegate: Rectangle {
-                                        Layout.preferredWidth: 3
-                                        Layout.preferredHeight: {
-                                            var v = (root.vizVals && root.vizVals.length > index) ? root.vizVals[index] : 0;
-                                            return Math.max(2, v * 30);
-                                        }
-                                        radius: 1
-                                        color: root.cAccent
-                                        Layout.alignment: Qt.AlignBottom
-                                        Behavior on Layout.preferredHeight { NumberAnimation { duration: 80 } }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // (le bloc MUSIQUE a été déplacé sur la page « Accueil » —
+            // il vit désormais dans Dashboard.qml, colonne 1, sous le profil.
+            // Une seule instance dans tout le CC : données pollées ici.)
 
             // ---------- RANGÉE 3: 3 tuiles ----------
             RowLayout {
