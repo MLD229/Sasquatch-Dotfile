@@ -7,7 +7,16 @@
 //
 // Le « souvenir » du dossier = la config waypaper (clé folder=) : le sélecteur
 // retombe dessus au lancement ; sur un fresh install où le dossier n'existe
-// pas, l'UI affiche un bandeau et invite à parcourir (Dossier…).
+// pas, l'UI affiche un bandeau et invite à choisir une image.
+//
+// Un seul bouton de choix : « Choisir une image… » (zenity fichier). Le dossier
+// mémorisé suit automatiquement le fichier choisi (apply_wallpaper écrit
+// folder=dirname), donc plus de bouton « Dossier… » concurrent.
+//
+// Recherche : champ en haut à droite, filtre la liste (filmstrip + navigation +
+// compteur) sur le NOM des images. Insensible à la casse et aux accents,
+// multi-mots dans n'importe quel ordre (« red spider » trouve
+// « spider-man-...-red-...jpg »), les correspondances exactes remontent en tête.
 //
 // Style : même structure que le CC (veil + panneau glassmorphism centré avec
 // dimensions explicites — jamais de ColumnLayout en fill direct dans la
@@ -45,6 +54,9 @@ FloatingWindow {
 
     // État du sélecteur
     property var wp: ({folder: "", folderExists: false, current: "", files: []})
+    // results = liste FILTRÉE (c'est elle que l'UI affiche et parcourt)
+    property var results: []
+    property string query: ""
     property int idx: 0
     property bool applyBusy: false
     property bool picking: false
@@ -82,63 +94,150 @@ FloatingWindow {
         }
     }
 
+    // ---------- normalisation (recherche) ----------
+    // Pas de String.normalize() garanti dans le moteur QML : table d'accents.
+    function deaccent(s) {
+        var map = {
+            "à": "a", "â": "a", "ä": "a", "á": "a", "ã": "a", "å": "a",
+            "é": "e", "è": "e", "ê": "e", "ë": "e",
+            "í": "i", "ì": "i", "î": "i", "ï": "i",
+            "ó": "o", "ò": "o", "ô": "o", "ö": "o", "õ": "o", "ø": "o",
+            "ù": "u", "û": "u", "ü": "u", "ú": "u",
+            "ç": "c", "ñ": "n", "ý": "y", "ÿ": "y",
+            "œ": "oe", "æ": "ae", "ß": "ss"
+        };
+        var out = "";
+        for (var i = 0; i < s.length; i++) {
+            var c = s.charAt(i);
+            out += (map[c] !== undefined) ? map[c] : c;
+        }
+        return out;
+    }
+
+    // « spider-man_2.png » → « spider man 2 »
+    function normName(name) {
+        var n = deaccent(("" + name).toLowerCase());
+        n = n.replace(/\.[a-z0-9]{1,5}$/, "");          // extension
+        n = n.replace(/[^a-z0-9]+/g, " ");              // séparateurs → espaces
+        return n.replace(/^\s+/, "").replace(/\s+$/, "");
+    }
+
+    function normQuery() {
+        var q = deaccent(root.query.toLowerCase());
+        q = q.replace(/[^a-z0-9]+/g, " ");
+        return q.replace(/^\s+/, "").replace(/\s+$/, "");
+    }
+
+    function hasFilter() { return root.normQuery().length > 0; }
+
     // ---------- données ----------
     function loadWallpapers() {
         root.api("GET", "/api/wallpapers", null, function(res) {
             if (!res) return;
             root.wp = res;
-            root.idx = 0;
-            for (var i = 0; i < res.files.length; i++) {
-                if (res.files[i].path === res.current) { root.idx = i; break; }
-            }
-            if (res.files.length > 0 && res.files[root.idx]) {
-                root.curPath = res.files[root.idx].path;
-                root.curName = res.files[root.idx].name;
-            } else {
-                root.curPath = "";
-                root.curName = "";
-            }
+            root.curPath = res.current || "";
+            root.curName = "";
+            root.rebuild();
         });
     }
 
-    function goTo(n) {
-        var files = root.wp.files;
-        if (!files || files.length === 0) return;
-        if (n < 0) n = files.length - 1;
-        if (n >= files.length) n = 0;
-        if (n === root.idx) return;
-        root.oldPath = root.curPath;
+    // Recalcule la liste filtrée. La sélection courante est conservée si elle
+    // est encore dedans, sinon on retombe sur le premier résultat.
+    function rebuild() {
+        var all = root.wp.files || [];
+        var q = root.normQuery();
+        var out = [];
+
+        if (q.length === 0) {
+            out = all.slice(0);
+        } else {
+            var toks = q.split(" ");
+            var hits = [];
+            for (var i = 0; i < all.length; i++) {
+                var n = root.normName(all[i].name);
+                var ok = true;
+                var first = -1;
+                for (var j = 0; j < toks.length; j++) {
+                    var p = n.indexOf(toks[j]);
+                    if (p < 0) { ok = false; break; }
+                    if (first < 0 || p < first) first = p;
+                }
+                if (!ok) continue;
+                // la requête entière (ordre exact) passe devant, puis la
+                // position de la 1re occurrence.
+                var exact = (n.indexOf(q) >= 0) ? 0 : 1;
+                hits.push({ f: all[i], rank: exact * 1000 + first });
+            }
+            hits.sort(function(a, b) { return a.rank - b.rank; });
+            for (var k = 0; k < hits.length; k++) out.push(hits[k].f);
+        }
+
+        root.results = out;
+
+        if (out.length === 0) {
+            root.idx = 0;
+            root.curPath = "";
+            root.curName = "";
+            return;
+        }
+        var found = -1;
+        for (var m = 0; m < out.length; m++) {
+            if (out[m].path === root.curPath) { found = m; break; }
+        }
+        root.setCurrent(found < 0 ? 0 : found);
+    }
+
+    function setCurrent(n) {
+        if (n < 0 || n >= root.results.length) return;
+        if (root.results[n].path !== root.curPath) root.oldPath = root.curPath;
         root.idx = n;
-        root.curPath = files[n].path;
-        root.curName = files[n].name;
-        fadeTimer.start();
+        root.curPath = root.results[n].path;
+        root.curName = root.results[n].name;
+        if (strip) strip.positionViewAtIndex(n, ListView.Contain);
+    }
+
+    function goTo(n) {
+        var len = root.results.length;
+        if (len === 0) return;
+        if (n < 0) n = len - 1;
+        if (n >= len) n = 0;
+        if (n === root.idx) return;
+        root.setCurrent(n);
+    }
+
+    function clearQuery() {
+        searchField.text = "";
+        root.query = "";
+        searchField.forceActiveFocus();
+    }
+
+    function escapeAction() {
+        if (root.query.length > 0) root.clearQuery();
+        else Qt.quit();
     }
 
     // ---------- actions ----------
-    function pickFolder() {
-        root.picking = true;
-        root.api("POST", "/api/wallpaper/pick", {kind: "folder"}, function(res) {
-            root.picking = false;
-            if (!res || !res.ok) return;
-            root.api("POST", "/api/wallpaper/folder", {folder: res.path}, function(r2) {
-                if (r2 && r2.ok) root.loadWallpapers();
-            }, 5000);
-        }, 200000);
-    }
-
+    // Un seul bouton de choix : une image. Le dossier mémorisé suit (le backend
+    // écrit folder=dirname du fichier), donc la liste se recharge autour d'elle.
     function pickFile() {
+        if (root.picking) return;
         root.picking = true;
         root.api("POST", "/api/wallpaper/pick", {kind: "file"}, function(res) {
-            root.picking = false;
-            if (!res || !res.ok) return;
+            if (!res || !res.ok) {
+                root.picking = false;
+                searchField.forceActiveFocus();   // zenity a pris le focus
+                return;
+            }
             root.api("POST", "/api/wallpaper/apply", {file: res.path}, function(r2) {
+                root.picking = false;
+                searchField.forceActiveFocus();
                 if (r2 && r2.ok) root.loadWallpapers();
             }, 30000);
         }, 200000);
     }
 
     function applyCurrent() {
-        var files = root.wp.files;
+        var files = root.results;
         if (root.applyBusy || !files || files.length === 0) return;
         root.applyBusy = true;
         root.api("POST", "/api/wallpaper/apply", {file: files[root.idx].path}, function(res) {
@@ -148,17 +247,13 @@ FloatingWindow {
     }
 
     function randomPick() {
-        // 🎲 : le serveur pioche dans le dossier courant → preview (crossfade),
-        // l'utilisateur valide avec Appliquer (cohérent avec le reste du picker).
-        root.api("GET", "/api/wallpaper/random", null, function(res) {
-            if (!res || !res.ok) return;
-            var files = root.wp.files;
-            if (!files) return;
-            for (var i = 0; i < files.length; i++) {
-                if (files[i].path === res.path) { root.goTo(i); return; }
-            }
-            root.loadWallpapers();
-        });
+        // 🎲 : pioche dans la liste AFFICHÉE (donc dans le filtre s'il y en a)
+        var files = root.results;
+        if (!files || files.length === 0) return;
+        if (files.length === 1) { root.goTo(0); return; }
+        var n = root.idx;
+        while (n === root.idx) n = Math.floor(Math.random() * files.length);
+        root.goTo(n);
     }
 
     // ---------- cycle de vie ----------
@@ -168,18 +263,23 @@ FloatingWindow {
     }
     Timer { id: fadeTimer; interval: 40; repeat: false; onTriggered: imgOld.opacity = 0.0 }
 
-    // ⚠️ Ne PAS quitter quand zenity (sélecteur Dossier/Fichier, lancé par le
-    // serveur) s'ouvre par-dessus : la FloatingWindow perd visible=true, et un
-    // Qt.quit() à ce moment annulerait le XHR pick → le serveur répond dans le
-    // vide (BrokenPipe) → la sélection n'est jamais appliquée ni mémorisée.
+    onQueryChanged: root.rebuild()
+
+    // ⚠️ Ne PAS quitter quand zenity (sélecteur lancé par le serveur) s'ouvre
+    // par-dessus : la FloatingWindow perd visible=true, et un Qt.quit() à ce
+    // moment annulerait le XHR pick → le serveur répond dans le vide
+    // (BrokenPipe) → la sélection n'est jamais appliquée ni mémorisée.
     // On ne quitte que si l'utilisateur ferme vraiment (toggle wp.sh /
     // closewindow) alors qu'aucun pick n'est en cours.
     onVisibleChanged: {
         if (!visible && !root.picking) Qt.quit();
     }
-    Shortcut { sequence: "Escape"; onActivated: Qt.quit() }
+    // Une seule voie par touche (Shortcut = niveau fenêtre, marche quel que
+    // soit l'élément focalisé) : pas de doublon avec des Keys.on*Pressed.
+    Shortcut { sequence: "Escape"; onActivated: root.escapeAction() }
     Shortcut { sequence: "Left";  onActivated: root.goTo(root.idx - 1) }
     Shortcut { sequence: "Right"; onActivated: root.goTo(root.idx + 1) }
+    Shortcut { sequence: "Return"; onActivated: root.applyCurrent() }
 
     // ---------- pollers ----------
     Timer { interval: 2000; running: true; repeat: true; triggeredOnStart: true
@@ -192,7 +292,10 @@ FloatingWindow {
         });
     }
 
-    Component.onCompleted: root.loadWallpapers()
+    Component.onCompleted: {
+        root.loadWallpapers();
+        searchField.forceActiveFocus();
+    }
 
     // ── UI (structure CC : veil + panel centré à dimensions explicites) ──
     Rectangle {
@@ -221,8 +324,12 @@ FloatingWindow {
             Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
             Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
-            // clics sur le panneau (hors boutons) : ne pas fermer
-            MouseArea { anchors.fill: parent; onClicked: {} }
+            // clics sur le panneau (hors boutons) : ne pas fermer, rendre le
+            // clavier au champ de recherche
+            MouseArea {
+                anchors.fill: parent
+                onClicked: searchField.forceActiveFocus()
+            }
 
             // Molette N'IMPORTE OÙ sur le panneau = changer de wallpaper
             // (les WheelHandler plus profonds — preview, filmstrip — gagnent).
@@ -238,7 +345,7 @@ FloatingWindow {
                 anchors.margins: 26
                 spacing: 14
 
-                // ── En-tête : titre + dossier + actions ──
+                // ── En-tête : titre + dossier + recherche + choix ──
                 RowLayout { spacing: 12; Layout.fillWidth: true; Layout.preferredHeight: 42
                     Text { text: "壁紙"; font.pixelSize: 27; font.weight: Font.Bold; color: root.cAccent }
                     Rectangle { width: 1; height: 30; color: Qt.rgba(root.cTextDim.r, root.cTextDim.g, root.cTextDim.b, 0.35) }
@@ -247,12 +354,96 @@ FloatingWindow {
                         Text {
                             text: root.wp.folder || "aucun dossier"
                             font.pixelSize: 12; color: root.cTextDim
-                            elide: Text.ElideMiddle; Layout.maximumWidth: 480
+                            elide: Text.ElideMiddle; Layout.maximumWidth: 420
                         }
                     }
                     Item { Layout.fillWidth: true }
-                    WpButton { label: "Dossier…"; fg: root.cText; bg: root.cCardSolid; onClicked: root.pickFolder() }
-                    WpButton { label: "Fichier…"; fg: root.cText; bg: root.cCardSolid; onClicked: root.pickFile() }
+
+                    // ── Champ de recherche : filtre la liste en direct ──
+                    Rectangle {
+                        id: searchBox
+                        Layout.preferredWidth: 300
+                        Layout.preferredHeight: 38
+                        radius: 11
+                        color: Qt.rgba(root.cCardSolid.r, root.cCardSolid.g, root.cCardSolid.b, 0.9)
+                        border.width: 1
+                        border.color: searchField.activeFocus
+                                      ? Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.8)
+                                      : Qt.rgba(root.cTextDim.r, root.cTextDim.g, root.cTextDim.b, 0.22)
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: 11
+                            visible: searchField.text.length === 0
+                            text: "🔎 Rechercher une image…"
+                            font.pixelSize: 13
+                            color: Qt.rgba(root.cTextDim.r, root.cTextDim.g, root.cTextDim.b, 0.75)
+                        }
+
+                        TextInput {
+                            id: searchField
+                            anchors.left: parent.left
+                            anchors.leftMargin: 11
+                            anchors.right: clearHit.left
+                            anchors.rightMargin: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            verticalAlignment: TextInput.AlignVCenter
+                            color: root.cText
+                            selectionColor: root.cAccent
+                            selectedTextColor: root.cBgSolid
+                            font.pixelSize: 13
+                            clip: true
+                            // Filtre en direct : on ne touche pas à wp, on
+                            // reconstruit seulement la liste affichée.
+                            onTextChanged: {
+                                if (root.query !== text) root.query = text;
+                            }
+                        }
+
+                        // Compteur de résultats + ✕ de remise à zéro
+                        Item {
+                            id: clearHit
+                            width: searchField.text.length > 0 ? 52 : 0
+                            height: parent.height
+                            anchors.right: parent.right
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: searchField.text.length > 0
+                                text: root.results.length
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                                color: root.results.length === 0 ? root.cHot : root.cAccent
+                            }
+                            Text {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: searchField.text.length > 0
+                                text: "✕"
+                                font.pixelSize: 13
+                                color: clearMa.containsMouse ? root.cHot : root.cTextDim
+                                MouseArea {
+                                    id: clearMa
+                                    anchors.fill: parent
+                                    anchors.margins: -6
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.clearQuery()
+                                }
+                            }
+                        }
+                    }
+
+                    // UN SEUL bouton de choix (le dossier suit le fichier)
+                    WpButton {
+                        label: root.picking ? "…" : "🖼 Choisir une image…"
+                        fg: root.cText; bg: root.cCardSolid
+                        disabled: root.picking
+                        onClicked: root.pickFile()
+                    }
                     WpButton { label: "✕"; fg: root.cHot; bg: root.cCardSolid; onClicked: Qt.quit() }
                 }
 
@@ -283,7 +474,7 @@ FloatingWindow {
                     Text {
                         anchors.centerIn: parent
                         visible: !root.wp.folderExists && root.wp.files.length === 0
-                        text: "⚠ Dossier introuvable — clique « Dossier… » pour en choisir un"
+                        text: "⚠ Dossier introuvable — clique « Choisir une image… » pour repartir d'un fichier"
                         color: root.cWarn; font.pixelSize: 17
                     }
                     Text {
@@ -291,6 +482,14 @@ FloatingWindow {
                         visible: root.wp.folderExists && root.wp.files.length === 0
                         text: "Aucune image dans ce dossier"
                         color: root.cTextDim; font.pixelSize: 17
+                    }
+                    // Recherche sans résultat : on le dit au lieu de laisser
+                    // une zone vide.
+                    Text {
+                        anchors.centerIn: parent
+                        visible: root.wp.files.length > 0 && root.results.length === 0
+                        text: "Aucune image ne correspond à « " + root.query + " »"
+                        color: root.cWarn; font.pixelSize: 17
                     }
 
                     // Molette = défilement stylé
@@ -302,7 +501,7 @@ FloatingWindow {
                     }
                 }
 
-                // ── Filmstrip : miniatures du dossier (cache serveur) ──
+                // ── Filmstrip : miniatures (liste filtrée, cache serveur) ──
                 ListView {
                     id: strip
                     Layout.fillWidth: true
@@ -310,7 +509,7 @@ FloatingWindow {
                     orientation: ListView.Horizontal
                     spacing: 7
                     clip: true
-                    model: root.wp.files
+                    model: root.results
 
                     // Molette sur la liste = la faire défiler horizontalement
                     // (le drag natif marche aussi) — PAS changer de wallpaper.
@@ -357,11 +556,15 @@ FloatingWindow {
                     WpButton { label: "🎲 Aléatoire"; fg: root.cText; bg: root.cCardSolid; onClicked: root.randomPick() }
                     ColumnLayout { spacing: 0
                         Text {
-                            text: root.wp.files.length > 0 ? (root.idx + 1) + " / " + root.wp.files.length : "—"
+                            property int total: root.wp.files.length
+                            text: root.results.length > 0
+                                  ? (root.idx + 1) + " / " + root.results.length
+                                    + (root.hasFilter() ? "   ·   " + root.results.length + " sur " + total : "")
+                                  : "—"
                             font.pixelSize: 13; color: root.cAccent; font.weight: Font.DemiBold
                         }
                         Text {
-                            text: root.curName || "—"
+                            text: root.curName || (root.hasFilter() ? "aucune correspondance" : "—")
                             font.pixelSize: 12; color: root.cTextDim
                             elide: Text.ElideMiddle; Layout.maximumWidth: 420
                         }
@@ -371,7 +574,7 @@ FloatingWindow {
                         label: root.applyBusy ? "Application…" : "Appliquer"
                         accent: true
                         accentColor: root.cAccent
-                        disabled: root.applyBusy || root.wp.files.length === 0
+                        disabled: root.applyBusy || root.results.length === 0
                         onClicked: root.applyCurrent()
                     }
                 }

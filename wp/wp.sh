@@ -54,4 +54,18 @@ if [ "$server_up" -ne 1 ]; then
     exit 1
 fi
 
-quickshell -p "$SCRIPT_DIR/main.qml"
+quickshell -p "$SCRIPT_DIR/main.qml" &
+QS_PID=$!
+
+# Le rice a `misc:focus_on_activate = false` : la fenêtre se mappe SANS focus,
+# et le champ de recherche ne recevrait aucune touche. On la focalise dès
+# qu'elle existe (le QML rend ensuite le clavier au champ de recherche).
+for i in $(seq 1 30); do
+    sleep 0.1
+    if hyprctl clients -j 2>/dev/null | grep -q "\"title\": \"$WIN_TITLE\""; then
+        hyprctl dispatch focuswindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
+        break
+    fi
+done
+
+wait "$QS_PID"
