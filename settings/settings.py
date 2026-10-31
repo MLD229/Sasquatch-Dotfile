@@ -39,6 +39,28 @@ KEYBINDS_USER_CONF = os.path.realpath(
     os.path.join(REPO, "hypr", "keybinds-user.conf"))
 APPLY_LANG = os.path.join(REPO, "scripts", "apply-lang.sh")
 
+# ── Barre verticale Quickshell (cc/bar) ────────────────────────────────────
+# Source unique des options de la barre : cc/bar/bar.json. Le panneau ne
+# duplique RIEN dans settings.json ; il lit ce fichier et délègue toute
+# écriture à barjson.py --set (garde-fou : bornes par clé, écriture atomique,
+# ordre et indentation du fichier préservés).
+BAR_JSON = os.path.realpath(os.path.join(HOME, ".config", "cc", "bar", "bar.json"))
+BAR_WRITER = os.path.join(REPO, "cc", "bar", "barjson.py")
+# Chemin de clé exposé par le panneau -> libellé du contrôle (documentation)
+BAR_KEYS = {
+    "bar.position": "position",
+    "bar.width": "width",
+    "bar.blur": "blur",
+    "bar.persistentWorkspaces": "persistentWorkspaces",
+    "appearance.blockAlpha": "blockAlpha",
+    "appearance.hoverAlpha": "hoverAlpha",
+    "appearance.cardAlpha": "cardAlpha",
+    "runningApps.maxVisible": "maxVisible",
+}
+# Positions réellement honorées par la barre (cc/bar/shell.qml) : l'écriture
+# est refusée en dehors de ce choix, même si barjson.py a la même table.
+BAR_POSITIONS = ("left", "top", "right")
+
 # Lectures (symlinks de dossier : équivalents repo/live).
 PALETTE_QML = os.path.join(HOME, ".config", "cc", "qml", "Palette.qml")
 KEYBINDS_CONF = os.path.join(REPO, "hypr", "keybinds.conf")
@@ -450,6 +472,78 @@ def _read_lang():
     return mode if mode in ("ja", "fr") else "ja"
 
 
+def _bar_read():
+    """Valeurs courantes de la barre, lues depuis cc/bar/bar.json.
+
+    Aucune copie en mémoire du panneau : c'est le fichier qui fait foi (la
+    barre le surveille et se recharge seule). Fichier absent/illisible →
+    {"ok": false}, la section passe en lecture seule côté QML.
+    """
+    try:
+        with open(BAR_JSON, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "error": "bar.json illisible : %s" % exc}
+    bar = data.get("bar") or {}
+    app = data.get("appearance") or {}
+    run = data.get("runningApps") or {}
+    return {
+        "ok": True,
+        "path": BAR_JSON,
+        "values": {
+            "bar.position": bar.get("position", "left"),
+            "bar.width": bar.get("width", 40),
+            "bar.blur": bool(bar.get("blur", True)),
+            "bar.persistentWorkspaces": bar.get("persistentWorkspaces", 10),
+            "appearance.blockAlpha": app.get("blockAlpha", 0.0),
+            "appearance.hoverAlpha": app.get("hoverAlpha", 0.16),
+            "appearance.cardAlpha": app.get("cardAlpha", 0.86),
+            "runningApps.maxVisible": run.get("maxVisible", 3),
+        },
+    }
+
+
+def _post_bar(body):
+    """Une clé de bar.json : déléguée au writer chirurgical (barjson.py --set)."""
+    key = (body or {}).get("key")
+    value = (body or {}).get("value")
+    if key not in BAR_KEYS:
+        return {"ok": False, "error": "clé inconnue : %s" % key}
+    if value is None:
+        return {"ok": False, "error": "valeur manquante pour %s" % key}
+    # Garde-fou supplémentaire côté serveur : une position qui ne serait pas
+    # honorée par la barre ferait mentir le bouton du panneau.
+    if key == "bar.position" and value not in BAR_POSITIONS:
+        return {"ok": False,
+                "error": "position attendue parmi %s" % ", ".join(BAR_POSITIONS)}
+    if isinstance(value, bool):
+        rendered = "true" if value else "false"
+    elif isinstance(value, float):
+        rendered = "%g" % value
+    else:
+        rendered = str(value)
+    try:
+        proc = subprocess.run(
+            ["python3", BAR_WRITER, "--set", "%s=%s" % (key, rendered), "--file", BAR_JSON],
+            capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"ok": False, "error": "writer injoignable : %s" % exc}
+    lines = (proc.stdout or "").strip().splitlines()
+    try:
+        res = json.loads(lines[-1]) if lines else {"ok": False, "error": "aucune sortie"}
+    except ValueError:
+        return {"ok": False, "error": "sortie du writer illisible : %s" % (proc.stdout or "")[:200]}
+    # On renvoie l'état RÉEL relu (pas la valeur demandée) : le panneau affiche
+    # ce qui est vraiment dans le fichier après écriture.
+    state = _bar_read().get("values")
+    res["state"] = state
+    # Pour la position, la valeur RELUE est répétée à la racine : le panneau
+    # n'a pas à fouiller `state` pour savoir où est la barre.
+    if key == "bar.position" and isinstance(state, dict):
+        res["position"] = state.get("bar.position")
+    return res
+
+
 def _post_lang(body):
     mode = body.get("mode")
     if mode not in ("ja", "fr"):
@@ -614,6 +708,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/lang":
             self._json({"mode": _read_lang()})
             return
+        if path == "/api/bar":
+            self._json(_bar_read())
+            return
         self._not_found()
 
     # -- POST --------------------------------------------------------------
@@ -648,6 +745,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/lang":
             self._json(_post_lang(body))
+            return
+        if path == "/api/bar":
+            self._json(_post_bar(body))
             return
         if path == "/api/close":
             self._json({"ok": True})

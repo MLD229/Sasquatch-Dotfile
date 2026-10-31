@@ -74,6 +74,64 @@ FloatingWindow {
     property bool sysLoaded: false
     property string langMode: "ja"
 
+    // ---------- Section BARRE (cc/bar/bar.json, source unique) ----------
+    // Aucune de ces valeurs n'est recopiée dans settings.json : le panneau lit
+    // bar.json (GET /api/bar) et délègue toute écriture à barjson.py --set.
+    property bool barLoaded: false
+    property bool barOk: true
+    property string barError: ""
+    property string barPosition: "left"
+    property int barWidth: 40
+    property int barBlockPct: 0          // blockAlpha × 100 (fond au repos)
+    property int barHoverPct: 16         // hoverAlpha × 100 (fond au survol)
+    property bool barBlur: false
+    property int barPersistWs: 10
+    property int barMaxVisible: 3
+    // Écritures en cours : évite d'empiler les POST pendant un glissement.
+    property bool barBusy: false
+
+    function barApply(values) {
+        if (!values) return;
+        if (values["bar.position"] !== undefined) root.barPosition = values["bar.position"];
+        if (values["bar.width"] !== undefined) root.barWidth = values["bar.width"];
+        if (values["appearance.blockAlpha"] !== undefined)
+            root.barBlockPct = Math.round(values["appearance.blockAlpha"] * 100);
+        if (values["appearance.hoverAlpha"] !== undefined)
+            root.barHoverPct = Math.round(values["appearance.hoverAlpha"] * 100);
+        if (values["bar.blur"] !== undefined) root.barBlur = !!values["bar.blur"];
+        if (values["bar.persistentWorkspaces"] !== undefined)
+            root.barPersistWs = values["bar.persistentWorkspaces"];
+        if (values["runningApps.maxVisible"] !== undefined)
+            root.barMaxVisible = values["runningApps.maxVisible"];
+    }
+    function loadBar() {
+        root.api("GET", "/api/bar", null, function(res) {
+            if (!res || !res.ok) {
+                root.barOk = false;
+                root.barError = (res && res.error) ? res.error : "bar.json illisible";
+                return;
+            }
+            root.barOk = true;
+            root.barError = "";
+            root.barLoaded = true;
+            root.barApply(res.values);
+        });
+    }
+    function saveBar(key, value) {
+        if (!root.barOk || root.barBusy) return;
+        root.barBusy = true;
+        root.api("POST", "/api/bar", {key: key, value: value}, function(res) {
+            root.barBusy = false;
+            if (!res || !res.ok) {
+                root.barError = (res && res.error) ? res.error : "écriture refusée";
+                root.loadBar();               // on ré-affiche l'état réel
+                return;
+            }
+            root.barError = "";
+            root.barApply(res.state);          // état relu depuis le fichier
+        }, 6000);
+    }
+
     // ---------- API helper (XHR, inline — identique au CC) ----------
     function api(method, path, body, cb, timeoutMs) {
         var xhr = new XMLHttpRequest();
@@ -262,6 +320,10 @@ FloatingWindow {
         interval: 400; running: true; repeat: false; triggeredOnStart: true
         onTriggered: root.loadKeybinds()
     }
+    Timer {
+        interval: 450; running: true; repeat: false; triggeredOnStart: true
+        onTriggered: root.loadBar()
+    }
     // Debounce veille (300 ms après le dernier mouvement de slider).
     Timer {
         id: veilleTimer
@@ -388,6 +450,133 @@ FloatingWindow {
                     id: contentCol
                     width: parent.width
                     spacing: 12
+
+                    // ═══════════ 0. BARRE (cc/bar/bar.json) ═══════════
+                    // Source unique : le fichier de la barre. Aucune valeur
+                    // n'est stockée dans settings.json ; chaque contrôle part
+                    // en POST /api/bar -> barjson.py --set (bornes vérifiées,
+                    // écriture atomique). La barre se recharge seule (< 2 s).
+                    Section {
+                        title: "BARRE"
+                        Layout.fillWidth: true
+
+                        Text {
+                            visible: !root.barOk
+                            text: "bar.json illisible — section en lecture seule"
+                                  + (root.barError.length > 0 ? " (" + root.barError + ")" : "")
+                            color: root.cWarn
+                            font.pixelSize: 10
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        // Position : trois boutons, état RELU depuis bar.json
+                        // (GET /api/bar, et res.state après chaque écriture).
+                        // Chaque clic part en POST /api/bar -> barjson.py
+                        // --set bar.position=left|top|right : une seule clé
+                        // change. La barre se replace seule (< 2 s).
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Text {
+                                text: "Position"
+                                color: root.cTextDim
+                                font.pixelSize: 11
+                            }
+                            BarPosition {
+                                value: root.barPosition
+                                accentColor: root.cAccent
+                                textColor: root.cText
+                                enabledItems: root.barOk && !root.barBusy
+                                onChosen: function (key) {
+                                    if (root.barPosition === key)
+                                        return;
+                                    root.barPosition = key;      // optimiste
+                                    root.saveBar("bar.position", key);
+                                }
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+                        Text {
+                            text: "Gauche / Droite : barre verticale pleine hauteur. Haut : bande horizontale de la même épaisseur (les modules passent sur une ligne)."
+                            color: root.cTextDim
+                            font.pixelSize: 10
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        SliderRow {
+                            label: "Épaisseur (px)"
+                            from: 32; to: 64
+                            value: root.barWidth
+                            Layout.fillWidth: true
+                            enabled: root.barOk
+                            onChanged: {
+                                root.barWidth = value;
+                                root.saveBar("bar.width", value);
+                            }
+                        }
+                        SliderRow {
+                            label: "Fond au repos (%) — 0 = aucun"
+                            from: 0; to: 60
+                            value: root.barBlockPct
+                            Layout.fillWidth: true
+                            enabled: root.barOk
+                            onChanged: {
+                                root.barBlockPct = value;
+                                root.saveBar("appearance.blockAlpha", value / 100.0);
+                            }
+                        }
+                        SliderRow {
+                            label: "Fond au survol (%)"
+                            from: 0; to: 60
+                            value: root.barHoverPct
+                            Layout.fillWidth: true
+                            enabled: root.barOk
+                            onChanged: {
+                                root.barHoverPct = value;
+                                root.saveBar("appearance.hoverAlpha", value / 100.0);
+                            }
+                        }
+                        Toggle {
+                            label: "Flou derrière la barre (off = no blur)"
+                            checked: root.barBlur
+                            enabled: root.barOk
+                            onToggled: {
+                                root.barBlur = value;
+                                root.saveBar("bar.blur", value);
+                            }
+                        }
+                        SliderRow {
+                            label: "Workspaces persistants (0 = existants seuls)"
+                            from: 0; to: 12
+                            value: root.barPersistWs
+                            Layout.fillWidth: true
+                            enabled: root.barOk
+                            onChanged: {
+                                root.barPersistWs = value;
+                                root.saveBar("bar.persistentWorkspaces", value);
+                            }
+                        }
+                        SliderRow {
+                            label: "Apps en cours visibles"
+                            from: 1; to: 6
+                            value: root.barMaxVisible
+                            Layout.fillWidth: true
+                            enabled: root.barOk
+                            onChanged: {
+                                root.barMaxVisible = value;
+                                root.saveBar("runningApps.maxVisible", value);
+                            }
+                        }
+                        Text {
+                            visible: root.barError.length > 0 && root.barOk
+                            text: root.barError
+                            color: root.cHot
+                            font.pixelSize: 10
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
 
                     // ═══════════ 1. LANGUE 言語 ═══════════
                     Section {
