@@ -7,9 +7,13 @@ import QtQuick.Layouts
 Rectangle {
     id: tile
     radius: 16
-    color: Qt.rgba(1,1,1,0.04)
+    // Défauts = REPLI (voile blanc translucide) ; main.qml passe les couleurs
+    // de la palette (cCard/cText) pour que la tuile suive le thème.
+    property color tileColor: Qt.rgba(1,1,1,0.04)
+    property color tileBorder: Qt.rgba(1,1,1,0.045)
+    color: tile.tileColor
     border.width: 1
-    border.color: Qt.rgba(1,1,1,0.045)
+    border.color: tile.tileBorder
 
     default property alias content: contentItem.children
     property string title: ""

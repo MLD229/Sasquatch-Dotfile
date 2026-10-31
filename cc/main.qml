@@ -37,6 +37,15 @@ FloatingWindow {
     property color cWarn: "#f9e2af"
     property color cHot: "#f38ba8"
 
+    // Encre sur fond accentué (pilule de nav) : noir ou blanc selon la
+    // luminance de l'accent — lisible même avec un accent sombre (#460918),
+    // là où le #101018 en dur disparaissait.
+    function lum(c) { return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b; }
+    readonly property color cInk: {
+        var la = lum(cAccent);
+        return Math.abs(la - lum(cText)) > Math.abs(la - lum(cBgSolid)) ? cText : cBgSolid;
+    }
+
     // ---------- state ----------
     property bool serverOk: true
     property bool everShown: false
@@ -338,7 +347,7 @@ FloatingWindow {
                             text: modelData.t
                             font.pixelSize: 11
                             font.bold: root.page === modelData.k
-                            color: root.page === modelData.k ? "#101018" : root.cText
+                            color: root.page === modelData.k ? root.cInk : root.cText
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -369,6 +378,7 @@ FloatingWindow {
                 cWarn: root.cWarn
                 cGood: root.cGood
                 cHot: root.cHot
+                cInk: root.cInk
                 // Lecteur musique : données fournies par les pollers uniques
                 // d'ici (aucun timer en double dans le Dashboard).
                 music: root.music
@@ -387,6 +397,9 @@ FloatingWindow {
                 Layout.minimumHeight: 150
                 Layout.fillHeight: true
                 title: "PERFORMANCE"
+                    titleColor: root.cTextDim
+                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
+                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
                 contentMargins: 14
 
                 RowLayout {
@@ -398,16 +411,22 @@ FloatingWindow {
                         pct: root.stats && root.stats.cpu ? root.stats.cpu : 0
                         strokeColor: root.cAccent
                         label: "CPU"
+                        textColor: root.cText
+                        labelColor: root.cTextDim
                     }
                     Gauge {
                         pct: root.stats && root.stats.ram ? root.stats.ram.pct : 0
                         strokeColor: root.cAccent2
                         label: "RAM"
+                        textColor: root.cText
+                        labelColor: root.cTextDim
                     }
                     Gauge {
                         pct: root.stats && root.stats.gpu ? root.stats.gpu.util : 0
                         strokeColor: root.cWarn
                         label: "GPU"
+                        textColor: root.cText
+                        labelColor: root.cTextDim
                         showPct: !!(root.stats && root.stats.gpu)
                     }
 
@@ -461,6 +480,9 @@ FloatingWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     title: "📷 CAPTURE"
+                    titleColor: root.cTextDim
+                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
+                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
                     RowLayout {
                         spacing: 8
                         Layout.fillWidth: true
@@ -505,6 +527,9 @@ FloatingWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     title: "🎤 RECONNAÎTRE"
+                    titleColor: root.cTextDim
+                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
+                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
                     Rectangle {
                         Layout.fillWidth: true
                         height: 28
@@ -558,6 +583,9 @@ FloatingWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     title: "🌐 RECHERCHE IMAGE"
+                    titleColor: root.cTextDim
+                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
+                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 6
@@ -604,6 +632,9 @@ FloatingWindow {
                 Layout.minimumHeight: 120
                 Layout.fillHeight: true
                 title: "🖼️ TRADUCTION"
+                    titleColor: root.cTextDim
+                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
+                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true

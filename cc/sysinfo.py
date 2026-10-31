@@ -82,13 +82,21 @@ def humain(sec):
     return "%dm" % m
 
 
+def _user():
+    """USER, sinon os.getlogin() — qui lève OSError hors terminal (l'ancien
+    `A or B if cond else C` n'était pas protégé et pouvait faire un 500)."""
+    try:
+        return os.environ.get("USER") or os.getlogin()
+    except Exception:
+        return os.environ.get("USER") or "user"
+
+
 def sysinfo():
     """Profil système pour la carte identité. Cache 60 s (l'uptime est recalculé)."""
     now = time.time()
     if not _sys_cache["data"] or now - _sys_cache["at"] > 60:
         _sys_cache["data"] = {
-            "user": os.environ.get("USER") or os.getlogin() if hasattr(os, "getlogin") else
-                    os.environ.get("USER", ""),
+            "user": _user(),
             "host": socket.gethostname(),
             "distro": _distro(),
             "kernel": platform.release(),

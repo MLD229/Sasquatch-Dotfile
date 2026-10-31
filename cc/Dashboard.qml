@@ -9,6 +9,8 @@ import QtQuick.Controls
 Item {
     id: dash
 
+    // Couleurs : REPLI Catppuccin tant que main.qml n'a pas passé la palette
+    // réelle (cCard/cText/cAccent…). Aucun usage direct en dur ailleurs.
     property color cCard: "#181825"
     property color cText: "#cdd6f4"
     property color cTextDim: "#a6adc8"
@@ -17,6 +19,7 @@ Item {
     property color cWarn: "#f9e2af"
     property color cGood: "#a6e3a1"
     property color cHot: "#f38ba8"
+    property color cInk: dash.cText        // encre sur fond accentué (calculée par main.qml)
 
     property var sys: ({})
     property var upd: ({})
@@ -561,9 +564,11 @@ Item {
                             }
                             Text {
                                 anchors.centerIn: parent
-                                text: parent.actif ? String(parent.jour) : ""
+                                // Avant : seul le jour ACTIF affichait son numéro
+                                // (grille vide le reste du mois).
+                                text: parent.jour > 0 ? String(parent.jour) : ""
                                 font.pixelSize: 11
-                                color: parent.actif ? "#101018" : dash.cText
+                                color: parent.actif ? dash.cInk : dash.cText
                             }
                         }
                     }
@@ -636,6 +641,9 @@ Item {
 
                 TextField {
                     Layout.fillWidth: true
+                    // Sans hauteur explicite, le champ se réduisait à son texte
+                    // (~10 px) : le fond par défaut n'a pas de hauteur propre.
+                    Layout.preferredHeight: 30
                     placeholderText: "Nouvelle tâche…"
                     text: dash.newTask
                     font.pixelSize: 11
@@ -667,7 +675,7 @@ Item {
                             color: modelData.done
                                    ? Qt.rgba(dash.cGood.r, dash.cGood.g, dash.cGood.b, 0.8)
                                    : Qt.rgba(dash.cText.r, dash.cText.g, dash.cText.b, 0.10)
-                            Text { anchors.centerIn: parent; text: modelData.done ? "✓" : ""; font.pixelSize: 10; color: "#101018" }
+                            Text { anchors.centerIn: parent; text: modelData.done ? "✓" : ""; font.pixelSize: 10; color: dash.cInk }
                             MouseArea {
                                 anchors.fill: parent
                                 onClicked: dash.api("/api/tasks", {action: "toggle", id: modelData.id},
