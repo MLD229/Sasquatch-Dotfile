@@ -41,6 +41,88 @@ Item {
     property bool wpFailed: false
     property int postCount: 0           // nombre de POST acceptés (preuve)
 
+    // Placement intelligent (brief autoplace) : le calcul est chez le serveur
+    // (cc/autoplace.py), la page n'envoie qu'une opération et affiche le
+    // résultat RÉEL (placés / non placés + raison). Message dans le panneau,
+    // jamais un toast fugace.
+    property string apStrategy: "auto"
+    property int apMargin: 24
+    property int apGap: 12
+    property string apCorner: "tr"
+    property bool apBusy: false
+    property int apPlaced: -1           // -1 = aucun placement tenté
+    property var apUnplaced: []
+    property string apReason: ""
+    readonly property bool apOk: apPlaced > 0 && apUnplaced.length === 0
+    readonly property var apStrategies: [
+        { k: "theme", t: "Thème" }, { k: "auto", t: "Auto" },
+        { k: "grid", t: "Grille" }, { k: "stack", t: "Empilé" },
+        { k: "center", t: "Centré" }, { k: "spread", t: "Réparti" }
+    ]
+    readonly property var apCorners: [
+        { k: "tr", t: "haut d." }, { k: "tl", t: "haut g." },
+        { k: "br", t: "bas d." }, { k: "bl", t: "bas g." }
+    ]
+    readonly property string apHostLabel: (studio.hostFilter === "cc") ? "CC" : "Fond d'écran"
+
+    function apResultText() {
+        if (studio.apPlaced < 0)
+            return "";
+        var n = studio.apUnplaced.length;
+        if (studio.apPlaced > 0 && n === 0)
+            return studio.apPlaced + " placé" + (studio.apPlaced > 1 ? "s" : "")
+                   + " · " + studio.apHostLabel;
+        if (n === 0)
+            return "échec · " + studio.apReason;
+        return studio.apPlaced + " placé" + (studio.apPlaced > 1 ? "s" : "")
+               + " · " + n + " non placé" + (n > 1 ? "s" : "")
+               + " · " + studio.apReason;
+    }
+
+    // POST autoplace sur l'hôte AFFICHÉ, puis relecture du fichier : l'aperçu
+    // se rafraîchit par le même chemin que d'habitude (FileView → instances).
+    function autoplace() {
+        if (studio.apBusy)
+            return;
+        var ids = [];
+        var list = studio.byHost(studio.hostFilter);
+        for (var i = 0; i < list.length; ++i)
+            ids.push(list[i].id);
+        studio.apBusy = true;
+        var op = {
+            op: "autoplace",
+            host: studio.hostFilter,
+            strategy: studio.apStrategy,
+            margin: studio.apMargin,
+            gap: studio.apGap,
+            corner: studio.apCorner,
+            ids: ids,
+            screen: { w: studio.screenW, h: studio.screenH }
+        };
+        Api.post("/api/widgets", op, function (d) {
+            studio.apBusy = false;
+            if (!d) {
+                studio.apPlaced = 0;
+                studio.apUnplaced = [];
+                studio.apReason = "aucune réponse du serveur (8765)";
+                studio.lastError = "autoplace : pas de réponse";
+                return;
+            }
+            // `ok:false` est un RÉSULTAT (« pas de place »), pas un plantage :
+            // on garde les ids non placés et la raison pour le panneau.
+            studio.apPlaced = (d.placed && d.placed.length) ? d.placed.length : 0;
+            studio.apUnplaced = d.unplaced ? d.unplaced : [];
+            studio.apReason = d.reason ? d.reason : (d.error ? d.error : "");
+            if (d.ok === true) {
+                studio.lastError = "";
+                studio.postCount += 1;
+                if (typeof d.revision === "number")
+                    studio.revision = d.revision;
+                studio.file.reload();
+            }
+        }, 15000);
+    }
+
     readonly property url widgetsPath: Qt.resolvedUrl("../widgets.json")
 
     // Écran réel : c'est le repère des fractions x/y des widgets du fond.
@@ -697,9 +779,149 @@ Item {
             }
         }
 
+        // ── Placement intelligent (brief autoplace §4) ─────────────────────
+        // Panneau complet : stratégie, marges, espacement, coin (Empilé), et
+        // le résultat réel renvoyé par le serveur. Il agit sur l'hôte affiché.
+        Column {
+            id: apPanel
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: hostRow.bottom
+            anchors.topMargin: 10
+            spacing: 6
+
+            Text {
+                width: parent.width
+                text: "PLACEMENT INTELLIGENT"
+                font.pixelSize: 10
+                font.bold: true
+                color: Theme.textDim
+            }
+
+            Flow {
+                width: parent.width
+                spacing: 4
+
+                Repeater {
+                    model: studio.apStrategies
+
+                    delegate: Rectangle {
+                        required property var modelData
+                        readonly property bool active: studio.apStrategy === modelData.k
+                        width: apStratLabel.implicitWidth + 16
+                        height: 22
+                        radius: Theme.radiusBtn
+                        color: active ? Theme.a(Theme.accent, 0.85) : Theme.a(Theme.text, 0.06)
+                        Behavior on color { ColorAnimation { duration: 90 } }
+
+                        Text {
+                            id: apStratLabel
+                            anchors.centerIn: parent
+                            text: modelData.t
+                            font.pixelSize: 9
+                            color: (studio.apStrategy === modelData.k) ? Theme.ink : Theme.textDim
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: studio.apStrategy = modelData.k
+                        }
+                    }
+                }
+            }
+
+            // Le coin ne concerne QUE la stratégie Empilé (brief §1).
+            Flow {
+                width: parent.width
+                spacing: 4
+                visible: studio.apStrategy === "stack"
+
+                Repeater {
+                    model: studio.apCorners
+
+                    delegate: Rectangle {
+                        required property var modelData
+                        readonly property bool active: studio.apCorner === modelData.k
+                        width: apCornerLabel.implicitWidth + 16
+                        height: 22
+                        radius: Theme.radiusBtn
+                        color: active ? Theme.a(Theme.accent, 0.85) : Theme.a(Theme.text, 0.06)
+
+                        Text {
+                            id: apCornerLabel
+                            anchors.centerIn: parent
+                            text: modelData.t
+                            font.pixelSize: 9
+                            color: (studio.apCorner === modelData.k) ? Theme.ink : Theme.textDim
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: studio.apCorner = modelData.k
+                        }
+                    }
+                }
+            }
+
+            SliderRow {
+                width: apPanel.width
+                label: "Marges"
+                from: 8
+                to: 96
+                decimals: 0
+                modelValue: studio.apMargin
+                onCommitted: function (v) { studio.apMargin = Math.round(v); }
+            }
+
+            SliderRow {
+                width: apPanel.width
+                label: "Espacement"
+                from: 0
+                to: 48
+                decimals: 0
+                modelValue: studio.apGap
+                onCommitted: function (v) { studio.apGap = Math.round(v); }
+            }
+
+            Rectangle {
+                width: apPanel.width
+                height: 28
+                radius: Theme.radiusBtn
+                color: studio.apBusy ? Theme.a(Theme.accent, 0.45)
+                                     : (apGoHover.containsMouse ? Theme.a(Theme.accent, 0.85)
+                                                                : Theme.a(Theme.text, 0.10))
+
+                Text {
+                    anchors.centerIn: parent
+                    text: studio.apBusy ? "Placement…" : "Placer les widgets"
+                    font.pixelSize: 10
+                    color: apGoHover.containsMouse ? Theme.ink : Theme.text
+                }
+
+                MouseArea {
+                    id: apGoHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: studio.autoplace()
+                }
+            }
+
+            Text {
+                width: parent.width
+                visible: studio.apPlaced >= 0
+                text: studio.apResultText()
+                font.pixelSize: 9
+                color: studio.apOk ? Theme.textDim : Theme.hot
+                wrapMode: Text.WordWrap
+            }
+        }
+
         ListView {
             id: catList
-            anchors.top: hostRow.bottom
+            anchors.top: apPanel.bottom
             anchors.topMargin: 8
             anchors.left: parent.left
             anchors.right: parent.right

@@ -30,7 +30,13 @@ API :
   apply(op)           -> {"ok": true, "revision": N, "instance": {...}}
                          lève OpError (ValueError) si l'opération est invalide.
 
-Opérations : add | rm | move | resize | style | variant | option | reorder
+Opérations : add | rm | move | resize | style | variant | option | reorder | autoplace
+
+`autoplace` (brief autoplace) ne calcule RIEN ici : cc/autoplace.py fournit les
+géométries (fonctions pures), ce module les valide avec `_geo` puis écrit une
+seule révision. Tout ou rien : si un widget n'a pas de place, `autoplace`
+répond {"ok": false, "unplaced": [...], "reason": "..."} et le fichier n'est
+PAS touché (aucune révision, rien de déplacé).
 
 CLI (pour les tests et Asuka) :
   widgets_json.py get
@@ -44,6 +50,8 @@ import json
 import os
 import sys
 import tempfile
+
+import autoplace
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -494,6 +502,26 @@ def _reslot_order(doc):
             slot += 1
 
 
+def _wallpaper_context():
+    """(chemin, lumgrid) du fond courant — jamais bloquant : au pire (None, None).
+
+    `wallpaper.lumgrid()` est déjà en cache par (chemin, mtime, taille) : la
+    luminance n'est pas recalculée à chaque placement. Une machine sans PIL ou
+    sans wallpaper retombe sur (None, None) et `autoplace` choisit son repli.
+    """
+    try:
+        import wallpaper as wallpaper_mod
+        grid = wallpaper_mod.lumgrid()
+    except Exception:
+        return None, None
+    if not isinstance(grid, dict):
+        return None, None
+    path = grid.get("wallpaper") or None
+    if not grid.get("values"):
+        return path, None
+    return path, grid
+
+
 # ── API ────────────────────────────────────────────────────────────────────
 def get():
     """Document complet (l'appelant l'enveloppe : {"ok":true,"revision":N,"data":…})."""
@@ -507,12 +535,14 @@ def apply(op):
     kind = op.get("op")
     if not isinstance(kind, str):
         raise OpError("champ `op` manquant")
-    if kind not in ("add", "rm", "move", "resize", "style", "variant", "option", "reorder"):
+    if kind not in ("add", "rm", "move", "resize", "style", "variant", "option",
+                    "reorder", "autoplace"):
         raise OpError("opération inconnue : %r" % kind)
 
     registry = load_registry()
     doc = _read()
     instance = None
+    extra = None
 
     if kind == "add":
         widget_type = op.get("type")
@@ -619,6 +649,43 @@ def apply(op):
         _reslot_order(doc)
         instance = {"id": instance["id"], "to": target}
 
+    elif kind == "autoplace":
+        # Placement intelligent (brief autoplace) : le calcul vit dans
+        # cc/autoplace.py (fonctions pures, testables) ; l'écriture reste ICI.
+        # Tout ou rien : si un widget n'a pas de place, `place()` renvoie
+        # ok:false et on sort AVANT toute écriture (aucune révision, rien de
+        # déplacé — c'est la contrainte « on ne force pas »).
+        host = op.get("host") or "background"
+        if host not in ("background", "cc"):
+            raise OpError("autoplace : hôte non géré %r (background|cc)" % host)
+        strategy = op.get("strategy") or "auto"
+        if strategy not in autoplace.STRATEGIES:
+            raise OpError("autoplace : stratégie inconnue %r (%s)"
+                          % (strategy, ", ".join(autoplace.STRATEGIES)))
+        screen = _screen(op)
+        wallpaper_path, lumgrid = _wallpaper_context()
+        computed = autoplace.place(
+            doc["instances"], host=host, strategy=strategy,
+            margin=op.get("margin", 24), gap=op.get("gap", 12),
+            corner=op.get("corner") or "tr", ids=op.get("ids"),
+            screen=screen, wallpaper=wallpaper_path, lumgrid=lumgrid)
+        if not computed.get("ok"):
+            return computed
+        placed = []
+        for item in computed["placed"]:
+            _, inst = _find(doc, item["id"])
+            if host == "background":
+                geo = dict((k, item[k]) for k in ("x", "y", "w", "h"))
+            else:
+                geo = dict((k, item[k]) for k in ("col", "row", "w", "h"))
+            # Même validateur que `move` : les bornes de l'hôte s'appliquent.
+            inst["geo"] = _geo(host, geo, ref=inst.get("geo"), screen=screen)
+            entry = {"id": item["id"]}
+            entry.update(inst["geo"])
+            placed.append(entry)
+        extra = {"placed": placed, "unplaced": [], "strategy": strategy,
+                 "note": computed.get("note", "")}
+
     doc["version"] = 1
     doc["revision"] = int(doc.get("revision") or 0) + 1
     _write(doc)
@@ -634,7 +701,12 @@ def apply(op):
             if inst.get("id") == instance["id"]:
                 written = inst
                 break
-    return {"ok": True, "revision": fresh["revision"], "instance": written or instance}
+    reply = {"ok": True, "revision": fresh["revision"]}
+    if instance is not None:
+        reply["instance"] = written or instance
+    if extra:
+        reply.update(extra)
+    return reply
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────

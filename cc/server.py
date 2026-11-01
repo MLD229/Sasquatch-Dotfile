@@ -584,6 +584,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/widgets":
             # Écriture des instances : UNIQUEMENT par widgets_json.apply
             # (clamp sur les bornes du registre, révision, écriture atomique).
+            # `op: "autoplace"` suit le même chemin : le calcul est dans
+            # cc/autoplace.py, mais c'est apply() qui écrit (un seul écrivain).
             try:
                 self._json(widgets_json.apply(body))
             except ValueError as exc:
