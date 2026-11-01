@@ -1,0 +1,5 @@
+module pages
+HomePage 1.0 HomePage.qml
+StudioPage 1.0 StudioPage.qml
+SystemPage 1.0 SystemPage.qml
+ToolsPage 1.0 ToolsPage.qml

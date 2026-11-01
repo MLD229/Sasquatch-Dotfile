@@ -1,0 +1,330 @@
+{
+    "widgets": [
+        {
+            "id": "clock",
+            "name": "Horloge",
+            "component": "ClockWidget.qml",
+            "hosts": ["background", "cc", "bar", "subpage"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] },
+                "hero": { "w": 560, "h": 260, "cell": [8, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": true,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "mode": { "type": "enum", "values": ["digital", "analog"], "default": "digital" },
+                "showSeconds": { "type": "bool", "default": true },
+                "hour24": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "media",
+            "name": "Média",
+            "component": "MediaWidget.qml",
+            "hosts": ["background", "cc", "bar", "subpage"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] },
+                "hero": { "w": 560, "h": 260, "cell": [8, 2] },
+                "visualizer": { "w": 360, "h": 96, "cell": [6, 1] }
+            },
+            "defaultVariant": "normal",
+            "live": true,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "bars": { "type": "int", "min": 8, "max": 48, "default": 28 },
+                "showSource": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "weather",
+            "name": "Météo",
+            "component": "WeatherWidget.qml",
+            "hosts": ["background", "cc", "bar"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] },
+                "hero": { "w": 560, "h": 260, "cell": [8, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "showLabel": { "type": "bool", "default": true },
+                "showForecast": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "resources",
+            "name": "Ressources",
+            "component": "ResourcesWidget.qml",
+            "hosts": ["background", "cc"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] },
+                "hero": { "w": 560, "h": 260, "cell": [8, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "showSparkline": { "type": "bool", "default": true },
+                "showTemp": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "tasks",
+            "name": "Tâches",
+            "component": "TasksWidget.qml",
+            "hosts": ["background", "cc"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "maxItems": { "type": "int", "min": 2, "max": 8, "default": 4 },
+                "showAdd": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "volume",
+            "name": "Volume",
+            "component": "VolumeWidget.qml",
+            "hosts": ["background", "cc", "bar"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "showBrightness": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "battery",
+            "name": "Batterie",
+            "component": "BatteryWidget.qml",
+            "hosts": ["background", "cc", "bar"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "showWatts": { "type": "bool", "default": true },
+                "showTime": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "playlist",
+            "name": "File d'attente",
+            "component": "PlaylistWidget.qml",
+            "hosts": ["cc"],
+            "variants": {
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] },
+                "hero": { "w": 560, "h": 260, "cell": [8, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "maxTracks": { "type": "int", "min": 3, "max": 20, "default": 8 },
+                "showArtist": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "calendar",
+            "name": "Calendrier",
+            "component": "CalendarWidget.qml",
+            "hosts": ["cc", "background"],
+            "variants": {
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] },
+                "hero": { "w": 560, "h": 260, "cell": [8, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "showList": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "connectivity",
+            "name": "Réseau",
+            "component": "ConnectivityWidget.qml",
+            "hosts": ["cc", "background", "bar"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {}
+        },
+        {
+            "id": "toggles",
+            "name": "Interrupteurs",
+            "component": "TogglesWidget.qml",
+            "hosts": ["cc", "background"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {}
+        },
+        {
+            "id": "notifications",
+            "name": "Notifications",
+            "component": "NotificationsWidget.qml",
+            "hosts": ["cc", "background"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "maxItems": { "type": "int", "min": 1, "max": 5, "default": 3 },
+                "showBadge": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "workspaces",
+            "name": "Bureaux",
+            "component": "WorkspacesWidget.qml",
+            "hosts": ["cc", "background"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "count": { "type": "int", "min": 5, "max": 10, "default": 10 },
+                "showCount": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "apps",
+            "name": "Favoris",
+            "component": "AppsWidget.qml",
+            "hosts": ["cc", "background"],
+            "variants": {
+                "compact": { "w": 220, "h": 64, "cell": [4, 1] },
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "maxItems": { "type": "int", "min": 3, "max": 12, "default": 6 },
+                "showNames": { "type": "bool", "default": true }
+            }
+        },
+        {
+            "id": "notes",
+            "name": "Notes",
+            "component": "NotesWidget.qml",
+            "hosts": ["cc", "background"],
+            "variants": {
+                "normal": { "w": 360, "h": 180, "cell": [4, 2] }
+            },
+            "defaultVariant": "normal",
+            "live": false,
+            "style": {
+                "alpha": [0.03, 0.35],
+                "blur": [0, 20],
+                "radius": [0, 24],
+                "accent": ["auto", "primary", "secondary", "text"]
+            },
+            "options": {
+                "maxNotes": { "type": "int", "min": 2, "max": 8, "default": 4 }
+            }
+        }
+    ]
+}

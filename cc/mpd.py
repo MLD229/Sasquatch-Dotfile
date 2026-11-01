@@ -110,6 +110,17 @@ def _mpd_socket():
     return s, f
 
 
+def mpd_available():
+    """True si le socket MPD répond (utile à /api/music/sources : MPD est une
+    source même à l'arrêt)."""
+    try:
+        s, _f = _mpd_socket()
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
 def _mpd_readline(f):
     return f.readline().decode("utf-8", "replace").rstrip("\n")
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=Sasquatch — coin supérieur gauche (libérer le workspace)
+After=graphical-session.target
+
+[Service]
+Type=simple
+# Le démon sonde `hyprctl cursorpos` : il a besoin de la session Hyprland.
+ExecStart=%h/.config/scripts/hotcorner.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

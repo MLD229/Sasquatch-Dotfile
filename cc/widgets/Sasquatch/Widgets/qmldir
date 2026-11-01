@@ -1,0 +1,18 @@
+module Sasquatch.Widgets
+singleton WidgetRegistry 1.0 WidgetRegistry.qml
+singleton Api 1.0 Api.qml
+singleton Theme 1.0 Theme.qml
+singleton Env 1.0 Env.qml
+singleton Music 1.0 Music.qml
+singleton Playlist 1.0 Playlist.qml
+singleton Modes 1.0 Modes.qml
+singleton Connectivity 1.0 Connectivity.qml
+singleton Notifs 1.0 Notifs.qml
+singleton Notes 1.0 Notes.qml
+singleton Apps 1.0 Apps.qml
+WidgetBase 1.0 WidgetBase.qml
+GlassCard 1.0 GlassCard.qml
+WidgetHost 1.0 WidgetHost.qml
+WidgetCanvas 1.0 WidgetCanvas.qml
+BackgroundMask 1.0 BackgroundMask.qml
+WeatherWidget 1.0 widgets/WeatherWidget.qml

@@ -11,6 +11,12 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WIN_TITLE="Sasquatch CC"
 
+# Module de widgets partagé (Sasquatch.Widgets) — brief widgets v1 §0.1 :
+# le partage de code entre processus Quickshell passe par QML_IMPORT_PATH.
+if [ -d "$HOME/.config/cc/widgets" ]; then
+    export QML_IMPORT_PATH="$HOME/.config/cc/widgets${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}"
+fi
+
 # Détection robuste de fenêtre : parse du JSON hyprctl avec python
 # (grep échoue sur sortie vide/erronée).
 window_open() {

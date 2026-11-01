@@ -27,6 +27,11 @@ PY="${PYTHON:-python3}"
 RUN_DIR="${XDG_RUNTIME_DIR:-/tmp}/subpage"
 LOG_FILE="$RUN_DIR/decoration.log"
 
+# Module de widgets partagé (Sasquatch.Widgets) — brief widgets v1 §0.1.
+if [ -d "$HOME/.config/cc/widgets" ]; then
+    export QML_IMPORT_PATH="$HOME/.config/cc/widgets${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}"
+fi
+
 # Session Hyprland : les keybinds la fournissent déjà ; on la reconstitue pour
 # que le script marche aussi depuis un shell nu (tests, cron).
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"

@@ -1,0 +1,27 @@
+[Unit]
+Description=Sasquatch Background - widgets sur le papier peint (cc/background/shell.qml)
+After=graphical-session.target sasquatch-cc.service
+Wants=sasquatch-cc.service
+
+[Service]
+Type=simple
+# %h/.config/cc = symlink vers le dépôt des dotfiles (chemins portables).
+ExecStart=/usr/bin/quickshell -p %h/.config/cc/background/shell.qml
+WorkingDirectory=%h/.config/cc/background
+# Module de widgets partagé (Sasquatch.Widgets) : obligatoire, sinon le shell
+# meurt au chargement sur `import Sasquatch.Widgets 1.0`.
+Environment=QML_IMPORT_PATH=%h/.config/cc/widgets
+Environment=QML_DISABLE_DISK_CACHE=1
+# Restart=always : un crash du fond ne laisse pas le papier peint sans
+# horloge jusqu'au prochain login.
+Restart=always
+RestartSec=3
+# Arrêt volontaire (background.sh toggle = SIGTERM) = sortie propre.
+SuccessExitStatus=SIGTERM
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+# default.target comme sasquatch-cc / sasquatch-bar : sur ce poste
+# graphical-session.target n'est pas actif (Hyprland n'y est pas câblé).
+WantedBy=default.target

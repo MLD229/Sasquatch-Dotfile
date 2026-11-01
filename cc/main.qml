@@ -1,18 +1,23 @@
-// Sasquatch Control Center - main UI
-// Point d'entrée : fenêtre, palette, état, API, voile et panneau.
-// Les composants visuels réutilisables vivent dans qml/ (Gauge, IconButton,
-// Tile, Sparkline) — le backend HTTP est server.py (modules Python dans cc/).
+// Sasquatch Control Center — shell (refonte v1c-1, brief §7 « v1c »).
 //
-// NOTE thème dynamique : la palette est pollée via /api/palette (relue depuis
-// qml/Palette.qml, régénéré par theme-apply.py à chaque changement de
-// wallpaper) — le CC suit donc le thème au lieu de rester figé.
-
+// Ce fichier ne contient plus de contenu de page : il garde la fenêtre
+// (FloatingWindow, toggle cc.sh, close(), suppressQuit, capture/OCR), la
+// palette dynamique (/api/palette) et le helper api(), puis dessine le cadre :
+// board centré (max 1340 × h-80, rayon 18), rail gauche 64 px
+// (Accueil / Widgets / Système / Outils + point d'état serveur) et header
+// (salutation, heure, météo compacte).
+//
+// Les pages vivent dans cc/pages/ : HomePage (hôte de widgets `cc`),
+// StudioPage (l'espace widget : catalogue + aperçu du fond + panneau de
+// style), SystemPage (perf) et ToolsPage (outils).
 import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
 import "qml"
+import "pages"
+import Sasquatch.Widgets 1.0
 
 FloatingWindow {
     id: root
@@ -37,9 +42,8 @@ FloatingWindow {
     property color cWarn: "#f9e2af"
     property color cHot: "#f38ba8"
 
-    // Encre sur fond accentué (pilule de nav) : noir ou blanc selon la
-    // luminance de l'accent — lisible même avec un accent sombre (#460918),
-    // là où le #101018 en dur disparaissait.
+    // Encre sur fond accentué (bouton de rail actif) : noir ou blanc selon la
+    // luminance de l'accent — lisible même avec un accent sombre.
     function lum(c) { return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b; }
     readonly property color cInk: {
         var la = lum(cAccent);
@@ -55,22 +59,14 @@ FloatingWindow {
     // true while a screenshot request is in flight; blocks double-click.
     property bool shotBusy: false
     property var stats: ({})
-    // Page affichée : "home" (dashboard) | "sys" (perf+musique) | "tools" (outils)
+    // Page affichée : "home" (board de widgets) | "widgets" (Studio, l'espace
+    // widget) | "sys" (perf) | "tools" (outils)
     property string page: "home"
-    property var music: ({playing: false, paused: false, title: null, artist: null, volume: 0, elapsed: 0, duration: 0})
-    property var sysVol: ({volume: 0, muted: false})
-    property var sysBright: ({brightness: 0})
-    property var vizVals: []
-    // Page « Outils » : dépendances externes (/api/tools/health) + retour
-    // d'action, pour qu'un bouton ne reste jamais muet.
-    property var toolHealth: ({})
     property string shotStatus: ""
-    property string imgStatus: ""
-    // Sidebar volume/luminosité (colonne à côté du panel)
-    property int sidebarW: 110
-    property int ccH: Math.min(780, root.height - 40)
 
-    // ---------- API helper (XHR, inline) ----------
+    // ---------- helpers ----------
+    // Helper historique : même transport XHR que le reste du CC (timeout
+    // explicite pour les routes longues).
     function api(method, path, body, cb, timeoutMs) {
         var xhr = new XMLHttpRequest();
         xhr.timeout = timeoutMs || 3000;
@@ -98,30 +94,6 @@ FloatingWindow {
         } catch (e) {
             if (cb) cb(null);
         }
-    }
-
-    // Outil disponible ? (avant la 1re réponse /health : on laisse actif,
-    // aucun bouton ne se retrouve bloqué par un backend non à jour)
-    function toolOk(k) {
-        var h = root.toolHealth ? root.toolHealth[k] : null;
-        return !h || h.ok !== false;
-    }
-    // « non installé : grim, slurp  ·  pacman -S grim slurp »
-    function toolWhy(k) {
-        var h = root.toolHealth ? root.toolHealth[k] : null;
-        if (!h || h.ok !== false) return "";
-        return "non installé : " + h.resume + (h.hint ? "  ·  " + h.hint : "");
-    }
-
-    // Recherche image : le texte déclenche une requête directe ; vide → le
-    // serveur fait l'OCR de la sélection (d'où le timeout long).
-    function searchImage() {
-        if (!root.toolOk("imgsearch")) return;
-        imgStatus = "recherche…";
-        root.api("POST", "/api/imgsearch", {q: imgQuery.text}, function(res) {
-            imgStatus = (res && res.ok) ? "lancée ✓"
-                                        : ("⚠ " + ((res && res.error) || "échec"));
-        }, 130000);
     }
 
     function quit() {
@@ -152,6 +124,14 @@ FloatingWindow {
         }, 120000);
     }
 
+    // ---------- header : heure + salutation ----------
+    property string clockText: Qt.formatDateTime(new Date(), "hh:mm")
+    property int clockHour: new Date().getHours()
+    readonly property string greeting: root.clockHour < 6 ? "Bonne nuit"
+                                      : root.clockHour < 12 ? "Bonjour"
+                                      : root.clockHour < 18 ? "Bon après-midi"
+                                      : "Bonsoir"
+
     onVisibleChanged: {
         if (visible) everShown = true;
         // Quit only after the window was actually shown once (avoids the
@@ -161,12 +141,14 @@ FloatingWindow {
 
     Shortcut {
         sequence: "Escape"
-        // Don't steal Escape while typing in the image-search field.
-        enabled: !imgQuery.activeFocus
+        // Don't steal Escape while typing in the image-search / translate field.
+        enabled: !(pageLoader.item && pageLoader.item.searchFocused === true)
         onActivated: root.quit()
     }
 
     // ---------- pollers ----------
+    // Battement du serveur : sert au point d'état du rail et à la ligne du
+    // header (hôte · RAM · Hz).
     Timer {
         interval: 1000; running: true; repeat: true; triggeredOnStart: true
         onTriggered: {
@@ -201,44 +183,14 @@ FloatingWindow {
     Timer {
         interval: 1000; running: true; repeat: true; triggeredOnStart: true
         onTriggered: {
-            root.api("GET", "/api/music/status", null, function(res) {
-                if (res) root.music = res;
-            });
-            // Volume système (wpctl) : la barre reflète le vrai volume audible,
-            // pas le volume MPD (indépendant, souvent figé à 0).
-            root.api("GET", "/api/system/volume", null, function(res) {
-                if (res) root.sysVol = res;
-            });
-            // Luminosité (brightnessctl) : sidebar du CC.
-            root.api("GET", "/api/system/brightness", null, function(res) {
-                if (res) root.sysBright = res;
-            });
+            var d = new Date();
+            root.clockText = Qt.formatDateTime(d, "hh:mm");
+            root.clockHour = d.getHours();
         }
-    }
-    Timer {
-        interval: 120; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: {
-            root.api("GET", "/api/viz", null, function(res) {
-                if (res && res.vals) root.vizVals = res.vals;
-            });
-        }
-    }
-    Timer {
-        interval: 1000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "hh:mm")
-    }
-    // Dépendances de la page Outils : `command -v` côté serveur, relu
-    // toutes les 60 s (installer un paquet se voit sans relancer le CC).
-    Timer {
-        interval: 60000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: root.api("GET", "/api/tools/health", null, function(res) {
-            if (res) root.toolHealth = res;
-        });
     }
 
     // ---------- veil (léger : le verre doit laisser voir le desktop flouté) ----------
     Rectangle {
-        id: veil
         anchors.fill: parent
         color: root.cOverlay
         opacity: 0.3
@@ -248,21 +200,95 @@ FloatingWindow {
         }
     }
 
-    // ---------- CC : panel + sidebar (volume/luminosité) ----------
-    RowLayout {
-        id: ccRow
-        anchors.centerIn: parent
-        spacing: 14
+    // ---------- board ----------
+    readonly property real boardW: Math.min(1340, Math.max(640, root.width - 80))
+    // Pleine hauteur pour les pages à listes ; sur l'Accueil, le board prend la
+    // hauteur de ses widgets (grille 12 colonnes) et ne laisse plus de vide.
+    readonly property real boardH: {
+        if (root.page !== "home")
+            return Math.max(420, root.height - 80);
+        var content = boardColumn.implicitHeight;
+        if (!(content > 0))
+            return Math.max(420, root.height - 80);
+        return Math.min(root.height - 80, content + Theme.spacing * 2);
+    }
 
-        // ---------- panel (verre dépoli : translucide + blur Hyprland derrière) ----------
-        Rectangle {
-            id: panel
-            Layout.preferredWidth: Math.min(1000, root.width - 40 - root.sidebarW - 14)
-            Layout.preferredHeight: root.ccH
-            radius: 22
-            color: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.30)
-            border.width: 1
-            border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.4)
+    // Icônes du rail, dessinées : aucun émoji (la police couleur casse la
+    // teinte, et les glyphes symboliques manquent selon la police).
+    // 0 accueil · 1 widgets · 2 système · 3 outils
+    component RailIcon: Canvas {
+        id: ri
+        property int kind: 0
+        property color tint: root.cText
+
+        function repaint() { requestPaint(); }
+        onKindChanged: repaint()
+        onTintChanged: repaint()
+        onWidthChanged: repaint()
+        onHeightChanged: repaint()
+
+        onPaint: {
+            var ctx = getContext("2d");
+            ctx.reset();
+            var S = Math.min(width, height);
+            if (S < 6)
+                return;
+            ctx.strokeStyle = ri.tint;
+            ctx.fillStyle = ri.tint;
+            ctx.lineWidth = Math.max(1.2, S * 0.09);
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            function P(v) { return v / 24 * S; }
+
+            if (ri.kind === 0) {
+                ctx.beginPath();
+                ctx.moveTo(P(12), P(3));
+                ctx.lineTo(P(21), P(10));
+                ctx.lineTo(P(18), P(10));
+                ctx.lineTo(P(18), P(21));
+                ctx.lineTo(P(14), P(21));
+                ctx.lineTo(P(14), P(15));
+                ctx.lineTo(P(10), P(15));
+                ctx.lineTo(P(10), P(21));
+                ctx.lineTo(P(6), P(21));
+                ctx.lineTo(P(6), P(10));
+                ctx.lineTo(P(3), P(10));
+                ctx.closePath();
+                ctx.stroke();
+            } else if (ri.kind === 1) {
+                ctx.strokeRect(P(3), P(3), P(8), P(8));
+                ctx.strokeRect(P(13), P(3), P(8), P(8));
+                ctx.strokeRect(P(3), P(13), P(8), P(8));
+                ctx.strokeRect(P(13), P(13), P(8), P(8));
+            } else if (ri.kind === 2) {
+                ctx.beginPath();
+                ctx.arc(P(12), P(12), P(8), Math.PI * 0.75, Math.PI * 2.25);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(P(12), P(12));
+                ctx.lineTo(P(16), P(8));
+                ctx.stroke();
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(P(4), P(20));
+                ctx.lineTo(P(13), P(11));
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(P(16), P(8), P(4.5), 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+    }
+
+    Rectangle {
+        id: board
+        anchors.centerIn: parent
+        width: root.boardW
+        height: root.boardH
+        radius: Theme.radiusPanel
+        color: Theme.panelFill(Theme.alphaPanel)
+        border.width: 1
+        border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.4)
 
         opacity: 0
         scale: 0.98
@@ -270,583 +296,201 @@ FloatingWindow {
         Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
         Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
-        // swallow clicks landing on empty panel space so they don't reach the veil
+        // swallow clicks landing on empty board space so they don't reach the veil
         MouseArea {
             anchors.fill: parent
             onClicked: {}
         }
 
-        ColumnLayout {
+        RowLayout {
             anchors.fill: parent
-            anchors.margins: 24
-            spacing: 14
+            anchors.margins: Theme.spacing
+            spacing: Theme.spacing
 
-            // ---------- HEADER ----------
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
+            // ---------- rail (64 px) ----------
+            Rectangle {
+                Layout.preferredWidth: 64
+                Layout.fillHeight: true
+                radius: Theme.radiusCard
+                color: Theme.a(root.cText, 0.04)
+                border.width: 1
+                border.color: Theme.a(root.cText, 0.06)
 
-                Text {
-                    text: "⚡ Sasquatch Control Center"
-                    font.pixelSize: 20
-                    font.bold: true
-                    color: root.cText
-                }
-                Text {
-                    text: {
-                        var s = root.stats;
-                        if (!root.serverOk) return "serveur injoignable…";
-                        if (!s || !s.hostname) return "…";
-                        var ram = s.ram ? s.ram.pct : 0;
-                        var rf = s.refresh || 0;
-                        return s.hostname + " · " + rf + " Hz · " + Math.round(ram) + "% RAM";
-                    }
-                    font.pixelSize: 12
-                    color: root.serverOk ? root.cTextDim : root.cHot
-                    Layout.leftMargin: 4
-                }
-                Item { Layout.fillWidth: true }
-                Text {
-                    id: clockLabel
-                    text: "--:--"
-                    font.pixelSize: 18
-                    font.bold: true
-                    color: root.cText
-                }
-                IconButton {
-                    width: 30; height: 30
-                    glyph: "✕"
-                    fontSize: 14
-                    glyphColor: root.cText
-                    onClicked: root.quit()
-                }
-            }
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    spacing: 6
 
-            // ---------- NAV : Accueil / Système / Outils ----------
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
+                    Repeater {
+                        model: [
+                            { k: "home",    t: "Accueil" },
+                            { k: "widgets", t: "Widgets" },
+                            { k: "sys",     t: "Système" },
+                            { k: "tools",   t: "Outils" }
+                        ]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
 
-                Repeater {
-                    model: [
-                        { k: "home",  t: "Accueil" },
-                        { k: "sys",   t: "Système" },
-                        { k: "tools", t: "Outils" }
-                    ]
-                    delegate: Rectangle {
-                        required property var modelData
-                        height: 28
-                        width: navLabel.implicitWidth + 26
-                        radius: 14
-                        color: root.page === modelData.k
-                               ? Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.85)
-                               : Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
-                        Text {
-                            id: navLabel
-                            anchors.centerIn: parent
-                            text: modelData.t
-                            font.pixelSize: 11
-                            font.bold: root.page === modelData.k
-                            color: root.page === modelData.k ? root.cInk : root.cText
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: root.page = modelData.k
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: 52
+                            Layout.preferredHeight: 52
+                            radius: Theme.radiusBtn
+                            color: root.page === modelData.k
+                                   ? Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.85)
+                                   : (railHover.containsMouse
+                                      ? Theme.a(root.cText, 0.10)
+                                      : Theme.a(root.cText, 0.05))
+                            Behavior on color { ColorAnimation { duration: 90 } }
+
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 3
+
+                                RailIcon {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: 18
+                                    height: 18
+                                    kind: index
+                                    tint: root.page === modelData.k ? root.cInk : root.cText
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: modelData.t
+                                    font.pixelSize: 8
+                                    color: root.page === modelData.k ? root.cInk : root.cTextDim
+                                }
+                            }
+
+                            MouseArea {
+                                id: railHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.page = modelData.k
+                            }
                         }
                     }
-                }
-                Item { Layout.fillWidth: true }
-                IconButton {
-                    width: 30; height: 30
-                    glyph: "⚙"
-                    fontSize: 14
-                    glyphColor: root.cTextDim
-                    onClicked: Quickshell.execDetached(["/home/momo/.config/settings/settings.sh"])
+
+                    Item { Layout.fillHeight: true }
+
+                    // Point d'état serveur (sasquatch-cc sur 8765).
+                    Rectangle {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 8
+                        Layout.preferredHeight: 8
+                        radius: 4
+                        color: root.serverOk ? root.cGood : root.cHot
+                        Behavior on color { ColorAnimation { duration: 160 } }
+                    }
                 }
             }
 
-            // ---------- PAGE ACCUEIL : dashboard (sysinfo / updates / weather / tasks) ----------
-            Dashboard {
-                visible: root.page === "home"
+            // ---------- colonne : header + page ----------
+            ColumnLayout {
+                id: boardColumn
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                cCard: root.cCard
-                cText: root.cText
-                cTextDim: root.cTextDim
-                cAccent: root.cAccent
-                cAccent2: root.cAccent2
-                cWarn: root.cWarn
-                cGood: root.cGood
-                cHot: root.cHot
-                cInk: root.cInk
-                // Lecteur musique : données fournies par les pollers uniques
-                // d'ici (aucun timer en double dans le Dashboard).
-                music: root.music
-                sysVol: root.sysVol
-                vizVals: root.vizVals
-                onMusicCmd: function(path, body) {
-                    root.api("POST", path, body, function() {});
-                }
-            }
-
-            // ---------- RANGÉE 1: PERFORMANCE ----------
-            Tile {
-                visible: root.page === "sys"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 220
-                Layout.minimumHeight: 150
-                Layout.fillHeight: true
-                title: "PERFORMANCE"
-                    titleColor: root.cTextDim
-                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
-                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
-                contentMargins: 14
+                spacing: Theme.spacing
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 18
-
-                    Gauge {
-                        pct: root.stats && root.stats.cpu ? root.stats.cpu : 0
-                        strokeColor: root.cAccent
-                        label: "CPU"
-                        textColor: root.cText
-                        labelColor: root.cTextDim
-                    }
-                    Gauge {
-                        pct: root.stats && root.stats.ram ? root.stats.ram.pct : 0
-                        strokeColor: root.cAccent2
-                        label: "RAM"
-                        textColor: root.cText
-                        labelColor: root.cTextDim
-                    }
-                    Gauge {
-                        pct: root.stats && root.stats.gpu ? root.stats.gpu.util : 0
-                        strokeColor: root.cWarn
-                        label: "GPU"
-                        textColor: root.cText
-                        labelColor: root.cTextDim
-                        showPct: !!(root.stats && root.stats.gpu)
-                    }
+                    spacing: 12
 
                     ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        spacing: 6
+                        spacing: 2
 
-                        Repeater {
-                            model: [
-                                {label: "VRAM", key: "vram", color: root.cAccent2},
-                                {label: "Temp CPU", key: "cpu_temp", color: root.cHot},
-                                {label: "Temp GPU", key: "gpu_temp", color: root.cWarn},
-                                {label: "Réseau", key: "down", color: root.cAccent}
-                            ]
-                            delegate: RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-                                Text {
-                                    text: modelData.label
-                                    font.pixelSize: 10
-                                    color: root.cTextDim
-                                    Layout.preferredWidth: 70
-                                }
-                                Sparkline {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 24
-                                    hist: (root.stats && root.stats.history && root.stats.history[modelData.key]) ? root.stats.history[modelData.key] : []
-                                    lineColor: modelData.color
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // (le bloc MUSIQUE a été déplacé sur la page « Accueil » —
-            // il vit désormais dans Dashboard.qml, colonne 1, sous le profil.
-            // Une seule instance dans tout le CC : données pollées ici.)
-
-            // ---------- RANGÉE 3: 3 tuiles ----------
-            RowLayout {
-                visible: root.page === "tools"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 110
-                Layout.minimumHeight: 85
-                Layout.fillHeight: true
-                spacing: 14
-
-                Tile {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    title: "📷 CAPTURE"
-                    titleColor: root.cTextDim
-                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
-                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
-                    RowLayout {
-                        spacing: 8
-                        Layout.fillWidth: true
-                        Repeater {
-                            model: [
-                                {label: "Zone", mode: "area"},
-                                {label: "Plein écran", mode: "full"},
-                                {label: "Fenêtre", mode: "window"}
-                            ]
-                            delegate: Rectangle {
-                                Layout.fillWidth: true
-                                height: 30
-                                radius: 8
-                                opacity: root.toolOk("capture") ? 1 : 0.45
-                                color: shotMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
-                                Behavior on color { ColorAnimation { duration: 120 } }
-                                Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 10; color: root.cText }
-                                MouseArea {
-                                    id: shotMa
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: {
-                                        if (!root.toolOk("capture")) return;
-                                        root.takeScreenshot(modelData.mode);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.toolOk("capture") ? root.shotStatus
-                                                     : ("⚠ " + root.toolWhy("capture"))
-                        visible: text.length > 0
-                        font.pixelSize: 9
-                        color: root.toolOk("capture") ? root.cTextDim : root.cHot
-                        elide: Text.ElideRight
-                    }
-                }
-
-                Tile {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    title: "🎤 RECONNAÎTRE"
-                    titleColor: root.cTextDim
-                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
-                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 28
-                        radius: 8
-                        opacity: root.toolOk("finder") ? 1 : 0.45
-                        color: findMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
-                        Behavior on color { ColorAnimation { duration: 120 } }
                         Text {
-                            anchors.centerIn: parent
-                            text: findLabel.busy ? "Écoute…" : "Identifier"
-                            font.pixelSize: 11
+                            text: root.greeting
+                            font.pixelSize: 20
+                            font.bold: true
                             color: root.cText
                         }
-                        MouseArea {
-                            id: findMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                if (!root.toolOk("finder")) return;
-                                if (findLabel.busy) return;  // block re-click while recording
-                                findLabel.busy = true;
-                                findLabel.resultText = "";
-                                // Finder : ~8s (enregistrement) + retry 15s si échec + songrec :
-                                // le timeout XHR par défaut (3s) le tuerait — 60s couvre le pire cas.
-                                root.api("POST", "/api/music/finder", null, function(res) {
-                                    findLabel.busy = false;
-                                    if (res && res.recognized) {
-                                        findLabel.resultText = res.title + (res.artist ? " — " + res.artist : "");
-                                    } else {
-                                        findLabel.resultText = (res && res.error) ? res.error : "non reconnu";
-                                    }
-                                }, 60000);
-                            }
-                        }
-                    }
-                    Text {
-                        id: findLabel
-                        property bool busy: false
-                        property string resultText: ""
-                        // Sans songrec, dire POURQUOI au lieu d'un bouton mort.
-                        text: root.toolOk("finder") ? resultText
-                                                    : ("⚠ " + root.toolWhy("finder"))
-                        font.pixelSize: 10
-                        color: root.toolOk("finder") ? root.cTextDim : root.cHot
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                }
-
-                Tile {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    title: "🌐 RECHERCHE IMAGE"
-                    titleColor: root.cTextDim
-                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
-                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        TextField {
-                            id: imgQuery
-                            Layout.fillWidth: true
-                            placeholderText: "mot-clé…"
-                            color: root.cText
-                            font.pixelSize: 11
-                            background: Rectangle { radius: 8; color: Qt.rgba(1,1,1,0.06) }
-                            // Enter triggers the search (mirrors the 🔍 button)
-                            Keys.onReturnPressed: root.searchImage()
-                        }
-                        Rectangle {
-                            width: 30; height: 26; radius: 8
-                            color: imgMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            Text { anchors.centerIn: parent; text: "🔍"; font.pixelSize: 12; color: root.cText }
-                            MouseArea {
-                                id: imgMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.searchImage()
-                            }
-                        }
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.toolOk("imgsearch") ? root.imgStatus
-                                                       : ("⚠ " + root.toolWhy("imgsearch"))
-                        visible: text.length > 0
-                        font.pixelSize: 9
-                        color: root.toolOk("imgsearch") ? root.cTextDim : root.cHot
-                        elide: Text.ElideRight
-                    }
-                }
-            }
-
-            // ---------- RANGÉE 4: TRADUCTION ----------
-            Tile {
-                visible: root.page === "tools"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 170
-                Layout.minimumHeight: 120
-                Layout.fillHeight: true
-                title: "🖼️ TRADUCTION"
-                    titleColor: root.cTextDim
-                    tileColor: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.55)
-                    tileBorder: Qt.rgba(root.cText.r, root.cText.g, root.cText.b, 0.06)
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 6
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 32
-                        radius: 8
-                        opacity: root.toolOk("translate") ? 1 : 0.45
-                        color: transMa.containsMouse ? Qt.rgba(1,1,1,0.105) : Qt.rgba(1,1,1,0.05)
-                        Behavior on color { ColorAnimation { duration: 120 } }
                         Text {
-                            anchors.centerIn: parent
-                            text: transOrig.busy ? "OCR + traduction…" : "Traduire depuis l'écran"
-                            font.pixelSize: 12
-                            color: root.cText
-                        }
-                        MouseArea {
-                            id: transMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                if (!root.toolOk("translate")) return;
-                                if (transOrig.busy) return;
-                                transOrig.busy = true;
-                                transOrig.detected = "";
-                                transOrig.translation = "";
-                                // Masque le CC pendant la sélection OCR (même
-                                // mécanisme que le screenshot) : le serveur ne
-                                // répond qu'une fois texte + traduction prêts
-                                // (max 120 s), puis le panneau remonte.
-                                root.suppressQuit = true;
-                                root.visible = false;
-                                root.api("POST", "/api/translate", null, function(res) {
-                                    transOrig.busy = false;
-                                    root.suppressQuit = false;
-                                    root.visible = true;
-                                    if (res && res.ok && res.translation) {
-                                        transOrig.detected = res.text || "";
-                                        transOrig.translation = res.translation;
-                                    } else {
-                                        transOrig.detected = "";
-                                        transOrig.translation = (res && res.error) ? "⚠ " + res.error : "⚠ échec";
-                                    }
-                                }, 120000);
+                            text: {
+                                var s = root.stats;
+                                if (!root.serverOk) return "serveur injoignable…";
+                                if (!s || !s.hostname) return "…";
+                                var ram = s.ram ? s.ram.pct : 0;
+                                var rf = s.refresh || 0;
+                                return s.hostname + " · " + rf + " Hz · " + Math.round(ram) + "% RAM";
                             }
+                            font.pixelSize: 11
+                            color: root.serverOk ? root.cTextDim : root.cHot
+                            elide: Text.ElideRight
+                            wrapMode: Text.NoWrap
                         }
                     }
 
-                    // Dépendance manquante : message explicite au-dessus du
-                    // résultat (jamais un bouton qui ne fait rien).
+                    Item { Layout.fillWidth: true }
+
                     Text {
-                        Layout.fillWidth: true
-                        visible: !root.toolOk("translate")
-                        text: "⚠ " + root.toolWhy("translate")
-                        font.pixelSize: 9
-                        color: root.cHot
-                        elide: Text.ElideRight
+                        id: clockLabel
+                        text: root.clockText
+                        font.pixelSize: 22
+                        font.bold: true
+                        color: root.cText
                     }
 
-                    // Texte détecté (original OCR)
-                    Text {
-                        id: transOrig
-                        property bool busy: false
-                        property string detected: ""
-                        property string translation: ""
-                        visible: detected !== ""
-                        text: "Détecté : " + detected
-                        font.pixelSize: 12
-                        color: root.cTextDim
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
+                    // Météo compacte : c'est le widget `weather` du registre
+                    // (variante compact), pas un texte recopié.
+                    WeatherWidget {
+                        variant: "compact"
+                        Layout.preferredWidth: 172
+                        Layout.preferredHeight: 54
                     }
-                    // Traduction : zone COULISSABLE (scroll) + texte plus grand
-                    // — les longues traductions se font défiler au lieu de
-                    // déborder/être coupées.
-                    ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
-                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                        TextArea {
-                            id: transResult
-                            text: transOrig.translation
-                            readOnly: true
-                            wrapMode: TextEdit.Wrap
-                            textFormat: TextEdit.PlainText
-                            font.pixelSize: 14
-                            color: root.cText
-                            selectByMouse: true
-                            background: Rectangle {
-                                color: Qt.rgba(1,1,1,0.04)
-                                radius: 8
-                            }
-                            padding: 8
-                        }
+
+                    IconButton {
+                        Layout.preferredWidth: 30
+                        Layout.preferredHeight: 30
+                        glyph: "✕"
+                        fontSize: 14
+                        glyphColor: root.cText
+                        onClicked: root.quit()
                     }
                 }
-            }
 
-            // ---------- FOOTER ----------
-            RowLayout {
-                Layout.fillWidth: true
-                Text { text: root.serverOk ? "Serveur prêt ✓" : "Serveur injoignable ✗"; font.pixelSize: 10; color: root.serverOk ? root.cGood : root.cHot }
-                Item { Layout.fillWidth: true }
-                Text { text: "Échap / ✕ / clic dehors pour fermer"; font.pixelSize: 10; color: root.cTextDim }
+                // ---------- contenu ----------
+                Loader {
+                    id: pageLoader
+                    Layout.fillWidth: true
+                    // Accueil : la page donne sa hauteur naturelle (widgets) ;
+                    // les autres pages remplissent le board.
+                    Layout.fillHeight: root.page !== "home"
+                    // « widgets » = StudioPage (l'espace widget, v1c-2).
+                    sourceComponent: root.page === "home" ? homePage
+                                     : root.page === "widgets" ? studioPage
+                                     : root.page === "tools" ? toolsPage
+                                     : sysPage
+                }
             }
         }
+    }
+
+    Component {
+        id: homePage
+        HomePage {}
+    }
+
+    Component {
+        id: studioPage
+        StudioPage {}
+    }
+
+    Component {
+        id: sysPage
+        SystemPage {
+            stats: root.stats
         }
+    }
 
-        // ---------- SIDEBAR : volume + luminosité (barres épaisses arrondies) ----------
-        Rectangle {
-            id: sidebar
-            Layout.preferredWidth: root.sidebarW
-            Layout.preferredHeight: root.ccH
-            radius: 22
-            color: Qt.rgba(root.cCard.r, root.cCard.g, root.cCard.b, 0.30)
-            border.width: 1
-            border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.4)
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 14
-                spacing: 8
-
-                // ── Volume ──
-                Text {
-                    text: "🔊"
-                    font.pixelSize: 14
-                    color: root.cText
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                // Barre épaisse verticale, arrondie, remplie depuis le bas.
-                Rectangle {
-                    id: volBar
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.minimumHeight: 60
-                    radius: 12
-                    color: Qt.rgba(1,1,1,0.075)
-                    Rectangle {
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.margins: 3
-                        radius: 10
-                        height: parent.height * ((root.sysVol && root.sysVol.volume) ? root.sysVol.volume/100 : 0)
-                        color: root.cAccent
-                        Behavior on height { NumberAnimation { duration: 120 } }
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        onPressed: volBar.setFromY(mouse.y)
-                        onPositionChanged: if (pressed) volBar.setFromY(mouse.y)
-                    }
-                    function setFromY(y) {
-                        var ratio = 1 - Math.max(0, Math.min(1, y / height));
-                        root.api("POST", "/api/system/volume", {v: Math.round(ratio*100)}, function() {});
-                    }
-                }
-                Text {
-                    text: (root.sysVol && root.sysVol.volume ? Math.round(root.sysVol.volume) : 0) + "%"
-                    font.pixelSize: 11
-                    color: root.cTextDim
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Item { Layout.preferredHeight: 6 }  // espace entre les deux
-
-                // ── Luminosité ──
-                Text {
-                    text: "☀"
-                    font.pixelSize: 14
-                    color: root.cText
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Rectangle {
-                    id: brightBar
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.minimumHeight: 60
-                    radius: 12
-                    color: Qt.rgba(1,1,1,0.075)
-                    Rectangle {
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.margins: 3
-                        radius: 10
-                        height: parent.height * ((root.sysBright && root.sysBright.brightness) ? root.sysBright.brightness/100 : 0)
-                        color: root.cWarn
-                        Behavior on height { NumberAnimation { duration: 120 } }
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        onPressed: brightBar.setFromY(mouse.y)
-                        onPositionChanged: if (pressed) brightBar.setFromY(mouse.y)
-                    }
-                    function setFromY(y) {
-                        var ratio = 1 - Math.max(0, Math.min(1, y / height));
-                        root.api("POST", "/api/system/brightness", {v: Math.round(ratio*100)}, function() {});
-                    }
-                }
-                Text {
-                    text: (root.sysBright && root.sysBright.brightness ? Math.round(root.sysBright.brightness) : 0) + "%"
-                    font.pixelSize: 11
-                    color: root.cTextDim
-                    Layout.alignment: Qt.AlignHCenter
-                }
-            }
+    Component {
+        id: toolsPage
+        ToolsPage {
+            shotStatus: root.shotStatus
+            onScreenshotRequested: function(mode) { root.takeScreenshot(mode); }
+            onHidePanel: { root.suppressQuit = true; root.visible = false; }
+            onShowPanel: { root.suppressQuit = false; root.visible = true; }
         }
     }
 }

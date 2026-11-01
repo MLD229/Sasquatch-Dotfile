@@ -14,8 +14,10 @@ vers les modules métier. Code découpé pour la lisibilité :
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 import urllib.parse
@@ -28,14 +30,17 @@ from mpd import (mpd_status, mpd_albumart, local_albumart,
                  notify_track_change, video_id_from_file, yt_thumbnail)
 from player import (now_playing as player_now_playing, toggle as player_toggle,
                     next_track as player_next, prev_track as player_prev,
-                    stop as player_stop, seek as player_seek, fetch_art)
+                    stop as player_stop, seek as player_seek, fetch_art,
+                    music_sources as player_sources, set_source as player_set_source)
 from web_bridge import handle_web_post as web_bridge_post
 from actions import (do_screenshot, do_translate, do_imgsearch, do_finder,
                      tools_health)
 from palette import read_palette
 import sysinfo
 from wallpaper import (list_wallpapers, set_folder, apply_wallpaper,
-                       pick_path, thumbnail, random_wallpaper)
+                       pick_path, thumbnail, random_wallpaper, lumgrid)
+import widgets_json
+import notes as notes_db
 from playlist import (playlist_status, playlist_list, playlist_toggle,
                       playlist_play, playlist_playtoggle, playlist_stop,
                       playlist_next, playlist_prev, playlist_seek,
@@ -49,6 +54,80 @@ from cava import (_start_cava, _stop_cava, _cava_watchdog, _cava_idle_watchdog,
 # Instances partagées (créées au chargement, comme dans le single-file original).
 metrics = Metrics()
 viz = Viz()
+
+# ── Modes (DND, allégé, nuit, flou) : UN SEUL moteur ─────────────────────
+# Le widget Toggles parle à ces routes ; aucune logique de mode n'est
+# dupliquée : tout passe par cc/sidebar/modes.py (le même module que la
+# sidebar). État persisté à part de sidebar-state.json — deux process qui
+# écriraient le même JSON s'écraseraient ; la vérité AFFICHÉE reste la
+# lecture réelle des outils (makoctl / hyprctl), faite à chaque appel.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sidebar"))
+import modes as modesmod                                           # noqa: E402
+
+MODES_STATE_FILE = os.path.join(
+    os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+    "sasquatch", "cc-modes.json")
+
+# Option Hyprland pilotée par le toggle « flou » (pas un mode : pas d'état
+# sauvegardé, la valeur réelle suffit).
+BLUR_OPT = "decoration:blur:enabled"
+
+# Outil requis par toggle → commande d'installation affichée si absent.
+MODES_TOOLS = {
+    "dnd": {"tool": "makoctl", "install": "sudo pacman -S mako"},
+    "lite": {"tool": "hyprctl", "install": "sudo pacman -S hyprland"},
+    "blur": {"tool": "hyprctl", "install": "sudo pacman -S hyprland"},
+    "bluesun": {"tool": "hyprsunset", "install": "sudo pacman -S hyprsunset"},
+}
+
+
+def _modes_load():
+    try:
+        with open(MODES_STATE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                data.setdefault("modes", {})
+                data.setdefault("modes_saved", {})
+                data.setdefault("procs", {})
+                return data
+    except (OSError, ValueError):
+        pass
+    return {"modes": {}, "modes_saved": {}, "procs": {}}
+
+
+def _modes_save():
+    """Écriture atomique de l'état des modes (jamais de JSON tronqué)."""
+    try:
+        os.makedirs(os.path.dirname(MODES_STATE_FILE), exist_ok=True)
+        tmp = MODES_STATE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(MODES_STATE, f, ensure_ascii=False, indent=1)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, MODES_STATE_FILE)
+    except OSError:
+        pass
+
+
+MODES_STATE = _modes_load()
+MODES = modesmod.ModeEngine(MODES_STATE)
+MODES_LOCK = threading.Lock()
+
+
+def _modes_report():
+    """État complet relu : `real` vient des outils, pas du dictionnaire."""
+    missing = [{"mode": k, "tool": v["tool"], "install": v["install"]}
+               for k, v in MODES_TOOLS.items()
+               if not modesmod.ModeEngine.have(v["tool"])]
+    return {
+        "ok": True,
+        "modes": dict(MODES_STATE.get("modes", {})),
+        "real": MODES.real_state(),
+        "env": MODES.env(),
+        "kelvin": MODES_STATE.get("modes", {}).get("kelvin", 4000),
+        "missing": missing,
+        "state_file": MODES_STATE_FILE,
+    }
 
 # Cache /api/music/status (500 ms) : le QML poll toutes les 1 s + la notif de
 # changement de piste → pas besoin de re-fork playerctl / rouvrir le socket MPD
@@ -140,6 +219,102 @@ def _brightness_set(v):
         return False
 
 
+# ── Notifications (mako) — widget `notifications` ─────────────────────────
+# Format VÉRIFIÉ sur cette machine (mako 1.10) : le JSON s'obtient avec le
+# drapeau `-j` → `makoctl list -j` (visibles) et `makoctl history -j`
+# (historique). « makoctl list -a » n'existe pas ici (invalid option -- 'a').
+# Champs réellement renvoyés : id, app_name, app_icon, category, desktop_entry,
+# summary, body (balisage Pango), urgency, actions {clé: libellé}.
+MAKO_INSTALL = "sudo pacman -S mako"
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _plain(value):
+    """Texte affichable : mako met du balisage (<b>…) dans summary/body."""
+    return " ".join(_TAG_RE.sub(" ", "" + (value or "")).split())
+
+
+def _mako_json(args):
+    """Liste JSON de `makoctl <args> -j`, ou None si mako est absent/muet."""
+    try:
+        proc = subprocess.run(["makoctl"] + args + ["-j"],
+                              capture_output=True, text=True, timeout=2)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    try:
+        data = json.loads(proc.stdout or "[]")
+    except ValueError:
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _mako_item(n, active):
+    return {
+        "id": n.get("id"),
+        "app": _plain(n.get("app_name")),
+        "icon": "" + (n.get("app_icon") or ""),
+        "summary": _plain(n.get("summary")),
+        "body": _plain(n.get("body")),
+        "urgency": n.get("urgency") or "normal",
+        "actions": list((n.get("actions") or {}).keys()),
+        "active": active,
+    }
+
+
+def mako_report():
+    """Notifications visibles + historique, relus à chaque appel (jamais un cache)."""
+    if not shutil.which("makoctl"):
+        return {"ok": False, "available": False, "running": False, "tool": "makoctl",
+                "install": MAKO_INSTALL, "items": [], "count": 0, "activeCount": 0,
+                "error": "mako n'est pas installé"}
+    active = _mako_json(["list"])
+    history = _mako_json(["history"])
+    if active is None and history is None:
+        return {"ok": False, "available": True, "running": False, "tool": "makoctl",
+                "install": MAKO_INSTALL, "items": [], "count": 0, "activeCount": 0,
+                "error": "mako ne répond pas"}
+
+    merged = []
+    active_ids = set()
+    for n in (active or []):
+        if isinstance(n, dict):
+            active_ids.add(n.get("id"))
+            merged.append((n, True))
+    for n in (history or []):
+        if isinstance(n, dict) and n.get("id") not in active_ids:
+            merged.append((n, False))
+
+    def _id(pair):
+        nid = pair[0].get("id")
+        return nid if isinstance(nid, int) else 0
+
+    # Les plus récentes d'abord (l'id mako est croissant) ; les visibles
+    # passent devant l'historique.
+    live = sorted([p for p in merged if p[1]], key=_id, reverse=True)
+    past = sorted([p for p in merged if not p[1]], key=_id, reverse=True)
+    items = [_mako_item(n, flag) for n, flag in (live + past)]
+    return {"ok": True, "available": True, "running": True, "tool": "makoctl",
+            "install": MAKO_INSTALL, "items": items, "count": len(items),
+            "activeCount": len(live), "error": ""}
+
+
+def _mako_dismiss(op, nid):
+    """op = dismiss-all | dismiss (id) → état RÉEL de makoctl."""
+    if op == "dismiss-all":
+        cmd = ["makoctl", "dismiss", "-a"]
+    else:
+        cmd = ["makoctl", "dismiss", "-n", "" + str(nid)]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"ok": False, "error": "makoctl : %s" % exc}
+    if proc.returncode != 0:
+        return {"ok": False, "error": (proc.stderr or "échec makoctl").strip()}
+    return {"ok": True}
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -199,6 +374,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json(sysinfo.tasks())
             return
 
+        if path == "/api/modes":
+            # État des toggles (DND, allégé, nuit, flou) — moteur unique
+            # cc/sidebar/modes.py, valeurs réelles relues à chaque GET.
+            with MODES_LOCK:
+                self._json(_modes_report())
+            return
+
         if path == "/api/weather":
             q = urllib.parse.parse_qs(parsed.query)
             self._json(sysinfo.weather((q.get("city") or [None])[0]))
@@ -235,6 +417,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(st)
             return
 
+        if path == "/api/music/sources":
+            # Sources détectées (MPRIS / MPD / pulse) + épingle courante
+            # (brief v1b). Coût : 1 playerctl + 1 socket MPD + 1 pactl.
+            self._json(player_sources())
+            return
+
         if path == "/api/palette":
             # Palette dynamique : relue à chaque requête → l'UI suit le thème.
             self._json(read_palette())
@@ -248,6 +436,33 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/wallpaper/random":
             # Bouton aléatoire : pioche un fichier aléatoire du dossier courant.
             self._json(random_wallpaper())
+            return
+
+        if path == "/api/wallpaper/lumgrid":
+            # Luminance 32x18 du wallpaper courant (texte adaptatif des
+            # widgets, Theme.qml). Cache par (chemin, mtime) côté module.
+            self._json(lumgrid())
+            return
+
+        if path == "/api/widgets":
+            # Instances du système de widgets (widgets.json, lu seul).
+            doc = widgets_json.get()
+            self._json({"ok": True, "revision": doc.get("revision", 0), "data": doc})
+            return
+
+        if path == "/api/notifications":
+            # Widget `notifications` : visibles (makoctl list -j) + historique
+            # (makoctl history -j), texte débarrassé du balisage Pango.
+            self._json(mako_report())
+            return
+
+        if path == "/api/notes":
+            # Widget `notes` : notes courtes persistées (~/.config/cc/notes.json).
+            try:
+                self._json(notes_db.get())
+            except notes_db.OpError as exc:
+                self._json({"ok": False, "error": str(exc),
+                            "notes": [], "count": 0}, 400)
             return
 
         if path == "/api/wallpaper/thumb":
@@ -341,6 +556,64 @@ class Handler(BaseHTTPRequestHandler):
                 text=body.get("text"), id=body.get("id")))
             return
 
+        if path == "/api/modes":
+            # {mode: dnd|lite|bluesun|blur|gaming|nosleep, on: bool, kelvin?}
+            # La réponse contient `real` : l'état RELU après application, que
+            # le widget affiche (jamais une supposition optimiste).
+            mode = (body.get("mode") or "").strip()
+            on = bool(body.get("on"))
+            if mode not in ("dnd", "lite", "bluesun", "blur", "gaming", "nosleep"):
+                self._json({"ok": False, "error": "mode inconnu: %s" % mode}, 400)
+                return
+            with MODES_LOCK:
+                if mode == "blur":
+                    res = MODES.set_option(BLUR_OPT, on)
+                else:
+                    res = MODES.set(mode, on, body.get("kelvin"))
+                if res.get("ok"):
+                    _modes_save()
+                rep = _modes_report()
+            rep["applied"] = res
+            rep["ok"] = bool(res.get("ok"))
+            if not res.get("ok"):
+                rep["error"] = res.get("error") or "échec de l'application"
+                rep["missing"] = rep.get("missing") or []
+            self._json(rep)
+            return
+
+        if path == "/api/widgets":
+            # Écriture des instances : UNIQUEMENT par widgets_json.apply
+            # (clamp sur les bornes du registre, révision, écriture atomique).
+            try:
+                self._json(widgets_json.apply(body))
+            except ValueError as exc:
+                self._json({"ok": False, "error": str(exc)}, 400)
+            return
+
+        if path == "/api/notifications":
+            # {op: "dismiss-all"} | {op: "dismiss", id: N} → état RELU ensuite.
+            op = (body.get("op") or "").strip()
+            if op not in ("dismiss-all", "dismiss"):
+                self._json({"ok": False, "error": "op inconnue: %r" % op}, 400)
+                return
+            res = _mako_dismiss(op, body.get("id"))
+            rep = mako_report()
+            rep["applied"] = res
+            if not res.get("ok"):
+                rep["ok"] = False
+                rep["error"] = res.get("error") or "échec makoctl"
+            self._json(rep)
+            return
+
+        if path == "/api/notes":
+            # {op: "add", text} | {op: "rm", id} | {op: "clear"} — écriture
+            # atomique dans cc/notes.py, réponse = liste RELUE du fichier.
+            try:
+                self._json(notes_db.apply(body))
+            except notes_db.OpError as exc:
+                self._json({"ok": False, "error": str(exc)}, 400)
+            return
+
         if path == "/api/music/toggle":
             self._json({"ok": player_toggle()})
             return
@@ -352,6 +625,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/music/stop":
             self._json({"ok": player_stop()})
+            return
+        if path == "/api/music/source":
+            # Épingle de source : persistée dans ~/.config/cc/music.json,
+            # respectée par active_source() (brief v1b). Body {"name": "..."}.
+            res = player_set_source(body.get("name") or "")
+            # Le statut est caché 500 ms : on invalide pour que la réponse
+            # suivante (et le widget) voie tout de suite la nouvelle source.
+            _music_cache["at"] = 0.0
+            _music_cache["st"] = None
+            self._json(res)
             return
         if path == "/api/system/volume":
             # Le slider du CC pilote le volume SYSTÈME (wpctl) : la barre

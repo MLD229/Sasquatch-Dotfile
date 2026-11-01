@@ -16,6 +16,8 @@ Restart=on-failure
 SuccessExitStatus=SIGTERM
 RestartSec=2
 Environment=QML_DISABLE_DISK_CACHE=1
+# Module de widgets partagé (Sasquatch.Widgets) — brief widgets v1 §7 point 5.
+Environment=QML_IMPORT_PATH=%h/.config/cc/widgets
 
 [Install]
 # default.target, comme sasquatch-cc / sasquatch-sidebar : sur ce poste

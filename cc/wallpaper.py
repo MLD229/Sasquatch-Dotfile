@@ -190,3 +190,51 @@ def thumbnail(path):
         return data
     except Exception:
         return None
+
+
+# ── Lumgrid : luminance du papier peint, pour le texte adaptatif des widgets ─
+LUMGRID_W = 32
+LUMGRID_H = 18
+_LUMGRID_CACHE: dict = {"key": None, "data": None}
+
+
+def lumgrid():
+    """Grille 32x18 de luminance (0..1) du wallpaper courant.
+
+    Sert au texte adaptatif des widgets (Theme.qml) : fond clair → encre sombre.
+    Cache par (chemin, mtime, taille). Si PIL est absent ou si l'image est
+    illisible : `values` vide — le thème garde son texte clair, jamais de crash.
+    """
+    _, path = _read_config()
+    if not path or not os.path.isfile(path):
+        return {"wallpaper": path or "", "w": 0, "h": 0, "values": []}
+    try:
+        stat = os.stat(path)
+        key = (path, stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return {"wallpaper": path, "w": 0, "h": 0, "values": []}
+    cached = _LUMGRID_CACHE
+    if cached["key"] == key and cached["data"] is not None:
+        return cached["data"]
+
+    try:
+        from PIL import Image
+    except ImportError:
+        return {"wallpaper": path, "w": 0, "h": 0, "values": []}
+    try:
+        img = Image.open(path).convert("RGB").resize((LUMGRID_W, LUMGRID_H))
+        # tobytes() plutôt que getdata() : getdata est déprécié (Pillow 14) et
+        # l'ordre RGB est garanti par convert("RGB").
+        raw = img.tobytes()
+        values = []
+        for i in range(0, len(raw), 3):
+            r, g, b = raw[i], raw[i + 1], raw[i + 2]
+            lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+            values.append(round(lum, 3))
+    except Exception:
+        return {"wallpaper": path, "w": 0, "h": 0, "values": []}
+
+    data = {"wallpaper": path, "w": LUMGRID_W, "h": LUMGRID_H, "values": values}
+    _LUMGRID_CACHE["key"] = key
+    _LUMGRID_CACHE["data"] = data
+    return data

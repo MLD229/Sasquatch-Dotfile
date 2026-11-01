@@ -80,6 +80,10 @@ playerctld daemon &
 wl-paste --type text --watch cliphist store &
 wl-paste --type image --watch cliphist store &
 
+# ── Coin supérieur gauche (libérer le workspace) ───────────────
+# Le démon lit `hyprctl cursorpos` : il doit démarrer APRÈS l'import du wayland env.
+systemctl --user start sasquatch-hotcorner 2>/dev/null &
+
 # ── Thème dynamique ──────────────────────────
 # apply-wallpaper.sh déclenche déjà theme-apply.sh ; l'appel direct ci-dessous
 # est un filet de sécurité (verrou flock = un seul apply).

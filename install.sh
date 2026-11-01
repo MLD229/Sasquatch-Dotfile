@@ -547,6 +547,8 @@ fi
 # panneau fermé, d'où le service permanent (Restart=always) et pas un
 # process lancé par le panneau.
 link "$DOTDIR/cc/sidebar/sasquatch-sidebar.service" "$SD_USER/sasquatch-sidebar.service"
+# Coin supérieur gauche = libérer le workspace (démon `hyprctl cursorpos`).
+link "$DOTDIR/scripts/sasquatch-hotcorner.service" "$SD_USER/sasquatch-hotcorner.service"
 systemctl --user daemon-reload 2>/dev/null || true
 if systemctl --user enable --now sasquatch-sidebar 2>/dev/null; then
     success "sasquatch-sidebar (service user) activé"

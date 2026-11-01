@@ -149,6 +149,40 @@ class ModeEngine:
         return {"ok": rc == 0, "cmd": ["hyprctl", "keyword", opt, str(value)],
                 "out": out, "err": err}
 
+    # ── option booléenne nue (flou) — réutilise les primitives ci-dessus ───
+    # Une seule option n'est pas un « mode » : pas de sauvegarde, pas de
+    # propriétaire. Le widget Toggles n'a donc PAS besoin d'un second moteur :
+    # il lit/écrit ici et relit la valeur réelle avec `real_state()`.
+    @staticmethod
+    def _as_bool(v):
+        """1/0, "1"/"0", "true"/"false", True/False → bool (ou None)."""
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return bool(int(v))
+        s = str(v).strip().lower()
+        if s in ("1", "true", "yes", "on"):
+            return True
+        if s in ("0", "false", "no", "off"):
+            return False
+        return None
+
+    def set_option(self, opt, on):
+        """Écrit une option Hyprland booléenne et relit la valeur réelle."""
+        if not self.have("hyprctl"):
+            return {"ok": False, "missing": True,
+                    "error": "hyprctl absent (paquet hyprland)"}
+        cur = self._getoption(opt)
+        if cur is None:
+            return {"ok": False, "error": "Hyprland injoignable (getoption vide)"}
+        if self._as_bool(cur) == bool(on):
+            return {"ok": True, "applied": False, "reason": "déjà dans cet état"}
+        res = self._keyword(opt, 1 if on else 0)
+        res["applied"] = bool(res.get("ok"))
+        return res
+
     # ── état des modes ────────────────────────────────────────────────────
     def status(self):
         return {
@@ -156,6 +190,26 @@ class ModeEngine:
             "saved": dict(self.state.get("modes_saved", {})),
             "env": self.env(),
             "kelvin": self.state.get("modes", {}).get("kelvin", 4000),
+        }
+
+    # ── état RÉEL (lu dans les outils, jamais le dictionnaire interne) ────
+    # Sert au widget Toggles : un toggle n'affiche que ce que la machine
+    # répond vraiment. None = outil injoignable (affiché « indisponible »).
+    def real_state(self):
+        dnd = self._dnd_active()
+        blur = self._as_bool(self._getoption("decoration:blur:enabled"))
+        anim = self._as_bool(self._getoption("animations:enabled"))
+        shadow = self._as_bool(self._getoption("decoration:shadow:enabled"))
+        procs = self.state.get("procs", {})
+        hypr = any(v is not None for v in (blur, anim, shadow))
+        return {
+            "dnd": dnd,
+            "blur": blur,
+            "animations": anim,
+            "shadow": shadow,
+            "hyprland": hypr,
+            "bluesun": bool(procs.get("hyprsunset")),
+            "lite": (anim is False and blur is False and shadow is False) if hypr else None,
         }
 
     def set(self, mode, on, kelvin=None):

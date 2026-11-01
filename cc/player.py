@@ -7,6 +7,7 @@ Stdlib only — la découverte MPRIS passe par le binaire `playerctl` (déjà
 installé ; playerctld est optionnel, `playerctl --all-players` fonctionne sans).
 """
 
+import json
 import os
 import re
 import shutil
@@ -16,7 +17,7 @@ import time
 import urllib.parse
 import urllib.request
 
-from mpd import mpd_status, mpd_simple_command, mpd_toggle
+from mpd import mpd_status, mpd_simple_command, mpd_toggle, mpd_available
 from config import RUNTIME_DIR
 from web_bridge import web_status, push_command as web_push_command
 
@@ -386,6 +387,110 @@ def _pulse_jump(direction):
     return _pulse_play(playlist)
 
 
+# ── Épinglage de source (brief widgets v1b) ─────────────────────────────────
+# POST /api/music/source {"name": "mpris:brave"} écrit la source choisie dans
+# ~/.config/cc/music.json ; active_source() la respecte tant qu'elle existe et
+# retombe sur l'auto (la plus récente) dès qu'elle disparaît.
+# Le fichier ne contient QUE ce choix : aucune donnée de lecture, aucun secret.
+MUSIC_PIN_FILE = os.environ.get("SASQUATCH_MUSIC_JSON") or os.path.expanduser(
+    "~/.config/cc/music.json")
+
+
+def _read_pin():
+    """Nom de la source épinglée, ou "" (fichier absent / illisible / invalide)."""
+    try:
+        with open(MUSIC_PIN_FILE, "r", encoding="utf-8") as f:
+            doc = json.load(f)
+    except Exception:
+        return ""
+    name = doc.get("source") if isinstance(doc, dict) else None
+    return name if isinstance(name, str) else ""
+
+
+def _write_pin(name):
+    """Écriture atomique (tmp + os.replace), une seule clé, 4 espaces."""
+    path = MUSIC_PIN_FILE
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"source": name}, f, indent=4, sort_keys=True)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+def _pin_target(mpris=None, st=None):
+    """(source, player) épinglés, ou None : aucune épingle, ou la source
+    épinglée a disparu → retour à l'auto (brief v1b)."""
+    name = _read_pin()
+    if not name:
+        return None
+    kind, _, rest = name.partition(":")
+    if kind == "mpris":
+        players = _mpris_players() if mpris is None else mpris
+        for p in players:
+            if p["name"] == rest:
+                return ("mpris", p["name"])
+        return None
+    if kind == "mpd":
+        return ("mpd", None) if mpd_available() else None
+    if kind == "pulse":
+        streams = _pulse_streams()
+        return ("pulse", streams[0]["app"]) if streams else None
+    return None
+
+
+def _pulse_status(p):
+    """Statut d'un stream PipeWire/PulseAudio (mpv, jeu, lecteur sans MPRIS)."""
+    local = _resolve_local_file(p["title"])
+    art = ("/albumart?local=" + urllib.parse.quote(local)) if local else None
+    return {"source": "pulse", "player": p["app"], "playing": True,
+            "paused": False, "title": p["title"], "artist": None,
+            "album": None, "file": local, "volume": 0, "elapsed": 0,
+            "duration": 0, "art": art}
+
+
+def music_sources():
+    """GET /api/music/sources : sources détectées + épingle courante."""
+    pinned = _read_pin()
+    sources = []
+    for p in _mpris_players():
+        sources.append({"name": "mpris:" + p["name"], "kind": "mpris",
+                        "label": "MPRIS", "detail": p["name"],
+                        "state": "playing" if p["status"] == "Playing" else "paused"})
+    st = mpd_status()
+    if mpd_available():
+        state = "playing" if st.get("playing") else ("paused" if st.get("paused") else "idle")
+        sources.append({"name": "mpd", "kind": "mpd", "label": "MPD",
+                        "detail": st.get("title") or "socket OK", "state": state})
+    for s in _pulse_streams():
+        sources.append({"name": "pulse", "kind": "pulse", "label": "Pulse",
+                        "detail": s["app"], "state": "playing"})
+    target = _pin_target()
+    src, name = active_source()
+    return {"ok": True, "pinned": pinned, "pinnedActive": target is not None,
+            "sources": sources,
+            "active": {"source": src, "player": name}}
+
+
+def set_source(name):
+    """POST /api/music/source : épingle une source détectée, ou remet en auto
+    ("" / "auto"). Refus explicite si la source n'est pas détectée."""
+    name = (name or "").strip()
+    if not name or name == "auto":
+        _write_pin("")
+        return music_sources()
+    doc = music_sources()
+    known = [s["name"] for s in doc["sources"]]
+    if name not in known:
+        return {"ok": False,
+                "error": "source inconnue : %s (détectées : %s)"
+                         % (name, ", ".join(known) if known else "aucune")}
+    _write_pin(name)
+    return music_sources()
+
+
 def now_playing():
     """Statut unifié : le lecteur qui joue et a démarré le plus récemment.
 
@@ -411,6 +516,25 @@ def now_playing():
     web_playing = bool(wst and not mpris_active and wst["playing"])
     web_paused = bool(wst and not mpris_active and wst["paused"])
 
+    # Épingle de source (brief v1b) : elle prime sur la récence tant que la
+    # source épinglée existe encore (sinon _pin_target → None = auto).
+    pinned = _pin_target(mpris, st)
+    if pinned is not None:
+        if pinned[0] == "mpris":
+            for p in mpris:
+                if p["name"] == pinned[1]:
+                    return _mpris_to_status(p)
+        elif pinned[0] == "mpd":
+            if st.get("file") or st.get("title"):
+                return _mpd_to_status(st)
+            return {"source": "mpd", "player": "MPD", "playing": False, "paused": False,
+                    "title": None, "artist": None, "album": None, "file": None,
+                    "volume": st.get("volume", 0), "elapsed": 0, "duration": 0, "art": None}
+        elif pinned[0] == "pulse":
+            streams = _pulse_streams()
+            if streams:
+                return _pulse_status(streams[0])
+
     # Le plus récemment activé parmi les lecteurs qui jouent VRAIMENT.
     cands = []
     if mpris_playing:
@@ -432,13 +556,7 @@ def now_playing():
     # AUDIBLE (mpv sans plugin, jeu, lecteur exotique…) → on l'affiche.
     pulse = _pulse_streams()
     if pulse:
-        p = pulse[0]
-        local = _resolve_local_file(p["title"])
-        art = ("/albumart?local=" + urllib.parse.quote(local)) if local else None
-        return {"source": "pulse", "player": p["app"], "playing": True,
-                "paused": False, "title": p["title"], "artist": None,
-                "album": None, "file": local, "volume": 0, "elapsed": 0,
-                "duration": 0, "art": art}
+        return _pulse_status(pulse[0])
 
     # Rien ne joue : le lecteur en pause le plus récent.
     paused = []
@@ -498,6 +616,12 @@ def active_source():
     # (navigateur moderne = MPRIS natif → le web_bridge serait un doublon).
     web_playing = bool(wst and not mpris and wst["playing"])
     web_paused = bool(wst and not mpris and wst["paused"])
+
+    # Épingle de source (brief v1b) : les contrôles vont à la source choisie
+    # tant qu'elle existe ; source disparue → auto (récence).
+    pinned = _pin_target(mpris, st)
+    if pinned is not None:
+        return pinned
 
     # Tous les lecteurs qui jouent, triés par récence.
     playing = []

@@ -27,3 +27,11 @@ scripts/watch-theme.sh
 
 # subpage : captures et sorties des preuves (tests/verify.sh)
 subpage/tests/out/
+
+# widgets v1b : source de lecture épinglée (état runtime, écrit par POST /api/music/source)
+cc/music.json
+
+# widgets : état runtime / artefacts de test (jamais commités)
+cc/notes.json
+docs/*.png
+docs/*.log
