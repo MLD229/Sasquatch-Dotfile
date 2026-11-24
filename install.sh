@@ -630,6 +630,19 @@ for _s in "$DOTDIR/scripts/theme-apply.sh" "$DOTDIR/scripts/apply-lang.sh"; do
 done
 [ "$_guards_ok" = "1" ] && info "aucun script ne (re)lance waybar (sasquatch-bar est la seule barre)"
 
+# Service USER fcitx5 (IME japonais, mozc). Le fichier existait dans le dépôt
+# mais n'était JAMAIS lié : sur un compte neuf, `systemctl --user start fcitx5`
+# d'autostart.sh échouait en silence → aucune saisie japonaise au premier login.
+# L'unité porte ConditionEnvironment=XDG_CURRENT_DESKTOP=Hyprland : elle reste
+# volontairement inactive sous KDE (c'est KWin qui y lance fcitx5).
+link "$DOTDIR/fcitx5/fcitx5.service" "$SD_USER/fcitx5.service"
+systemctl --user daemon-reload 2>/dev/null || true
+if systemctl --user enable --now fcitx5 2>/dev/null; then
+    success "fcitx5 (service user) activé — IME japonais (inactif sous KDE)"
+else
+    warning "fcitx5 : unité liée mais non activée (pas de session) — autostart.sh la démarrera"
+fi
+
 # ─── Aiko : service FACULTATIF, JAMAIS activé ────────────────────────────
 # Le backend aiko est lancé À LA DEMANDE par aiko.sh (Super+N) et il s'arrête
 # à la fermeture du panneau : c'est ce qui garantit « zéro process aiko »
