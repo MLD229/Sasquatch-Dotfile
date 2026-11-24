@@ -7,11 +7,16 @@ Extrait les couleurs dominantes d'un wallpaper (PIL) et réécrit les blocs
 délimités par les marqueurs SASQUATCH-PALETTE-BEGIN/END dans :
   - waybar/style.css          (palette @define-color)
   - kitty/kitty.conf          (foreground/background/accents/cursor)
-  - hypr/conf.d/general.conf  (col.active_border / col.inactive_border)
+  - hypr/theme.lua            (col.active_border / col.inactive_border — Lua,
+                              chargé en fin de hypr/hyprland.lua)
   - mako/config               (fichier entier)
   - rofi/themes/colors.rasi   (fichier entier)
   - fastfetch/config.jsonc    (logo arch — couleurs du logo, bloc JSONC)
 Écrit aussi /tmp/sasquatch-palette-kitty.conf pour kitty @ set-colors.
+Écrit aussi la grille de luminance du papier peint (32x18) dans
+$XDG_RUNTIME_DIR/sasquatch-lumgrid.json : le shell (Quickshell) la SURVEILLE
+avec un FileView, donc l'encre des cartes suit le changement de fond sans
+aucun timer ni requête périodique.
 
 Usage:
   theme-apply.py <wallpaper>           # applique
@@ -21,6 +26,7 @@ import colorsys
 import json
 import os
 import re
+import subprocess
 import sys
 
 from PIL import Image
@@ -38,7 +44,7 @@ CMT_END = "# === SASQUATCH-PALETTE-END ===\n"
 FILES = {
     "waybar": f"{CONFIG}/waybar/style.css",
     "kitty": f"{CONFIG}/kitty/kitty.conf",
-    "hypr": f"{CONFIG}/hypr/conf.d/general.conf",
+    "hypr": f"{CONFIG}/hypr/theme.lua",
     "hyprlock": f"{CONFIG}/hypr/hyprlock.conf",
     "mako": f"{CONFIG}/mako/config",
     "rofi": f"{CONFIG}/rofi/themes/colors.rasi",
@@ -46,6 +52,14 @@ FILES = {
     "cc": f"{CONFIG}/cc/qml/Palette.qml",
     "kitty_cache": f"{RUNDIR}/sasquatch-palette-kitty.conf",
 }
+
+# Grille de luminance du papier peint, lue et SURVEILLÉE par le shell
+# (Quickshell FileView). Même dimensions et même formule que
+# cc/wallpaper.py:lumgrid() — sinon l'encre des cartes changerait de valeur
+# selon la source (fichier / API).
+LUMGRID_W = 32
+LUMGRID_H = 18
+LUMGRID_FILE = "%s/sasquatch-lumgrid.json" % RUNDIR
 
 # Palette par défaut (Catppuccin Mocha-like) — utilisée si extraction impossible
 DEFAULTS = {
@@ -91,10 +105,23 @@ def _to_lum(c, target):
     t = (cur - target) / cur
     return _mix(c, (0, 0, 0), min(1.0, t))
 
+# Luminance moyenne du papier peint courant (0..1), remplie par extract().
+# None = inconnue (extraction échouée / palette par défaut) → valeurs par défaut.
+_WALL_LUM = None
+
+
 def extract(path):
     """Retourne le dict palette (hex)."""
+    global _WALL_LUM
     img = Image.open(path).convert("RGB")
     img.thumbnail((160, 160))
+    # Luminance MOYENNE du papier peint (0..1) : sert à caler la luminosité du
+    # fond de l'écran de verrouillage (et à savoir si une encre claire y tient).
+    # Gardée à part (pas dans le dict palette : `_clean_palette` n'accepte que
+    # des hex, un float y fait planter tout l'apply).
+    gray = img.convert("L")
+    raw = gray.tobytes()
+    _WALL_LUM = (sum(raw) / float(len(raw))) / 255.0 if raw else None
     q = img.quantize(colors=6, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
     pal = q.getpalette() or []
     counts = sorted(q.getcolors() or [], reverse=True)
@@ -123,6 +150,52 @@ def extract(path):
 
     return {**DEFAULTS, "BG": _hx(bg), "BG_ALT": _hx(bg_alt), "FG": _hx(fg),
             "FG_DIM": _hx(fg_dim), "ACCENT": _hx(accent), "ACCENT2": _hx(accent2)}
+
+# ────────────────────── grille de luminance (encre adaptative) ──────────────────────
+
+def lumgrid(path):
+    """Grille 32x18 de luminance du papier peint (0..1).
+
+    MÊME calcul que cc/wallpaper.py:lumgrid() : resize direct en 32x18 puis
+    luminance pondérée WCAG (0.2126/0.7152/0.0722). Identique au bit près, donc
+    un widget ne change pas d'encre selon que la valeur vient du fichier ou de
+    l'API."""
+    img = Image.open(path).convert("RGB").resize((LUMGRID_W, LUMGRID_H))
+    raw = img.tobytes()
+    values = []
+    for i in range(0, len(raw), 3):
+        r, g, b = raw[i], raw[i + 1], raw[i + 2]
+        values.append(round((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0, 3))
+    return {"wallpaper": os.path.abspath(path), "w": LUMGRID_W, "h": LUMGRID_H,
+            "values": values}
+
+
+def write_lumgrid(path):
+    """Écrit la grille pour le shell, atomiquement (os.replace).
+
+    Rien n'est réécrit si le contenu est identique (pas d'événement inotify
+    inutile pour le FileView qui surveille le fichier). Ne lève jamais : la
+    grille est un confort (encre adaptative), pas une condition d'application
+    du thème — un échec ne doit pas empêcher la palette d'être écrite.
+    Retourne True si le fichier a été remplacé."""
+    try:
+        payload = json.dumps(lumgrid(path), separators=(",", ":"))
+        os.makedirs(RUNDIR, exist_ok=True)
+        try:
+            with open(LUMGRID_FILE, encoding="utf-8") as f:
+                if f.read().strip() == payload:
+                    return False
+        except OSError:
+            pass
+        tmp = LUMGRID_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(payload + "\n")
+        # os.replace : jamais de fichier à moitié lu par le shell.
+        os.replace(tmp, LUMGRID_FILE)
+        return True
+    except Exception as e:
+        print("⚠ lumgrid non écrit (%s)" % e, file=sys.stderr)
+        return False
 
 # ─────────────────────────── générateurs de blocs ───────────────────────────
 
@@ -164,11 +237,64 @@ def b_kitty(p):
         "active_tab_background   %s" % p["ACCENT"],
     ])
 
-def b_hypr(p):
+THEME_LUA_HEADER = (
+    "-- theme.lua — généré par scripts/theme-apply.py (ne pas éditer à la main).\n"
+    "-- Chargé en fin de hypr/hyprland.lua : pcall(dofile, ...) → absent = ignoré.\n"
+    "-- Le fichier = durabilité (relogin) ; le même code est appliqué en direct\n"
+    "-- par `hyprctl eval` → effet immédiat, sans relogin.\n")
+
+
+def b_theme_lua(p):
+    """Corps Lua (hl.config) des bordures — sert au FICHIER et à l'eval.
+
+    Remplace l'ancien bloc `col.active_border` de hypr/conf.d/general.conf,
+    que plus personne ne lit (hyprlang supprimé en 0.57)."""
+    acc = p["ACCENT"][1:] + "ee"
+    acc2 = p["ACCENT2"][1:] + "ee"
     return "\n".join([
-        "    col.active_border = rgba(%s) rgba(%s) 45deg" % (p["ACCENT"][1:] + "ee", p["ACCENT2"][1:] + "ee"),
-        "    col.inactive_border = rgba(444444aa)",
-    ])
+        "hl.config({",
+        "    general = {",
+        "        col = {",
+        '            active_border = { colors = { "rgba(%s)", "rgba(%s)" }, angle = 45 },' % (acc, acc2),
+        '            inactive_border = "rgba(444444aa)",',
+        "        },",
+        "    },",
+        "})",
+    ]) + "\n"
+
+
+def write_theme_lua(p):
+    """Écrit hypr/theme.lua atomiquement. True si le contenu a changé.
+
+    N'échoue jamais l'apply : les bordures sont un confort, pas une condition."""
+    content = THEME_LUA_HEADER + "\n" + b_theme_lua(p)
+    try:
+        os.makedirs(os.path.dirname(FILES["hypr"]), exist_ok=True)
+        try:
+            with open(FILES["hypr"], encoding="utf-8") as f:
+                if f.read() == content:
+                    return False
+        except OSError:
+            pass
+        tmp = FILES["hypr"] + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp, FILES["hypr"])
+        return True
+    except OSError as e:
+        print("⚠ theme.lua non écrit (%s)" % e, file=sys.stderr)
+        return False
+
+
+def apply_theme_live(p):
+    """Applique les bordures tout de suite (hyprctl eval). Muet hors session."""
+    try:
+        r = subprocess.run(["hyprctl", "eval", b_theme_lua(p)],
+                           capture_output=True, text=True, timeout=5)
+    except Exception:
+        return False
+    return "ok" in (r.stdout or "").lower()
+
 
 def b_hyprlock(p, clock=None):
     clock = clock or {}
@@ -177,7 +303,25 @@ def b_hyprlock(p, clock=None):
     # Police OBLIGATOIRE : Noto Sans CJK JP (hiragana, pas de tofu).
     # Pas de Pango dans la sortie cmd (hyprlock le gère mal).
     date_label = "" if clock.get("lock_date", True) else "# date masquée (réglage horloge)"
+    # Fond = capture d'écran floutée. Sur un papier peint CLAIR, un facteur 0.6
+    # laisse le fond à mi-luminosité et l'encre claire (FG) s'y perd : on
+    # assombrit juste ce qu'il faut pour que le texte reste lisible (cible
+    # ≈ 0.42 de luminance de fond), et on ne touche à rien sur un fond sombre.
+    wall_lum = _WALL_LUM
+    if isinstance(wall_lum, (int, float)) and wall_lum > 0.02:
+        brightness = max(0.35, min(0.60, 0.42 / float(wall_lum)))
+    else:
+        brightness = 0.60
     lines = [
+        "background {",
+        "    monitor =",
+        "    path = screenshot",
+        "    blur_passes = 3",
+        "    blur_size = 8",
+        "    brightness = %.2f" % brightness,
+        "    vibrancy = 0.2",
+        "}",
+        "",
         "label {",
         "    monitor =",
         "    text = cmd[update:1000] python3 ~/.config/hypr/scripts/lock-ja.py time",
@@ -436,7 +580,6 @@ def main():
     blocks = (
         ("waybar", FILES["waybar"], CSS_BEGIN, CSS_END, b_waybar(p)),
         ("kitty", FILES["kitty"], CMT_BEGIN, CMT_END, b_kitty(p)),
-        ("hypr", FILES["hypr"], CMT_BEGIN, CMT_END, b_hypr(p)),
         ("hyprlock", FILES["hyprlock"], CMT_BEGIN, CMT_END, b_hyprlock(p, _clock)),
         ("mako", FILES["mako"], CMT_BEGIN, CMT_END, b_mako(p)),
         ("rofi", FILES["rofi"], CSS_BEGIN, CSS_END, b_rofi(p)),
@@ -493,6 +636,22 @@ def main():
     if changed:
         with open(FILES["kitty_cache"], "w", encoding="utf-8") as f:
             f.write(b_kitty(p) + "\n")
+
+    # Bordures Hyprland : theme.lua (durabilité, relu au login) + hyprctl eval
+    # (même code, effet immédiat). Hors session Hyprland l'eval échoue en
+    # silence : le fichier reste la source de vérité.
+    if write_theme_lua(p):
+        print("◈ theme.lua écrit : %s" % FILES["hypr"], file=sys.stderr)
+    if apply_theme_live(p):
+        print("◈ bordures appliquées à chaud (hyprctl eval)", file=sys.stderr)
+
+    # Grille de luminance pour le shell (encre adaptative). Écrite ici, dans le
+    # MÊME passage que la palette : Quickshell la surveille, donc l'encre des
+    # cartes change sans timer ni requête. Contenu identique = pas de réécriture
+    # (write_lumgrid le vérifie), et un échec n'invalide pas la palette.
+    if path and os.path.isfile(path):
+        if write_lumgrid(path):
+            print("◈ lumgrid écrit : %s" % LUMGRID_FILE, file=sys.stderr)
 
     print("Thème appliqué: BG=%s FG=%s ACCENT=%s ACCENT2=%s" % (p["BG"], p["FG"], p["ACCENT"], p["ACCENT2"]))
     return 0 if ok else 1

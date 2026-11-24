@@ -317,9 +317,50 @@ def _mako_dismiss(op, nid):
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    _aborted = 0  # clients partis (compteur — sert à n'écrire qu'une ligne de log)
 
     def log_message(self, fmt, *args):
         pass
+
+    # ── Clients qui coupent ───────────────────────────────────────────────
+    # Une fenêtre quickshell fermée, un `curl -m 0.05`, un onglet navigateur
+    # qui annule une miniature : le socket meurt pendant l'écriture des
+    # en-têtes (`end_headers` → `flush_headers` → `sendall`), l'exception
+    # remonte à socketserver qui imprime une traceback complète. Ce n'est pas
+    # un bug : une ligne de log maximum, jamais de traceback.
+    _GONE = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError)
+
+    def _client_gone(self, exc):
+        Handler._aborted += 1
+        n = Handler._aborted
+        if n == 1 or n % 50 == 0:
+            sys.stderr.write("client parti (%s) — %d au total\n"
+                             % (type(exc).__name__, n))
+            sys.stderr.flush()
+
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except self._GONE as exc:
+            self.close_connection = True
+            self._client_gone(exc)
+
+    def finish(self):
+        try:
+            super().finish()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            self.close_connection = True
+
+    def _send_bytes(self, data, ctype, code=200):
+        """Réponse binaire (image) tolérante au client parti."""
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            self.close_connection = True
 
     def _json(self, obj, code=200):
         body = json.dumps(obj).encode("utf-8")
@@ -350,11 +391,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             body = (b"<html><head><title>SasquatchCC</title></head>"
                      b"<body><h1>SasquatchCC</h1><p>Serveur actif.</p></body></html>")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_bytes(body, "text/html")
             return
 
         if path == "/api/stats":
@@ -389,7 +426,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/tools/health":
             # Dépendances des 4 outils (page « Outils ») : l'UI affiche
             # « non installé : X » au lieu d'un bouton qui ne fait rien.
-            self._json(tools_health())
+            # `?force=1` vide le cache de sonde (après une installation).
+            q = urllib.parse.parse_qs(parsed.query)
+            force = (q.get("force") or ["0"])[0] in ("1", "true", "yes")
+            self._json(tools_health(force=force))
             return
 
         if path == "/api/viz":
@@ -473,11 +513,7 @@ class Handler(BaseHTTPRequestHandler):
             if not data:
                 _not_found(self)
                 return
-            self.send_response(200)
-            self.send_header("Content-Type", "image/jpeg")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
+            self._send_bytes(data, "image/jpeg")
             return
 
         if path == "/albumart":
@@ -510,11 +546,7 @@ class Handler(BaseHTTPRequestHandler):
                 _not_found(self)
                 return
             ctype = "image/jpeg" if data[:3] == b"\xff\xd8\xff" else "image/png"
-            self.send_response(200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
+            self._send_bytes(data, ctype)
             return
 
         if path == "/api/system/volume":

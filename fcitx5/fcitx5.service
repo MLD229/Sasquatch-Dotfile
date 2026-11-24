@@ -1,0 +1,17 @@
+[Unit]
+Description=fcitx5 — IME japonais (mozc) pour la session Hyprland
+# Wayland : la session exporte ses variables via `systemctl --user import-environment`
+# dans autostart.sh, avant de démarrer cette unité.
+# Sous KDE Plasma, c'est KWin qui lance fcitx5 (kwinrc [Wayland] inputMethod) :
+# l'unité doit donc rester inactive dans cette session, sinon conflit d'instance.
+ConditionEnvironment=XDG_CURRENT_DESKTOP=Hyprland
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/fcitx5
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -27,7 +27,9 @@ EOF
 
 # Toggle OFF : si la fenêtre est déjà ouverte, la fermer.
 if window_open; then
-    hyprctl dispatch closewindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
+    # 0.57 : dispatcher Lua (l'ancien `dispatch closewindow` est mort).
+    printf -v __code 'hl.dispatch(hl.dsp.window.close({window = "title:^(%s)$"}))' "$WIN_TITLE"
+    hyprctl eval "$__code" >/dev/null 2>&1
     exit 0
 fi
 
@@ -63,7 +65,7 @@ QS_PID=$!
 for i in $(seq 1 30); do
     sleep 0.1
     if hyprctl clients -j 2>/dev/null | grep -q "\"title\": \"$WIN_TITLE\""; then
-        hyprctl dispatch focuswindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
+        hyprctl eval "hl.dispatch(hl.dsp.focus({window = \"title:^($WIN_TITLE)\$\"}))" >/dev/null 2>&1
         break
     fi
 done

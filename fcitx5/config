@@ -11,9 +11,10 @@ EnumerateSkipFirst=False
 ModifierOnlyKeyTimeout=250
 
 [Hotkey/TriggerKeys]
-0=Control+exclam
+0=Control+space
 1=Zenkaku_Hankaku
 2=Hangul
+3=Super+space
 
 [Hotkey/ActivateKeys]
 0=Hangul_Hanja
@@ -25,7 +26,6 @@ ModifierOnlyKeyTimeout=250
 0=Shift_L
 
 [Hotkey/EnumerateGroupForwardKeys]
-0=Super+space
 
 [Hotkey/EnumerateGroupBackwardKeys]
 0=Shift+Super+space

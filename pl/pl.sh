@@ -41,7 +41,9 @@ EOF
 
 # Toggle OFF : si la fenêtre est déjà ouverte, la fermer.
 if window_open; then
-    hyprctl dispatch closewindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
+    # 0.57 : dispatcher Lua (l'ancien `dispatch closewindow` est mort).
+    printf -v __code 'hl.dispatch(hl.dsp.window.close({window = "title:^(%s)$"}))' "$WIN_TITLE"
+    hyprctl eval "$__code" >/dev/null 2>&1
     exit 0
 fi
 
@@ -74,7 +76,9 @@ fi
 WIN_W=900
 MON_W=$(hyprctl monitors -j | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['width'])" 2>/dev/null || echo 1920)
 X=$((MON_W - WIN_W - 16))   # 16px de marge à droite
-hyprctl keyword "windowrule" "match:title ^(Sasquatch Playlist)$, move $X 62" >/dev/null 2>&1
+# 0.57 : `hyprctl keyword windowrule` (hyprlang) est mort — la règle runtime
+# passe par hl.window_rule, même table que la config Lua.
+hyprctl eval "hl.window_rule({match = {title = \"^(Sasquatch Playlist)\$\"}, move = \"$X 62\"})" >/dev/null 2>&1
 # NOTE : la règle runtime s'accumule jusqu'au reload (dernière gagnante, position
 # identique à chaque ouverture → sans effet fonctionnel). Comportement assumé.
 

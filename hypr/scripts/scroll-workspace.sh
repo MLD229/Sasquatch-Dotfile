@@ -5,7 +5,7 @@ direction=$1
 current=$(hyprctl activeworkspace -j | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
 if [ "$direction" = "up" ] && [ "$current" -lt 10 ]; then
-    hyprctl dispatch workspace r+1
+    hyprctl eval 'hl.dispatch(hl.dsp.focus({workspace = "e+1"}))'
 elif [ "$direction" = "down" ] && [ "$current" -gt 1 ]; then
-    hyprctl dispatch workspace r-1
+    hyprctl eval 'hl.dispatch(hl.dsp.focus({workspace = "e-1"}))'
 fi

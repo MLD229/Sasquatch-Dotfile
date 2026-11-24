@@ -11,6 +11,16 @@
 # 2 s d'immunité et obligation de sortir du coin avant de re-déclencher.
 set -uo pipefail
 
+# Lancé comme service systemd --user, ce script n'hérite pas de l'environnement
+# Wayland : sans signature, `hyprctl` échoue à chaque sonde (200 ms) et le coin
+# ne se déclenche jamais. On la retrouve depuis le socket runtime.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] || [ ! -d "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+    HYPRLAND_INSTANCE_SIGNATURE="$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -n1)"
+    export HYPRLAND_INSTANCE_SIGNATURE
+fi
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+
 ZONE="${HOTC_ZONE:-8}"
 POLL="${HOTC_POLL:-0.2}"
 ACTION="${HOTC_ACTION:-$HOME/.config/scripts/showdesktop.sh}"

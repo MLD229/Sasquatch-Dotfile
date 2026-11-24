@@ -24,5 +24,7 @@
         "ocr_lang": "fra",
         "cover_art": true
     },
-    "keybinds": {}
+    "keybinds": {
+        "dcbb9bc9": "exec, kitty -e echo TEST-OVERRIDE"
+    }
 }

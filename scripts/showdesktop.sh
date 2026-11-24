@@ -29,10 +29,15 @@ for win in state.get("windows", []):
     addr, ws = win.get("address"), win.get("workspace")
     if not addr or ws is None:
         continue
-    # La fenêtre peut avoir été fermée entre-temps : movetoworkspacesilent
-    # répond alors une erreur, qu'on ignore sans bruit.
-    r = subprocess.run(["hyprctl", "dispatch", "movetoworkspacesilent",
-                        f"{ws},address:{addr}"],
+    # La fenêtre peut avoir été fermée entre-temps : le dispatcher répond
+    # alors une erreur, qu'on ignore sans bruit.
+    # 0.57 : plus de `hyprctl dispatch movetoworkspacesilent` — dispatcher Lua
+    # window.move + sélecteur address:. `follow = false` = l'écran ne suit PAS
+    # la fenêtre (c'est le sens de « silent » ; l'option `silent` n'existe plus
+    # en 0.57, elle serait ignorée en silence).
+    r = subprocess.run(["hyprctl", "eval",
+                        'hl.dispatch(hl.dsp.window.move({window = "address:%s", '
+                        'workspace = %d, follow = false}))' % (addr, int(ws))],
                        capture_output=True, text=True, timeout=5)
     if "ok" in r.stdout.lower():
         back += 1
@@ -66,8 +71,11 @@ for c in clients:
     addr = c.get("address")
     if not addr:
         continue
-    r = subprocess.run(["hyprctl", "dispatch", "movetoworkspacesilent",
-                        f"special:{special},address:{addr}"],
+    # follow = false : on cache les fenêtres sans que l'écran ne bascule sur
+    # special:desk (sinon le « bureau vide » ne serait jamais affiché).
+    r = subprocess.run(["hyprctl", "eval",
+                        'hl.dispatch(hl.dsp.window.move({window = "address:%s", '
+                        'workspace = "special:%s", follow = false}))' % (addr, special)],
                        capture_output=True, text=True, timeout=5)
     if "ok" in r.stdout.lower():
         plan.append({"address": addr, "workspace": ws.get("id", 1)})

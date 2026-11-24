@@ -35,3 +35,8 @@ cc/music.json
 cc/notes.json
 docs/*.png
 docs/*.log
+
+# hypr : fichiers GÉNÉRÉS (réécrits en entier par theme-apply.py et settings.py,
+# chargés par hyprland.lua via pcall(dofile) — absents = ignorés)
+hypr/theme.lua
+hypr/keybinds-user.lua

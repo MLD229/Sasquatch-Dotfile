@@ -18,6 +18,7 @@ import io
 import os
 import random
 import subprocess
+import threading
 
 from config import RUNTIME_DIR
 
@@ -158,6 +159,22 @@ def pick_path(kind):
     return {"ok": True, "path": path}
 
 
+def _release_memory():
+    """Rend au kernel la mémoire libérée. glibc garde une arène par thread et
+    ne la rend pas : après quelques décodages d'images 4K le RSS reste haut
+    (pic mesuré 884 Mo) alors que les buffers sont déjà libérés."""
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
+
+
+# Les miniatures sont générées à la demande par le filmstrip : N requêtes
+# concurrentes = N décodages 4K en RAM en même temps (c'était le pic).
+_THUMB_LOCK = threading.Lock()
+
+
 def thumbnail(path):
     """Miniature JPEG (cache sha1) pour le filmstrip du sélecteur."""
     path = os.path.expanduser((path or "").strip())
@@ -176,20 +193,34 @@ def thumbnail(path):
                 return f.read()
         except OSError:
             pass
-    try:
-        img = Image.open(path)
-        # Pillow ≥ 9.1 : Image.Resampling.LANCZOS (ancien alias Image.LANCZOS
-        # toujours valide en runtime mais inconnu de Pyright → getattr).
-        resample = getattr(Image, "Resampling", Image).LANCZOS
-        img.thumbnail(THUMB_SIZE, resample)
-        buf = io.BytesIO()
-        img.convert("RGB").save(buf, "JPEG", quality=82)
-        data = buf.getvalue()
-        with open(out_path, "wb") as f:
-            f.write(data)
-        return data
-    except Exception:
-        return None
+    # Série (une miniature à la fois) : borne la RAM du serveur.
+    with _THUMB_LOCK:
+        # Un autre thread a pu générer le fichier pendant l'attente du verrou.
+        if os.path.exists(out_path):
+            try:
+                with open(out_path, "rb") as f:
+                    return f.read()
+            except OSError:
+                pass
+        try:
+            resample = getattr(Image, "Resampling", Image).LANCZOS
+            with Image.open(path) as src:
+                # draft() : les JPEG se décodent réduits (÷8) — décisif sur 4K.
+                try:
+                    src.draft("RGB", (THUMB_SIZE[0] * 2, THUMB_SIZE[1] * 2))
+                except Exception:
+                    pass
+                src.thumbnail(THUMB_SIZE, resample)
+                buf = io.BytesIO()
+                src.convert("RGB").save(buf, "JPEG", quality=82)
+            data = buf.getvalue()
+            with open(out_path, "wb") as f:
+                f.write(data)
+            return data
+        except Exception:
+            return None
+        finally:
+            _release_memory()
 
 
 # ── Lumgrid : luminance du papier peint, pour le texte adaptatif des widgets ─

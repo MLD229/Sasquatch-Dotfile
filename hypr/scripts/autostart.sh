@@ -32,11 +32,14 @@ systemctl --user restart sasquatch-cc 2>/dev/null || true
 # hyprpaper orphelins d'une session passée → fond noir, puis relance propre).
 ~/.config/hypr/scripts/wallpaper.sh
 
-# ── Horloge flottante (projet UI japonaise) ──
-# wallclock-ja.py : heure en hiragana dans le fond d'écran, positionnée dans
-# la zone plate du wallpaper (analyse variance), glisse quand le wallpaper
-# change (watcher interne 2 s). Layer background, sous les fenêtres.
-python3 ~/.config/waybar/scripts/wallclock-ja.py >/dev/null 2>&1 &
+# ── Horloge kana : plus de processus dédié ───
+# L'ancienne horloge flottante (waybar/scripts/wallclock-ja.py, layer
+# gtk-layer-shell) est remplacée par le widget `clock`, mode `kana`
+# (cc/widgets/Sasquatch/Widgets/widgets/ClockWidget.qml) : même lecture
+# hiragana, mais placeable/retirable via le Studio. Le script reste sur
+# disque (archive, revert = remettre la ligne ci-dessous), plus rien ne le
+# lance.
+# python3 ~/.config/waybar/scripts/wallclock-ja.py >/dev/null 2>&1 &
 
 # ── Bar ──────────────────────────────────────
 # waybar est lancé par theme-apply.sh (le thème doit être prêt avant la barre)
@@ -45,7 +48,9 @@ python3 ~/.config/waybar/scripts/wallclock-ja.py >/dev/null 2>&1 &
 mako &
 
 # ── IME japonais (fcitx5 + mozc) ──────────────
-fcitx5 -d &
+# Unité systemd (Restart=always) : fcitx5 mourait en silence et le clavier
+# perdait la bascule hiragana sans que rien ne le signale.
+systemctl --user start fcitx5 2>/dev/null || true
 
 # ── Polkit ───────────────────────────────────
 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &

@@ -11,7 +11,7 @@ FILE="$DIR/$(date +%Y%m%d_%H%M%S_%N).png"
 
 # appelé depuis le Control Center : on masque le CC avant de capturer
 if [[ "$2" == "cc" ]]; then
-    hyprctl dispatch closewindow "title:^(Sasquatch CC)$" >/dev/null 2>&1
+    hyprctl eval 'hl.dispatch(hl.dsp.window.close({window = "title:^(Sasquatch CC)$"}))' >/dev/null 2>&1
     sleep 0.35
 fi
 

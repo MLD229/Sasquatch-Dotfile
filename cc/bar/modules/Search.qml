@@ -3,12 +3,12 @@
 // La v2 lançait `/usr/bin/rofi -show drun` : rofi NU, sans thème, sans le mode
 // combi (apps + calculatrice) et sans le PATH corrigé pour qalc. Le lanceur du
 // dotfile est ~/.config/rofi/scripts/launcher.sh (thème sasquatch.rasi) ; il
-// est appelé par `hyprctl dispatch exec` (même style que le module Settings :
-// chemin absolu, Process, code de sortie journalisé) pour que Hyprland détache
-// le processus de la barre.
+// est appelé par un dispatcher Lua `hl.dsp.exec_cmd` (même style que le module
+// Settings : chemin absolu, Process, code de sortie journalisé) pour que
+// Hyprland détache le processus de la barre.
 //
 // Replis, dans l'ordre, tous VISIBLES :
-//   1. launcher.sh présent      → hyprctl dispatch exec (thème + combi) ;
+//   1. launcher.sh présent      → hyprctl eval hl.dsp.exec_cmd (thème + combi) ;
 //   2. launcher.sh absent       → /usr/bin/rofi -show drun -theme sasquatch.rasi ;
 //   3. ni l'un ni l'autre       → glyphe chaud + point d'alerte + infobulle
 //                                 « lanceur introuvable » (jamais un clic muet).
@@ -120,7 +120,7 @@ Item {
                 return;
             }
             mod.failed = true;
-            console.warn("bar: hyprctl dispatch exec launcher.sh → code " + code);
+            console.warn("bar: hyprctl eval exec_cmd launcher.sh → code " + code);
             Hypr.miss("le lanceur n'a pas pu être lancé (code " + code + ")");
         }
     }
@@ -150,7 +150,8 @@ Item {
         if (mod.launcherOk) {
             if (dispatchProc.running)
                 return;
-            dispatchProc.command = ["/usr/bin/hyprctl", "dispatch", "exec", mod.launcherTilde];
+            dispatchProc.command = ["/usr/bin/hyprctl", "eval",
+                    'hl.dispatch(hl.dsp.exec_cmd("' + mod.launcherTilde + '"))'];
             dispatchProc.running = true;
             return;
         }

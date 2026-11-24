@@ -269,6 +269,17 @@ Item {
             objectName: "widget-wrapper"
             property var inst: modelData
             property var r: canvas.rectFor(wrapper.inst)
+            // Luminance du papier peint DERRIÈRE cette carte (0..1), -1 =
+            // inconnue. Seul l'hôte `background` la fournit : ailleurs le
+            // widget est posé sur le verre du panneau (CC/bar), donc l'encre
+            // de palette est la bonne réponse. C'est ce qui rend lisible chaque
+            // carte séparément sur un fond mixte, sans ajouter de fond.
+            readonly property real bgLum: (canvas.host === "background"
+                                           && canvas.width > 1 && canvas.height > 1)
+                ? Theme.lumAt(wrapper.r.x / canvas.width, wrapper.r.y / canvas.height,
+                              (wrapper.r.x + wrapper.r.w) / canvas.width,
+                              (wrapper.r.y + wrapper.r.h) / canvas.height)
+                : -1
             // L'instance sélectionnée passe devant les autres (Studio).
             z: (wrapper.inst && wrapper.inst.id === canvas.selectedId) ? 5 : 1
 
@@ -375,6 +386,15 @@ Item {
                 target: loader.item
                 property: "host"
                 value: canvas.host
+                when: loader.status === Loader.Ready
+            }
+            // Luminance locale → l'encre du widget (WidgetBase.ink / inkDim /
+            // accentInk). Binding et non affectation : elle doit suivre un
+            // changement de wallpaper sans relancer l'hôte.
+            Binding {
+                target: loader.item
+                property: "bgLum"
+                value: wrapper.bgLum
                 when: loader.status === Loader.Ready
             }
             Binding {

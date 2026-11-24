@@ -3,13 +3,13 @@
 // Brief v2 §6 : l'ancien bouton lançait ~/.config/cc/cc.sh (Control Center),
 // ce n'est PAS le panneau de réglages. Le panneau du dotfile est
 // ~/.config/settings/settings.sh (fenêtre « Sasquatch Settings », backend
-// HTTP 8770, raccourci Super+I) : c'est lui qui écrit keybinds-user.conf,
+// HTTP 8770, raccourci Super+I) : c'est lui qui écrit hypr/keybinds-user.lua,
 // settings.json, hypridle.conf. Le Control Center reste accessible ailleurs
 // (Super+E / rofi), il n'est simplement plus derrière cet engrenage.
 //
-// Lancement par `hyprctl dispatch exec` : Hyprland étend ~ (le chemin reste
-// lisible) et détache le processus de la barre. Le script est un TOGGLE : si
-// le panneau est déjà ouvert, ce clic le ferme — c'est voulu.
+// Lancement par dispatcher Lua (`hl.dsp.exec_cmd`) : Hyprland étend ~ (le
+// chemin reste lisible) et détache le processus de la barre. Le script est un
+// TOGGLE : si le panneau est déjà ouvert, ce clic le ferme — c'est voulu.
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -58,11 +58,12 @@ Item {
 
     Process {
         id: setProc
-        command: ["/usr/bin/hyprctl", "dispatch", "exec", "~/.config/settings/settings.sh"]
+        command: ["/usr/bin/hyprctl", "eval",
+                  'hl.dispatch(hl.dsp.exec_cmd("~/.config/settings/settings.sh"))']
         onExited: function (code, status) {
             mod.failed = (code !== 0);
             if (mod.failed) {
-                console.warn("bar: hyprctl dispatch exec settings.sh → code " + code);
+                console.warn("bar: hyprctl eval exec_cmd settings.sh → code " + code);
                 Quickshell.execDetached(["notify-send", "-a", "Barre Sasquatch", "-t", "4000",
                                          "Barre Sasquatch",
                                          "Sasquatch Settings n'a pas pu être lancé (code "

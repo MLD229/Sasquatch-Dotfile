@@ -20,6 +20,7 @@
 // Aperçu : le canvas n'est pas mis à l'échelle en dur — il fait la taille
 // RÉELLE de l'écran (1920x1080) et on applique `scale` au conteneur. Les
 // fractions x/y et les tailles px des widgets du fond restent donc vraies.
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -53,11 +54,18 @@ Item {
     property int apPlaced: -1           // -1 = aucun placement tenté
     property var apUnplaced: []
     property string apReason: ""
+    // « Suivre le fond d'écran » : le placement mémorisé côté serveur
+    // (doc.placement) est rejoué à chaque changement de papier peint via
+    // l'op `reapply` qu'appelle apply-wallpaper.sh.
+    property bool apAuto: true
+    property var placement: null
+    property bool placementLoaded: false
     readonly property bool apOk: apPlaced > 0 && apUnplaced.length === 0
     readonly property var apStrategies: [
         { k: "theme", t: "Thème" }, { k: "auto", t: "Auto" },
         { k: "grid", t: "Grille" }, { k: "stack", t: "Empilé" },
-        { k: "center", t: "Centré" }, { k: "spread", t: "Réparti" }
+        { k: "center", t: "Centré" }, { k: "spread", t: "Réparti" },
+        { k: "fit", t: "Remplir" }
     ]
     readonly property var apCorners: [
         { k: "tr", t: "haut d." }, { k: "tl", t: "haut g." },
@@ -96,6 +104,9 @@ Item {
             margin: studio.apMargin,
             gap: studio.apGap,
             corner: studio.apCorner,
+            // Mémorisé côté serveur : c'est `auto` qui fait rejouer ce
+            // placement à chaque changement de papier peint (op `reapply`).
+            auto: studio.apAuto,
             ids: ids,
             screen: { w: studio.screenW, h: studio.screenH }
         };
@@ -230,6 +241,23 @@ Item {
         }
         studio.revision = rev;
         studio.instances = kept;
+        // Placement mémorisé par le serveur : le panneau s'initialise dessus
+        // UNE fois (ensuite c'est l'utilisateur qui commande).
+        if (parsed.placement && typeof parsed.placement === "object") {
+            studio.placement = parsed.placement;
+            if (!studio.placementLoaded) {
+                studio.placementLoaded = true;
+                if (typeof parsed.placement.strategy === "string")
+                    studio.apStrategy = parsed.placement.strategy;
+                if (typeof parsed.placement.margin === "number")
+                    studio.apMargin = Math.round(parsed.placement.margin);
+                if (typeof parsed.placement.gap === "number")
+                    studio.apGap = Math.round(parsed.placement.gap);
+                if (typeof parsed.placement.corner === "string")
+                    studio.apCorner = parsed.placement.corner;
+                studio.apAuto = parsed.placement.auto !== false;
+            }
+        }
         if (studio.selId.length > 0 && studio.byId(studio.selId) === null) {
             studio.selId = "";
             studio.sel = null;
@@ -339,6 +367,34 @@ Item {
         if (!studio.sel)
             return;
         studio.post({ op: "option", id: studio.sel.id, key: key, value: value });
+    }
+
+    // ── Taille de la sélection ─────────────────────────────────────────────
+    // Fond d'écran = pixels, board CC = cellules de la grille 12 colonnes. Les
+    // hôtes bar/subpage n'ont pas de resize (l'ordre fait la place) : les
+    // réglages sont alors masqués, jamais un slider qui n'envoie rien.
+    readonly property string sHostName: (studio.sel && typeof studio.sel.host === "string")
+                                        ? studio.sel.host : ""
+    readonly property bool sIsBg: studio.sHostName !== "cc"
+    readonly property bool sResizable: studio.sel !== null
+        && (studio.sHostName === "background" || studio.sHostName === "cc")
+    readonly property int sMaxW: studio.sIsBg ? Math.max(240, Math.round(studio.screenW)) : 12
+    readonly property int sMaxH: studio.sIsBg ? Math.max(160, Math.round(studio.screenH)) : 8
+
+    function sGeoNum(key, fallback) {
+        var g = studio.sel ? studio.sel.geo : null;
+        var v = g ? g[key] : undefined;
+        return (typeof v === "number") ? v : fallback;
+    }
+
+    // Un seul axe par envoi : le serveur garde l'autre valeur de la géométrie
+    // courante (`ref`), donc pas de saut de taille en changeant la largeur.
+    function setSize(key, value) {
+        if (!studio.sel)
+            return;
+        var geo = {};
+        geo[key] = Math.round(value);
+        studio.post({ op: "resize", id: studio.sel.id, geo: geo });
     }
 
     function removeWidget(id) {
@@ -754,6 +810,7 @@ Item {
                 model: [{ k: "background", t: "Fond d'écran" }, { k: "cc", t: "CC" }]
 
                 delegate: Rectangle {
+                    id: hostBtn
                     required property var modelData
                     width: 96
                     height: 26
@@ -765,15 +822,15 @@ Item {
 
                     Text {
                         anchors.centerIn: parent
-                        text: modelData.t
+                        text: hostBtn.modelData.t
                         font.pixelSize: 10
-                        color: (studio.hostFilter === modelData.k) ? Theme.ink : Theme.textDim
+                        color: (studio.hostFilter === hostBtn.modelData.k) ? Theme.ink : Theme.textDim
                     }
 
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: studio.hostFilter = modelData.k
+                        onClicked: studio.hostFilter = hostBtn.modelData.k
                     }
                 }
             }
@@ -806,6 +863,7 @@ Item {
                     model: studio.apStrategies
 
                     delegate: Rectangle {
+                        id: apChip
                         required property var modelData
                         readonly property bool active: studio.apStrategy === modelData.k
                         width: apStratLabel.implicitWidth + 16
@@ -817,15 +875,15 @@ Item {
                         Text {
                             id: apStratLabel
                             anchors.centerIn: parent
-                            text: modelData.t
+                            text: apChip.modelData.t
                             font.pixelSize: 9
-                            color: (studio.apStrategy === modelData.k) ? Theme.ink : Theme.textDim
+                            color: (studio.apStrategy === apChip.modelData.k) ? Theme.ink : Theme.textDim
                         }
 
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: studio.apStrategy = modelData.k
+                            onClicked: studio.apStrategy = apChip.modelData.k
                         }
                     }
                 }
@@ -841,6 +899,7 @@ Item {
                     model: studio.apCorners
 
                     delegate: Rectangle {
+                        id: apCornerChip
                         required property var modelData
                         readonly property bool active: studio.apCorner === modelData.k
                         width: apCornerLabel.implicitWidth + 16
@@ -851,15 +910,15 @@ Item {
                         Text {
                             id: apCornerLabel
                             anchors.centerIn: parent
-                            text: modelData.t
+                            text: apCornerChip.modelData.t
                             font.pixelSize: 9
-                            color: (studio.apCorner === modelData.k) ? Theme.ink : Theme.textDim
+                            color: (studio.apCorner === apCornerChip.modelData.k) ? Theme.ink : Theme.textDim
                         }
 
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: studio.apCorner = modelData.k
+                            onClicked: studio.apCorner = apCornerChip.modelData.k
                         }
                     }
                 }
@@ -883,6 +942,33 @@ Item {
                 decimals: 0
                 modelValue: studio.apGap
                 onCommitted: function (v) { studio.apGap = Math.round(v); }
+            }
+
+            // « Suivre le fond d'écran » : coché → le placement mémorisé est
+            // rejoué à chaque changement de papier peint. Décocher n'écrit QUE
+            // le drapeau (`setplacement`) : ça ne déplace aucun widget.
+            Rectangle {
+                width: apPanel.width
+                height: 24
+                radius: Theme.radiusBtn
+                color: studio.apAuto ? Theme.a(Theme.accent, 0.60) : Theme.a(Theme.text, 0.06)
+
+                Text {
+                    anchors.centerIn: parent
+                    text: studio.apAuto ? "Suivre le fond ✓" : "Suivre le fond"
+                    font.pixelSize: 9
+                    color: studio.apAuto ? Theme.ink : Theme.textDim
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        studio.apAuto = !studio.apAuto;
+                        if (studio.placement !== null)
+                            studio.post({ op: "setplacement", auto: studio.apAuto });
+                    }
+                }
             }
 
             Rectangle {
@@ -1236,6 +1322,7 @@ Item {
                         model: WidgetRegistry.variantNames(studio.sType())
 
                         delegate: Rectangle {
+                            id: varChip
                             required property var modelData
                             readonly property bool active: studio.sVariant() === modelData
                             width: varLabel.implicitWidth + 20
@@ -1246,18 +1333,49 @@ Item {
                             Text {
                                 id: varLabel
                                 anchors.centerIn: parent
-                                text: modelData
+                                text: varChip.modelData
                                 font.pixelSize: 10
-                                color: (studio.sVariant() === modelData) ? Theme.ink : Theme.textDim
+                                color: (studio.sVariant() === varChip.modelData) ? Theme.ink : Theme.textDim
                             }
 
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: studio.setVariant(modelData)
+                                onClicked: studio.setVariant(varChip.modelData)
                             }
                         }
                     }
+                }
+
+                // — taille (px sur le fond, cellules dans le CC) —
+                Text {
+                    width: styleCol.width
+                    visible: studio.sResizable
+                    text: studio.sIsBg ? "TAILLE · PX" : "TAILLE · CELLULES"
+                    font.pixelSize: 9
+                    color: Theme.textDim
+                }
+
+                SliderRow {
+                    width: styleCol.width
+                    visible: studio.sResizable
+                    label: "Largeur"
+                    from: studio.sIsBg ? 120 : 1
+                    to: studio.sMaxW
+                    decimals: 0
+                    modelValue: studio.sGeoNum("w", studio.sIsBg ? 360 : 4)
+                    onCommitted: function (v) { studio.setSize("w", v); }
+                }
+
+                SliderRow {
+                    width: styleCol.width
+                    visible: studio.sResizable
+                    label: "Hauteur"
+                    from: studio.sIsBg ? 80 : 1
+                    to: studio.sMaxH
+                    decimals: 0
+                    modelValue: studio.sGeoNum("h", studio.sIsBg ? 180 : 2)
+                    onCommitted: function (v) { studio.setSize("h", v); }
                 }
 
                 // — alpha / blur / radius (bornes du registre) —
@@ -1317,6 +1435,7 @@ Item {
                         model: studio.styleBounds.accent
 
                         delegate: Rectangle {
+                            id: accChip
                             required property var modelData
                             readonly property bool active: studio.sAccent() === modelData
                             width: accLabel.implicitWidth + 18
@@ -1327,15 +1446,15 @@ Item {
                             Text {
                                 id: accLabel
                                 anchors.centerIn: parent
-                                text: modelData
+                                text: accChip.modelData
                                 font.pixelSize: 9
-                                color: (studio.sAccent() === modelData) ? Theme.ink : Theme.textDim
+                                color: (studio.sAccent() === accChip.modelData) ? Theme.ink : Theme.textDim
                             }
 
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: studio.setAccent(modelData)
+                                onClicked: studio.setAccent(accChip.modelData)
                             }
                         }
                     }
@@ -1427,6 +1546,7 @@ Item {
                                 model: optRow.optSpec.values !== undefined ? optRow.optSpec.values : []
 
                                 delegate: Rectangle {
+                                    id: enumChip
                                     required property var modelData
                                     readonly property bool active: studio.sOpt(optRow.optKey, "") === modelData
                                     width: enumLabel.implicitWidth + 18
@@ -1437,16 +1557,16 @@ Item {
                                     Text {
                                         id: enumLabel
                                         anchors.centerIn: parent
-                                        text: modelData
+                                        text: enumChip.modelData
                                         font.pixelSize: 9
-                                        color: (studio.sOpt(optRow.optKey, "") === modelData)
+                                        color: (studio.sOpt(optRow.optKey, "") === enumChip.modelData)
                                                ? Theme.ink : Theme.textDim
                                     }
 
                                     MouseArea {
                                         anchors.fill: parent
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: studio.setOption(optRow.optKey, modelData)
+                                        onClicked: studio.setOption(optRow.optKey, enumChip.modelData)
                                     }
                                 }
                             }

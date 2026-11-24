@@ -36,7 +36,9 @@ Item {
         var h = toolsPage.toolHealth ? toolsPage.toolHealth[k] : null;
         if (!h || h.ok !== false)
             return "";
-        var msg = h.resume ? ("Non installé : " + h.resume) : "Indisponible";
+        var msg = h.resume
+                  ? ((h.casse && h.casse.length > 0 ? "Outil cassé : " : "Non installé : ") + h.resume)
+                  : "Indisponible";
         if (h.hint)
             msg += "  ·  " + h.hint;
         return msg;
@@ -64,9 +66,13 @@ Item {
             toolsPage.recognizeBusy = false;
             if (res && res.recognized)
                 toolsPage.recognizeResult = res.title + (res.artist ? " — " + res.artist : "");
-            else
+            else if (res && res.error)
+                toolsPage.recognizeResult = res.error;      // vrai motif (songrec absent, réseau…)
+            else if (res)
                 toolsPage.recognizeResult = "Non reconnu. Réessaie dans un endroit plus calme.";
-        }, 60000);
+            else
+                toolsPage.recognizeResult = "Serveur injoignable — réessaie dans un instant.";
+        }, 120000);
     }
 
     property bool translateBusy: false

@@ -43,8 +43,22 @@ MouseArea {
 
     readonly property real cardAlpha: Theme.cardAlpha(base.style, base.variant)
     readonly property int radius: Theme.radiusFor(base.style)
-    readonly property color ink: Theme.ink
-    readonly property color inkDim: Theme.inkDim
+    // Luminance du papier peint derrière la carte (0..1), posée par l'hôte.
+    // -1 = inconnue (CC/bar/subpage : le widget est sur du verre) → encre de
+    // palette. Sur le fond d'écran, l'encre est calculée sur CETTE zone : c'est
+    // ce qui la rend lisible sur un fond mixte sans ajouter de fond.
+    property real bgLum: -1
+    // Encre calculée sur CETTE zone (brief encre). Ces trois couleurs ne sont
+    // volontairement plus `readonly` : elles portent un Behavior de 220 ms, ce
+    // qui évite le « saut » d'encre quand le papier peint change. En édition
+    // (Studio) l'animation est coupée — il doit rester sec.
+    property color ink: Theme.inkOn(base.bgLum)
+    property color inkDim: Theme.inkDimOn(base.bgLum)
+    // Accent lisible sur la même zone (suffixes じ / ふん, jauges, barres).
+    property color accentInk: Theme.accentOn(base.bgLum)
+    Behavior on ink { enabled: !base.editing; ColorAnimation { duration: 220 } }
+    Behavior on inkDim { enabled: !base.editing; ColorAnimation { duration: 220 } }
+    Behavior on accentInk { enabled: !base.editing; ColorAnimation { duration: 220 } }
     // Padding intérieur ≥ 10 px (brief §3), proportionnel à la carte.
     readonly property int pad: Math.max(10, Math.round(Math.min(base.width, base.height) * 0.09))
 
@@ -132,6 +146,19 @@ MouseArea {
     onDoubleClicked: {
         if (base.editing)
             base.removeRequested();
+    }
+
+    // ── Apparition de la carte (brief §B.2) ───────────────────────────────
+    // 0.85 → 1 en 160 ms (OutCubic), jouée une seule fois à la création.
+    // Aucune animation de géométrie : le drag et le resize restent instantanés.
+    // En édition l'animation ne se joue pas (le Studio doit rester sec) et
+    // l'opacité garde sa valeur par défaut (1).
+    NumberAnimation on opacity {
+        from: 0.85
+        to: 1.0
+        duration: 160
+        easing.type: Easing.OutCubic
+        running: !base.editing
     }
 
     // Carte de verre (brief §3). `showCard: false` = widget sans fond

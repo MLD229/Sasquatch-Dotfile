@@ -2,7 +2,7 @@
 """Sasquatch Settings - backend HTTP (stdlib only, 127.0.0.1:8770).
 
 Panneau de configuration du dotfile (Super+I) : veille (hypridle), palette,
-horloge (waybar + hyprlock), raccourcis clavier (keybinds-user.conf) et
+horloge (waybar + hyprlock), raccourcis clavier (hypr/keybinds-user.lua) et
 options du CC. Lit/écrit ~/.config/settings/settings.json (symlinké vers
 settings/settings.json du repo) et ne modifie QUE la section concernée.
 
@@ -35,8 +35,8 @@ SETTINGS_JSON = os.path.realpath(
     os.path.join(HOME, ".config", "settings", "settings.json"))
 HYPRIDLE_CONF = os.path.realpath(
     os.path.join(HOME, ".config", "hypr", "hypridle.conf"))
-KEYBINDS_USER_CONF = os.path.realpath(
-    os.path.join(REPO, "hypr", "keybinds-user.conf"))
+KEYBINDS_USER_LUA = os.path.realpath(
+    os.path.join(REPO, "hypr", "keybinds-user.lua"))
 APPLY_LANG = os.path.join(REPO, "scripts", "apply-lang.sh")
 
 # ── Barre verticale Quickshell (cc/bar) ────────────────────────────────────
@@ -91,6 +91,81 @@ _RE_BIND = re.compile(r"^(bind|bindl|binde|bindel|bindr|bindm)\s*=\s*(.+)$")
 _BIND_TYPES = ("bind", "bindl", "binde", "bindel", "bindr", "bindm")
 
 # ---------------------------------------------------------------------------
+# hyprlang → Lua (Hyprland >= 0.57 : plus de hyprlang, dispatchers hl.dsp.*)
+# ---------------------------------------------------------------------------
+# Le panneau laisse taper la commande en syntaxe historique (« exec, kitty »).
+# Elle est TRADUITE ici : keybinds-user.lua ne contient que du Lua.
+_BIND_FLAGS = {
+    "bind": "",
+    "bindr": "release = true",
+    "bindm": "mouse = true",
+    "bindl": "locked = true",
+    "binde": "repeating = true",
+    "bindel": "locked = true, repeating = true",
+}
+_DIRECTIONS = {"l": "left", "r": "right", "u": "up", "d": "down",
+               "left": "left", "right": "right", "up": "up", "down": "down"}
+
+
+def _lua_str(s):
+    """Chaîne Lua échappée (guillemets doubles)."""
+    return '"%s"' % str(s).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _lua_dispatcher(dispatcher, arg):
+    """« dispatcher, arg » hyprlang → expression Lua hl.dsp.*.
+
+    None = aucun équivalent connu : l'appelant écrit la ligne en COMMENTAIRE
+    (rien ne casse, l'utilisateur voit ce qu'il doit adapter à la main)."""
+    d = re.sub(r"\s+", " ", (dispatcher or "")).strip().lower()
+    a = re.sub(r"\s+", " ", (arg or "")).strip()
+
+    if d == "exec":
+        return "hl.dsp.exec_cmd(%s)" % _lua_str(a)
+    if d in ("killactive", "closewindow"):
+        return "hl.dsp.window.close()"
+    if d == "exit":
+        return "hl.dsp.exit()"
+    if d == "workspace":
+        return "hl.dsp.focus({ workspace = %s })" % _lua_str(a or "1")
+    if d in ("movetoworkspace", "movetoworkspacesilent"):
+        ws = a.split(",")[0].strip() or "1"
+        # « silent » (pas de hyprlang) = follow = false : l'écran ne suit pas.
+        follow = "false" if d.endswith("silent") else "true"
+        return "hl.dsp.window.move({ workspace = %s, follow = %s })" % (_lua_str(ws), follow)
+    if d == "togglespecialworkspace":
+        return "hl.dsp.workspace.toggle_special(%s)" % _lua_str(a)
+    if d in ("movewindow", "movefocus"):
+        target = "hl.dsp.window.move" if d == "movewindow" else "hl.dsp.focus"
+        return "%s({ direction = %s })" % (target, _lua_str(_DIRECTIONS.get(a, a)))
+    if d in ("resizeactive", "resizewindow"):
+        parts = a.split()
+        try:
+            x, y = int(parts[0]), int(parts[1])
+        except (IndexError, ValueError):
+            return "hl.dsp.window.resize()"          # resize à la souris (bindm)
+        return "hl.dsp.window.resize({ x = %d, y = %d })" % (x, y)
+    if d == "fullscreen":
+        if a in ("1", "maximize", "maximized"):
+            return 'hl.dsp.window.fullscreen({ action = "toggle", mode = "maximized" })'
+        return 'hl.dsp.window.fullscreen({ action = "toggle" })'
+    if d == "togglefloating":
+        return 'hl.dsp.window.float({ action = "toggle" })'
+    if d == "pseudo":
+        return "hl.dsp.window.pseudo()"
+    if d == "layoutmsg":
+        return "hl.dsp.layout(%s)" % _lua_str(a or "togglesplit")
+    if d == "alterzorder":
+        # Équivalent bien présent en 0.57 : hl.dsp.window.alter_zorder({mode}).
+        return "hl.dsp.window.alter_zorder({ mode = %s })" % _lua_str(a or "top")
+    return None
+
+
+def _lua_dispatcher_from_command(command):
+    d, _, a = (command or "").partition(",")
+    return _lua_dispatcher(d, a)
+
+# ---------------------------------------------------------------------------
 # Template hypridle.conf (timeouts en SECONDES = minutes × 60)
 # ---------------------------------------------------------------------------
 HYPRIDLE_TEMPLATE = """# hypridle.conf — régénéré par le panneau Settings (Super+I)
@@ -98,7 +173,7 @@ HYPRIDLE_TEMPLATE = """# hypridle.conf — régénéré par le panneau Settings 
 general {
     lock_cmd = pidof hyprlock || hyprlock
     before_sleep_cmd = loginctl lock-session
-    after_sleep_cmd = hyprctl dispatch dpms on
+    after_sleep_cmd = hyprctl eval 'hl.dispatch(hl.dsp.dpms("on"))'
     ignore_dbus_inhibit = false
 }
 
@@ -118,8 +193,8 @@ listener {
 # Écran off après {OFF}s
 listener {
     timeout = {OFF}
-    on-timeout = hyprctl dispatch dpms off
-    on-resume = hyprctl dispatch dpms on
+    on-timeout = hyprctl eval 'hl.dispatch(hl.dsp.dpms("off"))'
+    on-resume = hyprctl eval 'hl.dispatch(hl.dsp.dpms("on"))'
 }
 
 # Suspend après {SUSPEND}s
@@ -139,7 +214,7 @@ HYPRIDLE_TEMPLATE_LOCK_ONLY = """# hypridle.conf — régénéré par le panneau
 general {
     lock_cmd = pidof hyprlock || hyprlock
     before_sleep_cmd = loginctl lock-session
-    after_sleep_cmd = hyprctl dispatch dpms on
+    after_sleep_cmd = hyprctl eval 'hl.dispatch(hl.dsp.dpms("on"))'
     ignore_dbus_inhibit = false
 }
 """
@@ -277,95 +352,113 @@ def _parse_keybinds():
     return binds
 
 
-def _keybinds_header():
-    """Lignes de commentaire (#) actuelles de keybinds-user.conf."""
-    header = []
-    try:
-        with open(KEYBINDS_USER_CONF, encoding="utf-8") as f:
-            for ln in f:
-                if ln.startswith("#"):
-                    header.append(ln)
-    except OSError:
-        pass
-    if not header:
-        header = [
-            "# keybinds-user.conf — overrides écrits par le panneau Settings (Super+I)\n",
-            "# Les binds ci-dessous surchargent ceux de keybinds.conf (dernier gagnant).\n",
-            "# Fichier versionné : vide = aucun override.\n",
-        ]
-    return header
+def _keybinds_with_overrides():
+    """Binds effectifs : keybinds.conf + overrides enregistrés dans settings.json.
+
+    Le panneau affiche donc ce qui est RÉELLEMENT actif, pas la ligne d'origine.
+    Les ids restent ceux de keybinds.conf (stables pour les POST)."""
+    binds = _parse_keybinds()
+    overrides = _read_settings().get("keybinds") or {}
+    for bind in binds:
+        command = overrides.get(bind["id"])
+        if not command:
+            continue
+        dispatcher, _, arg = command.partition(",")
+        bind["dispatcher"] = dispatcher.strip()
+        bind["arg"] = arg.strip()
+        bind["line"] = "%s = %s, %s, %s" % (bind["type"], bind["mods"], bind["key"], command.strip())
+    return binds
+
+
+def _keybinds_user_lua(settings=None):
+    """Contenu complet de hypr/keybinds-user.lua (fichier REMPLACÉ en entier).
+
+    Deux blocs :
+      1. hl.config des options SYSTÈME modifiées par le panneau (gaps/rounding/
+         animations) — les .conf ne sont plus lus par Hyprland 0.57 ;
+      2. un hl.bind par raccourci surchargé (commandes stockées en hyprlang
+         dans settings.json, traduites ici en hl.dsp.*).
+    """
+    settings = settings if settings is not None else _read_settings()
+    system = _read_system()
+    overrides = settings.get("keybinds") or {}
+    lines = [
+        "-- keybinds-user.lua — généré par le panneau Settings (Super+I)",
+        "-- REMPLACÉ EN ENTIER à chaque écriture : ne pas éditer à la main.",
+        "-- Chargé en fin de hypr/hyprland.lua (pcall(dofile, ...) : absence tolérée).",
+        "",
+        "-- ── Système (gaps / rounding / animations) ──",
+        "hl.config({",
+        "    general = { gaps_in = %d, gaps_out = %d }," % (system["gaps_in"], system["gaps_out"]),
+        "    decoration = { rounding = %d }," % system["rounding"],
+        "    animations = { enabled = %s }," % ("true" if system["animations"] else "false"),
+        "})",
+        "",
+        "-- ── Raccourcis surchargés ──",
+    ]
+    by_id = {b["id"]: b for b in _parse_keybinds()}
+    for bid, command in overrides.items():
+        target = by_id.get(bid)
+        if not target:
+            continue                     # keybinds.conf a changé depuis l'override
+        # Hyprland Lua : chaque modificateur séparé par " + "
+        # (« $mod SHIFT » → « SUPER + SHIFT »).
+        combo = " + ".join((target["mods"] or "").split() + [target["key"]])
+        lua = _lua_dispatcher_from_command(command)
+        if lua is None:
+            lines.append("-- non traduit (à adapter) : bind = %s, %s, %s"
+                         % (combo, target["dispatcher"], command))
+            continue
+        flags = _BIND_FLAGS.get(target["type"], "")
+        # Hyprland 0.57 : hl.bind sur un combo déjà pris AJOUTE un bind (les deux
+        # commandes partent). Il faut donc libérer le combo juste avant. hl.unbind
+        # ne normalise pas : il reçoit la chaîne EXACTE passée à hl.bind.
+        lines.append("hl.unbind(%s)  -- libère le combo (sinon la surcharge "
+                     "s'ajoute au lieu de remplacer)" % _lua_str(combo))
+        if flags:
+            lines.append("hl.bind(%s, %s, { %s })  -- %s"
+                         % (_lua_str(combo), lua, flags, command))
+        else:
+            lines.append("hl.bind(%s, %s)  -- %s" % (_lua_str(combo), lua, command))
+    return "\n".join(lines) + "\n"
+
+
+def _write_keybinds_lua(settings=None):
+    """Réécrit hypr/keybinds-user.lua atomiquement (remplacement complet)."""
+    content = _keybinds_user_lua(settings)
+    tmp = KEYBINDS_USER_LUA + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.replace(tmp, KEYBINDS_USER_LUA)
+    return {"ok": True}
 
 
 def _post_keybinds(body):
-    """Écrit un override dans keybinds-user.conf (en-tête conservé)."""
+    """Enregistre un override de bind (settings.json) puis réécrit le Lua."""
     bid = (body.get("id") or "").strip()
     command = (body.get("command") or "").strip()
-    target = None
-    for b in _parse_keybinds():
-        if b["id"] == bid:
-            target = b
-            break
-    if not target:
+    if not any(b["id"] == bid for b in _parse_keybinds()):
         return {"ok": False, "error": "bind introuvable"}
-
-    # split sur la première virgule : dispatcher + arg (arg vide si absent)
-    if "," in command:
-        dispatcher, _, arg = command.partition(",")
-        dispatcher = re.sub(r"\s+", " ", dispatcher).strip()
-        arg = re.sub(r"\s+", " ", arg).strip()
-    else:
-        dispatcher = re.sub(r"\s+", " ", command).strip()
-        arg = ""
-
-    bind_type = target["type"]
-    mods = target["mods"]          # déjà résolu ($mod → SUPER)
-    key = target["key"]
-    if arg:
-        new_line = ("%s = %s, %s, %s, %s  # overridden via Settings"
-                    % (bind_type, mods, key, dispatcher, arg))
-    else:
-        new_line = ("%s = %s, %s, %s  # overridden via Settings"
-                    % (bind_type, mods, key, dispatcher))
-
-    # Relire le fichier : en-tête # conservé, overrides existants conservés,
-    # celui qui matche (type+mods+key) remplacé pour éviter les doublons.
-    header = _keybinds_header()
-    kept = []
-    try:
-        with open(KEYBINDS_USER_CONF, encoding="utf-8") as f:
-            for ln in f:
-                if ln.startswith("#"):
-                    continue
-                s = ln.strip()
-                m = _RE_BIND.match(s)
-                if m and m.group(1) == bind_type:
-                    b = m.group(2).split("#", 1)[0]
-                    bp = [x.strip() for x in b.split(",")]
-                    if len(bp) >= 2:
-                        bmods = re.sub(r"\s+", " ", bp[0].replace("$mod", "SUPER")).strip()
-                        bkey = bp[1].strip()
-                        if bmods == mods and bkey == key:
-                            continue  # remplacé par new_line
-                kept.append(ln)
-    except OSError:
-        kept = []
-
-    content = "".join(header) + "".join(kept)
-    if content and not content.endswith("\n"):
-        content += "\n"
-    content += new_line + "\n"
-    with open(KEYBINDS_USER_CONF, "w", encoding="utf-8") as f:
-        f.write(content)
-
+    if not command:
+        return {"ok": False, "error": "commande vide"}
+    settings = _read_settings()
+    overrides = dict(settings.get("keybinds") or {})
+    overrides[bid] = command
+    settings["keybinds"] = overrides
+    _write_settings(settings)
+    _write_keybinds_lua(settings)
+    # Reload complet : hl.bind ne peut PAS surcharger un bind par `eval`
+    # (il en ajouterait un second sur le même combo).
     subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
     return {"ok": True}
 
 
 def _post_keybinds_reset():
-    """keybinds-user.conf réduit à son en-tête commentaire, puis reload."""
-    header = _keybinds_header()
-    with open(KEYBINDS_USER_CONF, "w", encoding="utf-8") as f:
-        f.writelines(header)
+    """Supprime tous les overrides de binds puis réécrit le Lua."""
+    settings = _read_settings()
+    settings["keybinds"] = {}
+    _write_settings(settings)
+    _write_keybinds_lua(settings)
     subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
     return {"ok": True}
 
@@ -576,22 +669,12 @@ def _safe_int(v, default):
         return default
 
 
-def _patch_file(fpath, pat, repl):
-    """Remplace la 1re occurrence du pattern ; écrit seulement si changé."""
-    try:
-        with open(fpath, encoding="utf-8") as f:
-            content = f.read()
-    except OSError:
-        return False
-    new = re.sub(pat, repl, content, count=1)
-    if new != content:
-        with open(fpath, "w", encoding="utf-8") as f:
-            f.write(new)
-        return True
-    return False
-
-
 def _read_system():
+    """Valeurs gaps/rounding/animations effectives.
+
+    Priorité : settings.json["system"] (ce que le panneau a écrit) ; sinon les
+    .conf d'origine, conservés comme référence/rollback (plus lus par Hyprland).
+    """
     def _grab(fpath, pat, default):
         try:
             with open(fpath, encoding="utf-8") as f:
@@ -599,6 +682,7 @@ def _read_system():
             return int(m.group(1)) if m else default
         except OSError:
             return default
+
     anim = True
     try:
         with open(ANIMATIONS_CONF, encoding="utf-8") as f:
@@ -606,24 +690,38 @@ def _read_system():
         anim = am.group(1) != "false" if am else True
     except OSError:
         pass
-    return {
+
+    out = {
         "gaps_in": _grab(GENERAL_CONF, r"gaps_in\s*=\s*(\d+)", 5),
         "gaps_out": _grab(GENERAL_CONF, r"gaps_out\s*=\s*(\d+)", 10),
         "rounding": _grab(DECORATION_CONF, r"rounding\s*=\s*(\d+)", 12),
         "animations": anim,
     }
+    saved = _read_settings().get("system")
+    if isinstance(saved, dict):
+        for key in out:
+            if key not in saved:
+                continue
+            out[key] = bool(saved[key]) if key == "animations" else _safe_int(saved[key], out[key])
+    return out
 
 
 def _post_system(body):
-    gaps_in = max(0, min(30, _safe_int(body.get("gaps_in"), 5)))
-    gaps_out = max(0, min(50, _safe_int(body.get("gaps_out"), 10)))
-    rounding = max(0, min(30, _safe_int(body.get("rounding"), 12)))
-    animations = bool(body.get("animations", True))
-    _patch_file(GENERAL_CONF, r"gaps_in\s*=\s*\d+", "gaps_in = %d" % gaps_in)
-    _patch_file(GENERAL_CONF, r"gaps_out\s*=\s*\d+", "gaps_out = %d" % gaps_out)
-    _patch_file(DECORATION_CONF, r"rounding\s*=\s*\d+", "rounding = %d" % rounding)
-    _patch_file(ANIMATIONS_CONF, r"enabled\s*=\s*(true|false)",
-                "enabled = %s" % ("true" if animations else "false"))
+    """Écrit gaps/rounding/animations en Lua (hl.config) + reload.
+
+    Plus aucun .conf n'est modifié : hypr/keybinds-user.lua est la surcouche
+    unique, rechargée par `hyprctl reload` (qui relit hyprland.lua → dofile).
+    """
+    system = {
+        "gaps_in": max(0, min(30, _safe_int(body.get("gaps_in"), 5))),
+        "gaps_out": max(0, min(50, _safe_int(body.get("gaps_out"), 10))),
+        "rounding": max(0, min(30, _safe_int(body.get("rounding"), 12))),
+        "animations": bool(body.get("animations", True)),
+    }
+    settings = _read_settings()
+    settings["system"] = system
+    _write_settings(settings)
+    _write_keybinds_lua(settings)
     subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
     return {"ok": True, "system": _read_system()}
 
@@ -703,7 +801,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(_read_system())
             return
         if path == "/api/keybinds":
-            self._json({"keybinds": _parse_keybinds(), "ok": True})
+            self._json({"keybinds": _keybinds_with_overrides(), "ok": True})
             return
         if path == "/api/lang":
             self._json({"mode": _read_lang()})

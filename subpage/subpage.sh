@@ -117,7 +117,8 @@ open_page() {
     # La décoration n'est pas mappée dans le workspace : on peut ouvrir la page
     # AVANT, APRÈS ou PENDANT son démarrage, ça ne la ferme plus.
     if ! page_open; then
-        hyprctl dispatch togglespecialworkspace subpage >/dev/null
+        # 0.57 : `dispatch togglespecialworkspace` est mort → dispatcher Lua.
+        hyprctl eval 'hl.dispatch(hl.dsp.workspace.toggle_special({name = "subpage"}))' >/dev/null 2>&1
     fi
     # Preuve de mise en route : la surface doit apparaître dans les layers.
     for _ in $(seq 1 30); do
@@ -135,7 +136,7 @@ close_page() {
     # La décoration se cache d'elle-même (synchro sur l'état réel) ; on
     # l'arrête pour ne pas laisser un process à sonder Hyprland pour rien.
     if page_open; then
-        hyprctl dispatch togglespecialworkspace subpage >/dev/null
+        hyprctl eval 'hl.dispatch(hl.dsp.workspace.toggle_special({name = "subpage"}))' >/dev/null 2>&1
     fi
     stop_decoration
 }

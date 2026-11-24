@@ -2,7 +2,7 @@
 """state.py — « la sub page est-elle ouverte ? » (source de vérité UNIQUE).
 
 La sub page = le special workspace Hyprland `special:subpage`
-(`hyprctl dispatch togglespecialworkspace subpage`).
+(`hyprctl eval 'hl.dispatch(hl.dsp.workspace.toggle_special("subpage"))'`).
 
 SEULE source de vérité : `hyprctl monitors -j` →
     monitor.specialWorkspace.name == "special:subpage"
@@ -20,7 +20,7 @@ Hyprland lui-même — même chemin, même réponse que ce que voit l'écran.
 
 Rien n'est stocké sur disque : l'état est relu à chaque interrogation, ce qui
 le rend juste même si la page a été fermée par un autre biais (autre keybind,
-`hyprctl dispatch` à la main, script tiers).
+`hyprctl` (eval d'un dispatcher Lua, ou un script tiers).
 
 Modes
     --check                 exit 0 = ouverte, exit 1 = fermée (muet)

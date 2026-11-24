@@ -48,13 +48,15 @@ API :
 
 import math
 
-STRATEGIES = ("theme", "auto", "grid", "spread", "stack", "center")
+STRATEGIES = ("theme", "auto", "grid", "spread", "stack", "center", "fit")
 HOSTS = ("background", "cc")
 CORNERS = ("tr", "tl", "br", "bl")
 
 CC_COLUMNS = 12
 CC_ROW_PX = 96.0          # hauteur de ligne du board (brief widgets v1 §4)
 CELL_PX = 8.0             # pas de la stratégie `grid` côté fond
+FIT_MIN_W = 180.0         # stratégie `fit` : plus petite case encore lisible
+FIT_MIN_H = 90.0
 GRID_LUM_W, GRID_LUM_H = 48, 27   # grille d'analyse du wallclock
 SCAN_STEP = 2             # pas de balayage des fenêtres (wallclock)
 EDGE_FREE = 3             # cellules « loin du bord » avant pénalité
@@ -342,6 +344,44 @@ def _size_of(inst, host):
     return w, h
 
 
+def _fit_place(targets, width, height, mx, my, gx, gy):
+    """Stratégie `fit` (« Remplir ») : la TAILLE suit l'écran.
+
+    La surface utile (écran − marges) est découpée en n cases égales ; le
+    nombre de colonnes retenu est celui dont le format de case est le plus
+    proche du format naturel moyen des widgets (donc on ne les étire pas dans
+    un sens absurde). Retourne (cases, cols, rows, cw, ch) ou None si aucune
+    découpe ne laisse une case lisible.
+    """
+    n = len(targets)
+    if n <= 0:
+        return None
+    avail_w = width - 2 * mx
+    avail_h = height - 2 * my
+    nat = [(_size_of(i, "background") or (360.0, 180.0)) for i in targets]
+    nat_ratio = sum(w / h for w, h in nat) / float(n)
+    best = None
+    for c in range(1, n + 1):
+        r = int(math.ceil(n / float(c)))
+        cw = (avail_w - gx * (c - 1)) / float(c)
+        ch = (avail_h - gy * (r - 1)) / float(r)
+        if cw < FIT_MIN_W - EPS or ch < FIT_MIN_H - EPS:
+            continue
+        score = abs(math.log((cw / ch) / nat_ratio))
+        if best is None or score < best[0] - 1e-9:
+            best = (score, c, r, cw, ch)
+    if best is None:
+        return None
+    _, cols, rows, cw, ch = best
+    cases = []
+    for index, inst in enumerate(targets):
+        col = index % cols
+        row = index // cols
+        cases.append((inst.get("id"),
+                      (mx + col * (cw + gx), my + row * (ch + gy), cw, ch)))
+    return cases, cols, rows, cw, ch
+
+
 def place(instances, host="background", strategy="auto", margin=24, gap=12,
           corner="tr", ids=None, screen=(1920, 1080),
           wallpaper=None, lumgrid=None):
@@ -394,6 +434,35 @@ def place(instances, host="background", strategy="auto", margin=24, gap=12,
         width, height = scr_w, scr_h
         mx = my = margin
         gx = gy = gap
+
+    # ── Stratégie `fit` (« Remplir ») ───────────────────────────────────────
+    # Le seul mode qui MODIFIE la taille : la surface utile est découpée en n
+    # cases égales et chaque widget prend sa case. Résultat : le fond est
+    # occupé sans trou ni débordement quelle que soit la résolution, au lieu de
+    # widgets de taille fixe posés au hasard. `cc` est un board en cellules qui
+    # défile → pas de fit (refus explicite, jamais un géo bancale).
+    if strategy == "fit":
+        if cells:
+            return _fail(strategy, {"": "hôte cc (board en cellules)"},
+                         "Remplir : réservé au fond d'écran")
+        fitted = _fit_place(targets, width, height, mx, my, gx, gy)
+        if fitted is None:
+            return _fail(strategy, {"": "cases < %dx%d px" % (FIT_MIN_W, FIT_MIN_H)},
+                         "pas assez de place pour %d widget(s) avec ces marges"
+                         % len(targets))
+        cases, cols, rows, cw, ch = fitted
+        entries = []
+        for iid, (x, y, w, h) in cases:
+            entries.append({
+                "id": iid,
+                "x": math.floor(x / width * 10000.0) / 10000.0,
+                "y": math.floor(y / height * 10000.0) / 10000.0,
+                "w": int(round(w)), "h": int(round(h)),
+            })
+        return {"ok": True, "strategy": strategy, "placed": entries,
+                "unplaced": [], "reason": "",
+                "note": "%d×%d cases de %d×%d px"
+                        % (cols, rows, int(round(cw)), int(round(ch)))}
 
     target_ids = set(id(i) for i in targets)
     obstacles = []

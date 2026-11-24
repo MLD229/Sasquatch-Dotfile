@@ -46,8 +46,12 @@ def do_screenshot(mode):
 
 def _close_cc_window():
     try:
-        subprocess.run(["hyprctl", "dispatch", "closewindow", "title:^(Sasquatch CC)$"],
-                        timeout=2, capture_output=True)
+        # Hyprland >= 0.57 : le dispatcher est du Lua, `dispatch closewindow`
+        # (hyprlang) n'existe plus.
+        subprocess.run(["hyprctl", "eval",
+                        'hl.dispatch(hl.dsp.window.close({window = '
+                        '"title:^(Sasquatch CC)$"}))'],
+                       timeout=2, capture_output=True)
     except Exception:
         pass
 
@@ -96,7 +100,9 @@ def do_imgsearch(q):
     if q:
         url = "https://duckduckgo.com/?q=" + urllib.parse.quote(q) + "&iax=images&ia=images"
         res = _open(url)
-        return {"ok": res["ok"], "error": res["error"], "mode": "text"}
+        # .get() : `_open` renvoie {"ok": True} SANS clé "error" au succès —
+        # res["error"] levait un KeyError → 500 à chaque recherche réussie.
+        return {"ok": res["ok"], "error": res.get("error"), "mode": "text"}
     _close_cc_window()
     manque = [c for c in ("grim", "slurp", "tesseract") if shutil.which(c) is None]
     if manque:
@@ -111,7 +117,7 @@ def do_imgsearch(q):
                     "error": (out.stderr or "").strip() or "aucun texte détecté"}
         url = "https://duckduckgo.com/?q=" + urllib.parse.quote(text) + "&iax=images&ia=images"
         res = _open(url)
-        return {"ok": res["ok"], "error": res["error"], "mode": "image"}
+        return {"ok": res["ok"], "error": res.get("error"), "mode": "image"}
     except Exception as exc:
         return {"ok": False, "mode": "image", "error": "recherche impossible (%s)" % exc}
 
@@ -387,22 +393,79 @@ TOOL_SCRIPTS = {
     "translate": os.path.join(SCRIPT_DIR, "ocr.sh"),
 }
 
+# ── Sonde d'exécutabilité (second niveau du health) ───────────────────────
+# `shutil.which` prouve la présence, pas que le binaire démarre : un paquet
+# à moitié installé (lib partagée manquante, mauvais chemin, script sans
+# shebang) répond « ok » puis échoue au clic. On lance donc `<cmd> --version`
+# (stdin fermé : wl-copy lit stdin sinon → blocage), timeout 2 s, résultat
+# mis en cache 60 s : la page Outils reste rapide tout en disant vrai.
+_PROBE_TTL = 60.0
+_PROBE_CACHE = {}  # cmd -> (timestamp, ok, raison)
 
-def tools_health():
-    """{outil: {ok, manque: [{cmd, paquet}], resume, hint}} — léger (which)."""
+
+def _probe(cmd):
+    now = time.time()
+    hit = _PROBE_CACHE.get(cmd)
+    if hit and now - hit[0] < _PROBE_TTL:
+        return hit[1], hit[2]
+    ok, raison = True, ""
+    try:
+        p = subprocess.run([cmd, "--version"], capture_output=True, text=True,
+                           timeout=2, stdin=subprocess.DEVNULL)
+        msg = ((p.stderr or "") + (p.stdout or "")).strip()
+        low = msg.lower()
+        if ("error while loading shared libraries" in low
+                or "cannot execute" in low
+                or "permission denied" in low
+                or "not found" in low):
+            ok = False
+            raison = (msg.splitlines() or ["échec au démarrage"])[0][:100]
+        elif p.returncode == 127:
+            ok, raison = False, "échec au démarrage (code 127)"
+    except FileNotFoundError:
+        ok, raison = False, "binaire introuvable à l'exécution"
+    except PermissionError:
+        ok, raison = False, "non exécutable (permissions)"
+    except subprocess.TimeoutExpired:
+        ok, raison = False, "ne répond pas à --version (2 s)"
+    except OSError as exc:
+        ok, raison = False, "non exécutable (%s)" % exc
+    _PROBE_CACHE[cmd] = (now, ok, raison)
+    return ok, raison
+
+
+def tools_health(force=False):
+    """{outil: {ok, manque, casse, resume, hint}}.
+
+    Deux niveaux : `which` (présence) puis `_probe` (le binaire DÉMARRE) —
+    un outil présent mais cassé ne doit pas être annoncé « ok » par la page.
+    """
+    if force:
+        _PROBE_CACHE.clear()
     out = {}
     for name, deps in TOOL_DEPS.items():
-        manque = [{"cmd": c, "paquet": p} for c, p in deps if shutil.which(c) is None]
+        manque, casse = [], []
+        for c, p in deps:
+            if shutil.which(c) is None:
+                manque.append({"cmd": c, "paquet": p})
+                continue
+            ok, raison = _probe(c)
+            if not ok:
+                casse.append({"cmd": c, "raison": raison})
         script = TOOL_SCRIPTS.get(name)
         if script and not os.path.exists(os.path.expanduser(script)):
             manque.append({"cmd": os.path.basename(script), "paquet": None})
-        out[name] = {"ok": not manque, "manque": manque}
+        out[name] = {"ok": not manque and not casse, "manque": manque, "casse": casse}
     # Reconnaissance : il faut au moins UN enregistreur audio.
     if not any(shutil.which(c) for c in ("ffmpeg", "pw-record", "arecord")):
         out["finder"]["manque"].append({"cmd": "ffmpeg", "paquet": "ffmpeg"})
         out["finder"]["ok"] = False
     for v in out.values():
-        v["resume"] = ", ".join(m["cmd"] for m in v["manque"])
+        parts = [m["cmd"] for m in v["manque"]]
+        parts += ["%s (cassé)" % m["cmd"] for m in v["casse"]]
+        v["resume"] = ", ".join(parts)
         paquets = sorted({m["paquet"] for m in v["manque"] if m["paquet"]})
         v["hint"] = ("pacman -S " + " ".join(paquets)) if paquets else ""
+        if v["casse"] and not v["hint"]:
+            v["hint"] = "vérifie : " + v["casse"][0]["raison"]
     return out

@@ -133,13 +133,11 @@ ForegroundPositive=39,174,96
 ForegroundVisited=155,89,182
 
 [General]
-ColorSchemeHash=9d38eb71ded8ff549da26d57d7cbab9164da243a
+ColorSchemeHash=27363f5706202c1c8261fbda7381ddaab8ad48f3
 font=JetBrains Mono,11,-1,5,50,0,0,0,0,0
 
 [Icons]
-# Papirus-Dark (installé via papirus-icon-theme) — Sours-Full-Color était un
-# thème local non portable (absent /usr/share + listes) → fallback Qt sinon.
-Theme=Papirus-Dark
+Theme=candy-icons
 
 [KDE]
 LookAndFeelPackage=org.kde.breezedark.desktop
@@ -161,7 +159,7 @@ Sort directories first=true
 Sort hidden files last=false
 Sort reversed=false
 Speedbar Width=216
-View Style=DetailTree
+View Style=Simple
 
 [Sounds]
 Theme=freedesktop

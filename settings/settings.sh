@@ -28,7 +28,9 @@ EOF
 
 # Toggle OFF : si la fenêtre Settings est déjà ouverte, la fermer.
 if window_open; then
-    hyprctl dispatch closewindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
+    # 0.57 : dispatcher Lua (l'ancien `dispatch closewindow` est mort).
+    printf -v __code 'hl.dispatch(hl.dsp.window.close({window = "title:^(%s)$"}))' "$WIN_TITLE"
+    hyprctl eval "$__code" >/dev/null 2>&1
     exit 0
 fi
 

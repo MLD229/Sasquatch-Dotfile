@@ -73,7 +73,7 @@ FloatingWindow {
         xhr.onreadystatechange = function() {
             if (xhr.readyState === XMLHttpRequest.DONE) {
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    var parsed = null;
+                    let parsed = null;
                     try { parsed = JSON.parse(xhr.responseText); } catch (e) { parsed = null; }
                     if (cb) cb(parsed);
                 } else {
@@ -286,9 +286,22 @@ FloatingWindow {
         width: root.boardW
         height: root.boardH
         radius: Theme.radiusPanel
-        color: Theme.panelFill(Theme.alphaPanel)
+        // Opacité du panneau calculée sur la luminance du papier peint DERRIÈRE
+        // lui (0.36 → 0.80 selon la zone) : à 0.36 sur un fond clair le panneau
+        // se laisse traverser et le texte perd son support. Les widgets du
+        // board, eux, gardent leur verre à 0.05–0.10 — c'est le panneau qui
+        // s'adapte, pas les cartes.
+        color: Theme.panelFill(Theme.panelAlphaOn(Theme.lumAt(
+                   (Math.max(0, root.width - root.boardW) / 2) / root.width,
+                   (Math.max(0, root.height - root.boardH) / 2) / root.height,
+                   (Math.max(0, root.width - root.boardW) / 2 + root.boardW) / root.width,
+                   (Math.max(0, root.height - root.boardH) / 2 + root.boardH) / root.height)))
         border.width: 1
         border.color: Qt.rgba(root.cAccent.r, root.cAccent.g, root.cAccent.b, 0.4)
+
+        // Brief encre §B.1 : le remplissage du panneau glisse vers sa nouvelle
+        // opacité quand le papier peint change (220 ms), au lieu de sauter.
+        Behavior on color { ColorAnimation { duration: 220 } }
 
         opacity: 0
         scale: 0.98

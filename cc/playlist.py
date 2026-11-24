@@ -24,7 +24,7 @@ import os
 import subprocess
 
 from config import RUNTIME_DIR
-from mpd import _mpd_read_kv, _mpd_readline, _mpd_send, _mpd_socket
+from mpd import _mpd_quote, _mpd_read_kv, _mpd_readline, _mpd_send, _mpd_socket
 
 # ── Constantes ─────────────────────────────────────────────────────
 # music_directory du mpd.conf (repo) — la racine que MPD sait lire.
@@ -246,7 +246,13 @@ def playlist_add(file_, play=False):
     file_ = (file_ or "").strip()
     if not file_:
         return {"ok": False, "error": "fichier vide"}
-    if not _mpd_ok('add "%s"' % file_):
+    # Échappement obligatoire : le nom vient du client HTTP, un « \n » non
+    # échappé injecterait une commande MPD supplémentaire (cf. _mpd_quote).
+    try:
+        uri = _mpd_quote(file_)
+    except ValueError:
+        return {"ok": False, "error": "nom de fichier invalide (caractère de contrôle)"}
+    if not _mpd_ok('add "%s"' % uri):
         return {"ok": False, "error": "add refusé (hors bibliothèque MPD ?)"}
     if play:
         st = _mpd_cmd("status")
@@ -352,9 +358,17 @@ def load_folder(folder=None, random=False):
     if rel == ".":
         # Racine MPD : pas d'`add` de dossier → on ajoute fichier par fichier.
         for path in _scan_audio(folder):
-            _mpd_ok('add "%s"' % os.path.relpath(path, MUSIC_DIR))
+            try:
+                _mpd_ok('add "%s"' % _mpd_quote(os.path.relpath(path, MUSIC_DIR)))
+            except ValueError:
+                # Nom de fichier avec caractère de contrôle : ignoré, jamais envoyé.
+                continue
     else:
-        if not _mpd_ok('add "%s"' % rel):
+        try:
+            uri = _mpd_quote(rel)
+        except ValueError:
+            return {"ok": False, "error": "nom de dossier invalide (caractère de contrôle)"}
+        if not _mpd_ok('add "%s"' % uri):
             return {"ok": False, "error": "add refusé"}
     if random:
         _mpd_ok("random 1")

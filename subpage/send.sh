@@ -56,4 +56,6 @@ fi
 
 # Envoi silencieux : la fenêtre quitte son workspace pour le scratchpad sans
 # que l'écran courant ne bascule.
-hyprctl dispatch movetoworkspacesilent "special:subpage,address:$addr" >/dev/null
+# 0.57 : plus de `dispatch movetoworkspacesilent` — dispatcher Lua, même
+# sélecteur address: et toujours silencieux.
+hyprctl eval "hl.dispatch(hl.dsp.window.move({window = \"address:$addr\", workspace = \"special:subpage\", follow = false}))" >/dev/null 2>&1

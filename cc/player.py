@@ -7,11 +7,16 @@ Stdlib only — la découverte MPRIS passe par le binaire `playerctl` (déjà
 installé ; playerctld est optionnel, `playerctl --all-players` fonctionne sans).
 """
 
+import http.client
+import ipaddress
 import json
 import os
 import re
 import shutil
 import signal
+import socket
+import ssl
+import stat
 import subprocess
 import time
 import urllib.parse
@@ -726,6 +731,22 @@ def seek(pos):
 
 _HTTP_RE = re.compile(r"^https?://", re.I)
 
+# Durcissement SSRF (LOT 1.1). Le CC écoute sans auth sur 127.0.0.1:8765 :
+# /albumart?url= ne doit JAMAIS être un proxy vers le poste ou le LAN, ni un
+# lecteur de fichiers arbitraires.
+_ART_MAX_BYTES = 8 * 1024 * 1024      # plafond de lecture ET de cache
+_ART_HTTP_TIMEOUT = 6                 # budget TOTAL en secondes (tous sauts)
+_ART_MAX_REDIRECTS = 3
+_ART_CACHE_TTL = 7 * 24 * 3600        # purge des .img plus vieux que 7 jours
+# Art MPRIS éphémère du navigateur (Brave/Chromium) : mkstemp dans /tmp.
+# Variantes réelles : /tmp/.org.chromium.Chromium.<suffixe> et sans le point.
+_ART_TMP_RE = re.compile(r"^/tmp/\.?org\.chromium\.Chromium\.[^/]+$")
+_ART_BLOCKED_NETS = tuple(ipaddress.ip_network(n) for n in (
+    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8",
+    "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16",
+    "::/128", "::1/128", "fc00::/7", "fe80::/10",
+))
+
 
 def _art_cache_key(url):
     import hashlib
@@ -733,34 +754,293 @@ def _art_cache_key(url):
     return os.path.join(_ART_CACHE_DIR, "sasquatch-mpris-art-%s.img" % digest)
 
 
-def fetch_art(url):
-    """Récupère l'image d'un artUrl MPRIS (https:// ou file://) → bytes/None."""
-    if not url:
+def _art_ip_blocked(ip):
+    """True si l'IP (littérale) est interne / non routable."""
+    try:
+        addr = ipaddress.ip_address(ip.split("%")[0])   # "%eth0" (zone IPv6)
+    except ValueError:
+        return True                                     # inparsable => refus
+    cands = [addr]
+    mapped = getattr(addr, "ipv4_mapped", None)
+    if mapped is not None:
+        cands.append(mapped)                            # ::ffff:127.0.0.1
+    for a in cands:
+        if (a.is_loopback or a.is_private or a.is_link_local
+                or a.is_reserved or a.is_unspecified or a.is_multicast):
+            return True
+        for net in _ART_BLOCKED_NETS:
+            if net.version == a.version and a in net:
+                return True
+    return False
+
+
+def _art_resolve(host, port):
+    """[sockaddr] pour host — None si UNE seule adresse est interne."""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except Exception:
         return None
-    if url.startswith("file://"):
-        try:
-            path = urllib.parse.urlparse(url).path
-            with open(path, "rb") as f:
-                data = f.read()
-            return data if data else None
-        except Exception:
+    addrs = []
+    for family, _t, _p, _c, sockaddr in infos:
+        if _art_ip_blocked(sockaddr[0]):
+            return None        # toutes les adresses comptent, pas la première
+        addrs.append((family, sockaddr))
+    return addrs or None
+
+
+def _is_ip_literal(host):
+    try:
+        ipaddress.ip_address(host.split("%")[0])
+        return True
+    except ValueError:
+        return False
+
+
+def _art_check_url(url):
+    """Valide une URL http(s). -> (scheme, host, port, cible, addrs) ou None."""
+    try:
+        p = urllib.parse.urlsplit(url)
+        port = p.port
+    except Exception:
+        return None
+    scheme = (p.scheme or "").lower()
+    if scheme not in ("http", "https"):
+        return None
+    if p.username or p.password:
+        return None
+    host = (p.hostname or "").strip()
+    if not host or any(c in host for c in " \t\r\n\\/@"):
+        return None
+    # Noms locaux / ambigus : refusés sans même résoudre.
+    if _is_ip_literal(host):
+        if _art_ip_blocked(host):
             return None
-    if not _HTTP_RE.match(url):
+    elif (host.endswith(".") or host.endswith(".local")
+          or host.endswith(".localhost") or "." not in host):
         return None
-    path = _art_cache_key(url)
-    if os.path.isfile(path) and os.path.getsize(path) > 0:
+    port = port or (443 if scheme == "https" else 80)
+    addrs = _art_resolve(host, port)
+    if not addrs:
+        return None
+    target = p.path or "/"
+    if p.query:
+        target += "?" + p.query
+    return scheme, host, port, target, addrs
+
+
+def _art_http_hop(url, deadline):
+    """UN saut GET, connecté sur l'IP DÉJÀ validée. -> (kind, payload) | None."""
+    info = _art_check_url(url)
+    if not info:
+        return None
+    scheme, host, port, target, addrs = info
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return None
+    sock = None
+    resp = None
+    try:
+        for family, sockaddr in addrs:
+            s = socket.socket(family, socket.SOCK_STREAM)
+            s.settimeout(max(0.5, deadline - time.monotonic()))
+            try:
+                # IP validée => aucune re-résolution : fenêtre DNS-rebinding fermée
+                s.connect(sockaddr)
+                sock = s
+                break
+            except OSError:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+        if sock is None:
+            return None
+        if scheme == "https":
+            ctx = ssl.create_default_context()
+            sock.settimeout(max(0.5, deadline - time.monotonic()))
+            sock = ctx.wrap_socket(sock, server_hostname=host)  # SNI = nom validé
+        hdrs = ["GET %s HTTP/1.1" % target,
+                "Host: %s" % (host if port in (80, 443)
+                              else "%s:%d" % (host, port)),
+                "User-Agent: Mozilla/5.0", "Accept: image/*,*/*;q=0.5",
+                "Accept-Encoding: identity", "Connection: close"]
+        sock.sendall(("\r\n".join(hdrs) + "\r\n\r\n").encode("latin-1"))
+        resp = http.client.HTTPResponse(sock, method="GET")
+        resp.begin()          # gère Content-Length ET chunked
+        if resp.status in (301, 302, 303, 307, 308):
+            loc = resp.getheader("Location")
+            return ("redirect", urllib.parse.urljoin(url, loc)) if loc else None
+        if resp.status != 200:
+            return None
+        ctype = (resp.getheader("Content-Type") or "").split(";")[0].strip().lower()
+        if not ctype.startswith("image/"):
+            return None       # jamais une page HTML d'erreur en cache
+        chunks, total = [], 0
+        while True:
+            if time.monotonic() > deadline:
+                return None   # trop lent : on coupe
+            block = resp.read(65536)
+            if not block:
+                break
+            total += len(block)
+            if total > _ART_MAX_BYTES:
+                return None   # plafond dépassé : connexion coupée, rien en cache
+            chunks.append(block)
+        data = b"".join(chunks)
+        return ("ok", data) if data else None
+    except Exception:
+        return None
+    finally:
+        for obj in (resp, sock):
+            try:
+                if obj is not None:
+                    obj.close()
+            except Exception:
+                pass
+
+
+def _art_http_fetch(url):
+    """GET + jusqu'à 3 redirections, schéma/hôte/IP revalidés À CHAQUE saut."""
+    deadline = time.monotonic() + _ART_HTTP_TIMEOUT
+    for _hop in range(_ART_MAX_REDIRECTS + 1):
+        if not _HTTP_RE.match(url):
+            return None
+        res = _art_http_hop(url, deadline)
+        if res is None:
+            return None
+        kind, payload = res
+        if kind == "ok":
+            return payload
+        url = payload if isinstance(payload, str) else None
+        if not url:
+            return None
+    return None
+
+
+def _art_local_roots():
+    """Racines autorisées pour file:// (realpath, uniquement si existantes)."""
+    roots = []
+    for d in ("~/songs", "~/Music"):
+        p = os.path.expanduser(d)
+        if os.path.isdir(p):
+            roots.append(os.path.realpath(p))
+    return tuple(roots)
+
+
+def _art_local_read(url):
+    """file:// autorisé -> bytes | None. realpath + containment + O_NOFOLLOW."""
+    try:
+        p = urllib.parse.urlsplit(url)
+        if p.scheme.lower() != "file":
+            return None
+        if p.netloc not in ("", "localhost"):
+            return None
+        raw = urllib.parse.unquote(p.path)
+    except Exception:
+        return None
+    if not raw or "\x00" in raw or "\n" in raw or "\r" in raw:
+        return None
+    rp = os.path.realpath(raw)          # symlinks résolus AVANT la vérification
+    in_tmp = bool(_ART_TMP_RE.match(rp))
+    if in_tmp:
+        if os.path.dirname(rp) != "/tmp":
+            return None
+    elif not any(rp == r or rp.startswith(r + os.sep)
+                 for r in _art_local_roots()):
+        return None
+    fd = None
+    try:
+        # O_NONBLOCK : un FIFO s'ouvre alors immédiatement au lieu de bloquer
+        # jusqu'à l'arrivée d'un écrivain ; fstat le rejette ensuite (S_ISREG
+        # faux). Sans effet sur un fichier régulier.
+        fd = os.open(rp, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+                     | getattr(os, "O_CLOEXEC", 0))
+        st = os.fstat(fd)                 # fstat sur le fd : pas de course
+        if not stat.S_ISREG(st.st_mode):   # fifo, device, socket, dir
+            return None
+        if st.st_size <= 0 or st.st_size > _ART_MAX_BYTES:
+            return None
+        if in_tmp and (st.st_uid != os.getuid()
+                       or (st.st_mode & 0o777) != 0o600):
+            return None                   # art Chromium : à nous, 0600 exact
+        buf = b""
+        while len(buf) <= _ART_MAX_BYTES:
+            block = os.read(fd, 262144)
+            if not block:
+                break
+            buf += block
+        return buf if buf and len(buf) <= _ART_MAX_BYTES else None
+    except Exception:
+        return None
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+
+
+def _art_cache_get(path):
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) > _ART_MAX_BYTES:
+            return None
+        with open(path, "rb") as f:
+            return f.read(_ART_MAX_BYTES) or None
+    except Exception:
+        return None
+
+
+def _art_cache_put(path, data):
+    """Écriture atomique + purge opportuniste des entrées > 7 jours."""
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except Exception:
         try:
-            with open(path, "rb") as f:
-                return f.read()
+            os.unlink(tmp)
         except Exception:
             pass
+        return
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        data = urllib.request.urlopen(req, timeout=6).read()
-        if data and len(data) > 100:
-            with open(path, "wb") as f:
-                f.write(data)
-            return data
+        cutoff = time.time() - _ART_CACHE_TTL
+        for name in os.listdir(_ART_CACHE_DIR):
+            if not (name.startswith("sasquatch-mpris-art-")
+                    and name.endswith(".img")):
+                continue
+            old = os.path.join(_ART_CACHE_DIR, name)
+            try:
+                if old != path and os.path.getmtime(old) < cutoff:
+                    os.unlink(old)
+            except Exception:
+                pass
     except Exception:
         pass
+
+
+def fetch_art(url):
+    """Récupère l'image d'un artUrl MPRIS (https:// ou file://) → bytes/None.
+
+    Ne lève JAMAIS (l'appelant répond 404 sur None). Allowlist stricte côté
+    fichier, refus des réseaux internes + redirections revalidées côté réseau.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    try:
+        scheme = (urllib.parse.urlsplit(url).scheme or "").lower()
+    except Exception:
+        return None
+    if scheme == "file":
+        return _art_local_read(url)
+    if scheme not in ("http", "https"):
+        return None
+    path = _art_cache_key(url)
+    data = _art_cache_get(path)
+    if data:
+        return data
+    data = _art_http_fetch(url)
+    if data and len(data) > 100:
+        _art_cache_put(path, data)
+        return data
     return None

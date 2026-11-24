@@ -5,7 +5,7 @@
 #                puis redémarre waybar. Si le service systemd user waybar est
 #                installé, c'est LUI le lanceur (un `waybar &` direct donnerait
 #                2 barres) — restart/start via systemctl, fallback direct sinon.
-#   Workspaces : hyprctl dispatch renameworkspace 1..10 (noms JA ou numéros FR),
+#   Workspaces : hyprctl eval hl.dsp.workspace.rename 1..10 (noms JA ou numéros FR),
 #                sans déplacer les fenêtres.
 #   wallclock / hyprlock / clock-ja : NON redémarrés — ils relisent
 #                settings.json à chaque tick/exécution.
@@ -44,7 +44,8 @@ else
     NAMES=(1 2 3 4 5 6 7 8 9 10)
 fi
 for i in $(seq 1 10); do
-    hyprctl dispatch renameworkspace "$i" "${NAMES[$((i - 1))]}" >/dev/null 2>&1
+    # 0.57 : `hyprctl dispatch renameworkspace` (hyprlang) n'existe plus.
+    hyprctl eval "hl.dispatch(hl.dsp.workspace.rename({workspace = $i, name = \"${NAMES[$((i - 1))]}\"}))" >/dev/null 2>&1
 done
 
 # ── Waybar : config de la langue + redémarrage ────────────────
@@ -78,7 +79,13 @@ else
 fi
 
 if [ "$CHANGED" = "1" ]; then
-    if systemctl --user is-active --quiet waybar; then
+    if [ -e "$HOME/.config/systemd/user/sasquatch-bar.service" ]; then
+        # 2026-10-31 : waybar remplacée par la barre verticale (cc/bar).
+        # La config de langue ne concerne plus l'affichage : on ne relance
+        # pas waybar (et on l'arrête si elle traîne).
+        systemctl --user is-active --quiet waybar \
+            && systemctl --user stop waybar >/dev/null 2>&1 || true
+    elif systemctl --user is-active --quiet waybar; then
         # Config changée (labels) : un simple `reload` (SIGUSR2) ne recharge que le
         # CSS → restart complet (relit aussi les noms de workspaces renommés).
         systemctl --user restart waybar >/dev/null 2>&1 || true

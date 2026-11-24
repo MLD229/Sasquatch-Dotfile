@@ -10,6 +10,9 @@
 // repos. `style.blur` reste dans le schéma mais n'est PLUS appliqué.
 pragma Singleton
 import QtQuick
+// Quickshell.Io = FileView (lumgrid surveillé, plus aucun timer de luminance).
+import Quickshell
+import Quickshell.Io
 import Sasquatch.Widgets 1.0
 
 QtObject {
@@ -147,8 +150,212 @@ QtObject {
     property bool lightWallpaper: false
     property var lumValues: []
 
-    readonly property color ink: theme.lightWallpaper ? Qt.darker(theme.bgSolid, 1.35) : theme.text
-    readonly property color inkDim: theme.lightWallpaper ? Qt.darker(theme.bgSolid, 1.10) : theme.textDim
+    readonly property color ink: theme.text
+    readonly property color inkDim: theme.textDim
+
+    // ── Contraste LOCAL (lumgrid) ─────────────────────────────────────────
+    // `lightWallpaper` est une moyenne GLOBALE : sur un fond mixte (zone sombre
+    // + zone claire) elle impose une encre qui disparaît sur l'autre moitié —
+    // mesuré sur le fond « cavalier » : texte sombre lisible sur la brume,
+    // illisible sur le bleu nuit. On expose donc la luminance d'une ZONE et une
+    // encre calculée par contraste dessus, ce qui rend lisible un widget posé
+    // sur un fond clair ET un widget posé sur la zone sombre du MÊME papier
+    // peint, sans ajouter le moindre fond.
+    readonly property int lumGridW: 32
+    readonly property int lumGridH: 18
+
+    function lumAt(fx0, fy0, fx1, fy1) {
+        var v = theme.lumValues;
+        var gw = theme.lumGridW;
+        var gh = theme.lumGridH;
+        if (!v || v.length < gw * gh)
+            return -1;
+        var c0 = Math.max(0, Math.min(gw - 1, Math.floor(fx0 * gw)));
+        var c1 = Math.max(0, Math.min(gw - 1, Math.floor(fx1 * gw)));
+        var r0 = Math.max(0, Math.min(gh - 1, Math.floor(fy0 * gh)));
+        var r1 = Math.max(0, Math.min(gh - 1, Math.floor(fy1 * gh)));
+        if (c1 < c0)
+            c1 = c0;
+        if (r1 < r0)
+            r1 = r0;
+        var sum = 0;
+        var n = 0;
+        for (var y = r0; y <= r1; ++y) {
+            for (var x = c0; x <= c1; ++x) {
+                sum += v[y * gw + x];
+                n += 1;
+            }
+        }
+        return (n > 0) ? sum / n : -1;
+    }
+
+    function luma(c) {
+        return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    }
+
+    // ── Encre TEINTÉE (brief encre §A) ────────────────────────────────────
+    // Mélange MINIMAL de `base` vers blanc (`light = true`) ou vers noir
+    // jusqu'à obtenir `target` d'écart de luminance avec `bgLum`. « Minimal »
+    // = on s'arrête DÈS que l'écart est atteint : c'est ce qui garde le
+    // maximum de saturation possible, donc l'encre reste colorée au lieu de
+    // finir en blanc pur (Qt.lighter poussait jusqu'au neutre).
+    // Sonde binaire bornée (8 itérations → pas de boucle non bornée, précision
+    // 1/256). Retourne `base` intacte si l'écart est déjà suffisant, ou si la
+    // direction demandée ne peut pas atteindre la cible (fond au bout du blanc
+    // ou du noir) — l'appelant décide alors du repli.
+    function tint(base, bgLum, target, light) {
+        if (!base || !(bgLum >= 0))
+            return base;
+        var tgt = theme.clamp(target, 0, 1);
+        if (Math.abs(theme.luma(base) - bgLum) >= tgt)
+            return base;
+        var goal = light ? Qt.rgba(1, 1, 1, 1) : Qt.rgba(0, 0, 0, 1);
+        if (Math.abs(theme.luma(goal) - bgLum) < tgt)
+            return base;
+        var lo = 0.0;
+        var hi = 1.0;
+        for (var i = 0; i < 8; ++i) {
+            var k = (lo + hi) / 2;
+            var probe = Math.abs(theme.luma(theme.mix(base, goal, k)) - bgLum);
+            if (probe >= tgt)
+                hi = k;
+            else
+                lo = k;
+        }
+        var out = theme.mix(base, goal, hi);
+        return Qt.rgba(out.r, out.g, out.b, 1.0);
+    }
+
+    // Encre lisible sur une luminance donnée : on GARDE la teinte de la palette
+    // et on l'éclaircit / l'assombrit jusqu'à l'écart de luminance voulu
+    // (0.42 ≈ contraste franc pour du texte, 0.30 pour du texte secondaire).
+    function contrastOn(base, bgLum, target, light) {
+        if (bgLum === undefined || bgLum === null || bgLum < 0 || !base)
+            return base;
+        var c = base;
+        var guard = 0;
+        while (Math.abs(theme.luma(c) - bgLum) < target && guard < 14) {
+            c = light ? Qt.lighter(c, 1.28) : Qt.darker(c, 1.28);
+            guard += 1;
+        }
+        return c;
+    }
+
+    // Direction de l'encre : on écrit CLAIR sur un fond sombre ou moyen (le
+    // texte clair tient mieux sur une illustration colorée), sombre seulement
+    // quand le fond est franchement clair. Le seuil à 0.62 évite le cas
+    // mesuré « fond à 0.55 » où assombrir donnait un texte noir sur des rochers
+    // déjà sombres.
+    function wantLight(bgLum) {
+        return bgLum < 0.62;
+    }
+
+    // ── Teinte conservée : on ne mélange PAS vers blanc/noir ──────────────
+    // Mesure sur la palette du moment (#8f707b, chroma 31) : mélanger 25 %
+    // d'accent dans le gris de la palette ne donne que 7/255 de chroma — donc
+    // encore gris à l'œil, exactement ce que momo refuse. Un mélange vers
+    // blanc/noir détruit la chroma par construction. On garde donc TEINTE et
+    // SATURATION de l'accent et on ne bouge que la LUMINOSITÉ (HSL) jusqu'à
+    // l'écart de luminance voulu.
+    function chroma(c) {
+        var mx = Math.max(c.r, c.g, c.b);
+        var mn = Math.min(c.r, c.g, c.b);
+        return (mx - mn) * 255.0;
+    }
+
+    // Luminosité HSL qui produit la luminance relative demandée (monotone →
+    // dichotomie bornée à 10 itérations).
+    function lightnessFor(h, s, targetLuma) {
+        var lo = 0.0;
+        var hi = 1.0;
+        for (var i = 0; i < 10; ++i) {
+            var mid = (lo + hi) / 2.0;
+            if (theme.luma(Qt.hsla(h, s, mid, 1.0)) < targetLuma)
+                lo = mid;
+            else
+                hi = mid;
+        }
+        return (lo + hi) / 2.0;
+    }
+
+    // Encre COLORÉE : teinte de l'accent, saturation bornée (du texte, pas un
+    // néon), luminosité calculée. `minSat` garantit que la couleur se voit même
+    // quand l'accent de la palette est presque gris.
+    function coloured(base, bgLum, target, minSat, maxSat) {
+        if (!(bgLum >= 0) || !base)
+            return base;
+        if (theme.chroma(base) < 6.0)
+            return theme.contrastOn(base, bgLum, target, theme.wantLight(bgLum));
+        // Direction : on prend le côté qui a le PLUS de marge (avec une petite
+        // préférence pour le clair, qui est le parti pris du thème). Sinon,
+        // autour de 0.5–0.6, le clair tombait sur du blanc pur — la teinte
+        // disparaissait précisément là où momo la veut.
+        var up = 1.0 - bgLum;
+        var down = bgLum;
+        var light = (up - 0.02) >= down;
+        if (light && up < target && down >= target)
+            light = false;
+        else if (!light && down < target && up >= target)
+            light = true;
+        var goal = light ? Math.min(1.0, bgLum + target) : Math.max(0.0, bgLum - target);
+        // Jamais un extrême pur (0 ou 1) : à ces luminosités toute teinte
+        // disparaît par construction.
+        goal = Math.max(0.06, Math.min(0.94, goal));
+        var h = (base.hslHue >= 0) ? base.hslHue : 0.0;
+        var s = Math.max(minSat, Math.min(maxSat, base.hslSaturation));
+        var l = theme.lightnessFor(h, s, goal);
+        var out = Qt.hsla(h, s, l, 1.0);
+        // Près des extrêmes, la chroma s'écrase : on remonte la saturation
+        // jusqu'à ce que la couleur se voie encore (borné, 8 pas).
+        var guard = 0;
+        while (theme.chroma(out) < 15.0 && s < 0.88 && guard < 8) {
+            s = Math.min(0.88, s + 0.08);
+            l = theme.lightnessFor(h, s, goal);
+            out = Qt.hsla(h, s, l, 1.0);
+            guard += 1;
+        }
+        return out;
+    }
+
+    // Encre principale : la couleur du fond, en plus clair (zone sombre) ou plus
+    // foncé (zone claire). Plus jamais du blanc pur.
+    function inkOn(bgLum) {
+        if (!(bgLum >= 0))
+            return theme.text;
+        return theme.coloured(theme.accent, bgLum, 0.50, 0.22, 0.42);
+    }
+
+    // Texte secondaire (date en kana) : même recette, plus discret.
+    function inkDimOn(bgLum) {
+        if (!(bgLum >= 0))
+            return theme.textDim;
+        return theme.coloured(theme.accent, bgLum, 0.34, 0.18, 0.34);
+    }
+
+    // Accent (suffixes じ / ふん, jauges) : teinte la plus franche — c'est lui
+    // qui doit rester reconnaissable comme la couleur du papier peint.
+    function accentOn(bgLum) {
+        if (!(bgLum >= 0))
+            return theme.accent;
+        return theme.coloured(theme.accent, bgLum, 0.42, 0.35, 0.75);
+    }
+
+    // Opacité du PANNEAU (CC) selon la luminance derrière lui : à 0.36 sur un
+    // fond clair, le panneau se laisse traverser et le texte perd son support.
+    // On ne monte pas « au feeling » : on calcule l'opacité MINIMALE qui garde
+    // le panneau plus sombre que l'encre (composite ≤ 0.36), donc on perd le
+    // moins de transparence possible. Les widgets, eux, ne changent pas — leur
+    // verre reste à 0.05–0.10.
+    function panelAlphaOn(bgLum) {
+        if (!(bgLum >= 0))
+            return theme.alphaPanel;
+        var panelLum = theme.luma(theme.glassBase);
+        var denom = bgLum - panelLum;
+        if (denom <= 0.02)
+            return theme.alphaPanel;
+        var need = (bgLum - 0.36) / denom;
+        return Math.max(theme.alphaPanel, Math.min(0.88, need));
+    }
 
     function readLumgrid(d) {
         if (!d || !d.values || d.values.length === 0) {
@@ -159,15 +366,88 @@ QtObject {
         var sum = 0;
         for (var i = 0; i < d.values.length; ++i)
             sum += d.values[i];
+        // Grille inattendue (dimensions changées côté serveur) : on ne devine
+        // pas les indexes, on retombe sur l'encre de palette.
+        if (d.values.length !== theme.lumGridW * theme.lumGridH) {
+            theme.lumValues = [];
+            theme.lightWallpaper = false;
+            return;
+        }
         theme.lumValues = d.values;
         theme.lightWallpaper = (sum / d.values.length) > 0.55;
     }
 
+    // ── Lumgrid SURVEILLÉ (brief §D : zéro polling, zéro requête) ─────────
+    // theme-apply.py écrit la grille 32x18 à côté du lock de palette, dans
+    // $XDG_RUNTIME_DIR. Quickshell la LIT et la surveille (inotify) : aucun
+    // timer, aucune requête — l'encre des cartes et l'opacité du panneau
+    // suivent le changement de papier peint à la frame suivante.
+    readonly property string lumgridPath: {
+        var d = Quickshell.env("XDG_RUNTIME_DIR");
+        var base = (typeof d === "string" && d.length > 0) ? d : "/tmp";
+        return base + "/sasquatch-lumgrid.json";
+    }
+    // Repli consommé UNE seule fois (jamais de boucle).
+    property bool lumFetchedOnce: false
+
+    property FileView lumFile: FileView {
+        path: theme.lumgridPath
+        watchChanges: true
+        blockLoading: true
+        printErrors: false
+        onFileChanged: theme.lumFile.reload()
+        onTextChanged: theme.readLumgridText(theme.lumFile.text())
+        onLoaded: theme.readLumgridText(theme.lumFile.text())
+        onLoadFailed: theme.fetchLumgridOnce()
+    }
+
+    // Parse défensif : fichier absent / tronqué / JSON invalide → on garde
+    // l'état courant (jamais de crash, jamais de valeurs devinées).
+    function readLumgridText(txt) {
+        if (typeof txt !== "string" || txt.length === 0)
+            return;
+        var d = null;
+        try {
+            d = JSON.parse(txt);
+        } catch (e) {
+            return;
+        }
+        theme.readLumgrid(d);
+    }
+
+    // Repli UNIQUE au démarrage : au premier boot XDG_RUNTIME_DIR est vide,
+    // le fichier n'existe pas encore → UN appel HTTP, puis le FileView prend
+    // le relais dès le prochain theme-apply.
+    function fetchLumgridOnce() {
+        if (theme.lumFetchedOnce)
+            return;
+        theme.lumFetchedOnce = true;
+        theme.refreshLumgrid();
+    }
+
     // ── Sondes ────────────────────────────────────────────────────────────
+    // Signature de la dernière palette : sert seulement à savoir si le papier
+    // peint a réellement changé (voir refreshPalette).
+    property string _palSig: ""
+
     function refreshPalette() {
         Api.get("/api/palette", function (d) {
-            if (d && typeof d === "object" && typeof d.accent === "string")
-                theme.pal = d;
+            if (!d || typeof d !== "object" || typeof d.accent !== "string")
+                return;
+            var sig = String(d.bg) + "|" + String(d.text) + "|" + String(d.accent);
+            // `_palSig` vide = premier passage : le démarrage est déjà couvert
+            // par le chargement du FileView (onLoaded / fetchLumgridOnce), donc
+            // on n'ajoute pas un reload concurrent ici.
+            var changed = (theme._palSig !== "" && sig !== theme._palSig);
+            theme._palSig = sig;
+            theme.pal = d;
+            // Filet de sécurité SANS timer : theme-apply écrit le lumgrid par
+            // `os.replace`, donc l'inode surveillé disparaît et un FileView
+            // peut rater le signal (mesuré sur widgets.json). Nouvelle palette
+            // = nouveau papier peint → on force la relecture du fichier LOCAL
+            // ici (aucune requête réseau, aucun process).
+            if (changed)
+                theme.lumFile.reload();
         });
     }
 
@@ -183,13 +463,5 @@ QtObject {
         running: true
         triggeredOnStart: true
         onTriggered: theme.refreshPalette()
-    }
-
-    property Timer lumTimer: Timer {
-        interval: 60000
-        repeat: true
-        running: true
-        triggeredOnStart: true
-        onTriggered: theme.refreshLumgrid()
     }
 }

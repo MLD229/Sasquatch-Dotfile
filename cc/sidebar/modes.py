@@ -78,6 +78,33 @@ def hypr_env():
     return env
 
 
+def _lua_value(value):
+    """Valeur Python → littéral Lua (true/false/nombre/"chaîne")."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    s = str(value).strip().lower()
+    if s in ("1", "true", "yes", "on"):
+        return "true"
+    if s in ("0", "false", "no", "off"):
+        return "false"
+    try:
+        float(s)
+        return s
+    except ValueError:
+        return json.dumps(str(value))
+
+
+def _lua_config(opt, value):
+    """`decoration:blur:enabled` + 0 → `hl.config({decoration = {blur = {enabled = false}}})`.
+
+    Remplace l'ancien `hyprctl keyword <opt> <valeur>` (retiré en 0.57).
+    """
+    expr = _lua_value(value)
+    for part in reversed(opt.split(":")):
+        expr = "{%s = %s}" % (part, expr)
+    return "hl.config(%s)" % expr
+
+
 def default_runner(cmd, timeout=6):
     """Exécute une commande → (returncode, stdout, stderr)."""
     try:
@@ -136,17 +163,28 @@ class ModeEngine:
             data = json.loads(out)
         except ValueError:
             return None
-        # getoption -j renvoie {"option":..., "int":1, "set":true, ...}
-        for key in ("int", "float", "str"):
+        # getoption -j renvoie {"option":..., "int":1, "set":true, ...} en 0.4x,
+        # mais Hyprland >= 0.57 (config Lua) répond "bool": true|false pour les
+        # booléens — sans cette clé, tout getoption booléen renvoyait None et le
+        # mode « allégé » se croyait sans Hyprland (getoption vide).
+        for key in ("bool", "int", "float", "str"):
             if key in data and data[key] not in (None, ""):
                 return data[key]
         return None
 
     def _keyword(self, opt, value):
+        # Hyprland >= 0.57 : `hyprctl keyword` a été retiré du runtime
+        # ("unknown request") — l'écriture dynamique passe par le Lua du
+        # compositeur (`hl.config`). Les valeurs relues sont des booléens :
+        # on les traduit en true/false (un "True" littéral n'existe pas).
+        if isinstance(value, bool):
+            value = int(value)
+        code = _lua_config(opt, value)
         if self.dry:
-            return {"dry": True, "cmd": ["hyprctl", "keyword", opt, str(value)]}
-        rc, out, err = self.run(["hyprctl", "keyword", opt, str(value)])
-        return {"ok": rc == 0, "cmd": ["hyprctl", "keyword", opt, str(value)],
+            return {"dry": True, "cmd": ["hyprctl", "eval", code]}
+        rc, out, err = self.run(["hyprctl", "eval", code])
+        ok = rc == 0 and "error:" not in (out or "").lower()
+        return {"ok": ok, "cmd": ["hyprctl", "eval", code],
                 "out": out, "err": err}
 
     # ── option booléenne nue (flou) — réutilise les primitives ci-dessus ───
@@ -502,10 +540,22 @@ class FakeRunner:
             opt = cmd[3]
             if opt not in self.opts:
                 return 0, json.dumps({"option": opt, "set": False}), ""
-            return 0, json.dumps({"option": opt, "int": self.opts[opt],
+            # Forme réelle de `hyprctl getoption -j` sur Hyprland >= 0.57
+            # (config Lua) : clé "bool", pas "int".
+            return 0, json.dumps({"option": opt, "bool": bool(self.opts[opt]),
                                   "set": True}), ""
-        if cmd[:2] == ["hyprctl", "keyword"]:
-            self.opts[cmd[2]] = int(cmd[3]) if str(cmd[3]).isdigit() else cmd[3]
+        if cmd[:2] == ["hyprctl", "eval"]:
+            # Forme réelle en 0.57 : hl.config({a = {b = {c = true|false}}})
+            # (2 ou 3 niveaux selon l'option) — on relit les clés et la valeur.
+            import re
+            code = cmd[2]
+            keys = re.findall(r"(\w+) = ", code)
+            mv = re.search(r"= (true|false|-?\d+(?:\.\d+)?)\}", code)
+            if keys and mv:
+                val = mv.group(1)
+                self.opts[":".join(keys)] = (
+                    1 if val == "true" else 0 if val == "false"
+                    else int(float(val)))
             return 0, "ok", ""
         if cmd[:2] == ["hyprctl", "version"]:
             return 0, "Hyprland 0.56.2 (fake)", ""

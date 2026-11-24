@@ -67,13 +67,34 @@ SOCK="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.hyprpaper.sock"
 # l'ancien hyprpaper fait croire à la boucle -S que tout est prêt → hyprctl
 # part dans le vide → fond noir (symptôme intermittent, surtout applies rapides).
 rm -f "$SOCK"
-hyprpaper >/dev/null 2>&1 &
-HP_PID=$!
-for _ in $(seq 1 30); do
-    [ -S "$SOCK" ] && break
-    kill -0 "$HP_PID" 2>/dev/null || break
-    sleep 0.1
-done
+# Lancement dans une SCOPE systemd dédiée (cgroup propre) : un simple
+# `hyprpaper &` hérite du cgroup de l'appelant. Quand l'appelant est
+# sasquatch-cc.service (backend, KillMode=control-group), le premier
+# `systemctl restart sasquatch-cc` tue hyprpaper avec lui → plus aucune
+# surface wallpaper (layer background vide) et fond noir définitif
+# jusqu'au prochain apply. La scope survit au restart du service.
+# Repli direct si systemd-run échoue (D-Bus indisponible…).
+HP_STARTED=0
+if command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --user --quiet --collect --scope -- hyprpaper >/dev/null 2>&1 &
+    HP_PID=$!
+    for _ in $(seq 1 30); do
+        [ -S "$SOCK" ] && { HP_STARTED=1; break; }
+        kill -0 "$HP_PID" 2>/dev/null || break
+        sleep 0.1
+    done
+fi
+if [ "$HP_STARTED" -ne 1 ]; then
+    pkill -x hyprpaper 2>/dev/null
+    rm -f "$SOCK"
+    hyprpaper >/dev/null 2>&1 &
+    HP_PID=$!
+    for _ in $(seq 1 30); do
+        [ -S "$SOCK" ] && break
+        kill -0 "$HP_PID" 2>/dev/null || break
+        sleep 0.1
+    done
+fi
 # Le socket peut exister avant que hyprpaper ait fini bind+listen : petit délai.
 sleep 0.3
 
@@ -106,5 +127,14 @@ fi
 # ── 4. Palette (ex-post_command waypaper) — fire & forget, le flock de
 #      theme-apply.sh sérialise avec le login/les switchs rapides ────
 "$HOME/.config/scripts/theme-apply.sh" "$WALL" >/dev/null 2>&1 &
+
+# ── 5. Le placement auto suit le fond ───────────────────────────────
+# op `reapply` = rejoue le DERNIER placement mémorisé (Studio « Remplir » /
+# « Auto ») : les widgets se replacent et se redimensionnent pour le nouveau
+# papier peint, au lieu de rester posés pour l'ancien. `auto: false` dans le
+# Studio → le serveur répond `skipped` et ne touche à rien. Silencieux : sans
+# backend le fond est posé quand même, c'est tout.
+curl -s -m 6 -X POST -H 'Content-Type: application/json' -d '{"op":"reapply"}' \
+    "http://127.0.0.1:${SASQUATCH_CC_PORT:-8765}/api/widgets" >/dev/null 2>&1 || true
 
 exit 0

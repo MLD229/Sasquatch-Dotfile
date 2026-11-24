@@ -102,6 +102,24 @@ def _int(value, name, low, high):
     return int(round(_clamp(_num(value, name), low, high)))
 
 
+def _px(value, name):
+    """Distance en pixels (margin / gap d'`autoplace`) : nombre FINI, borné 0..512.
+
+    Brief encre §C.1 : ces deux valeurs viennent d'un champ du Studio, elles ne
+    doivent jamais sortir de l'écran ni faire déborder le calcul. `float()` dans
+    un try → message lisible (OpError), jamais une TypeError brute remontée au
+    client HTTP."""
+    if isinstance(value, bool):
+        raise OpError("%s doit être un nombre (0..512)" % name)
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        raise OpError("%s doit être un nombre (0..512)" % name)
+    if v != v or v in (float("inf"), float("-inf")):  # NaN / ±inf
+        raise OpError("%s doit être un nombre fini (0..512)" % name)
+    return int(round(_clamp(v, 0.0, 512.0)))
+
+
 def load_registry():
     """{id: entrée} depuis le registre embarqué (seule source des chemins)."""
     try:
@@ -536,8 +554,24 @@ def apply(op):
     if not isinstance(kind, str):
         raise OpError("champ `op` manquant")
     if kind not in ("add", "rm", "move", "resize", "style", "variant", "option",
-                    "reorder", "autoplace"):
+                    "reorder", "autoplace", "reapply", "setplacement"):
         raise OpError("opération inconnue : %r" % kind)
+
+    # `reapply` : rejoue le DERNIER placement mémorisé. C'est ce qui fait
+    # « suivre » le fond d'écran : apply-wallpaper.sh l'appelle après chaque
+    # changement de papier peint, donc les widgets se replacent et se
+    # redimensionnent pour le nouveau fond (même mécanique que l'encre des
+    # cartes). `auto: false` (Studio) = on ne touche à rien.
+    if kind == "reapply":
+        doc0 = _read()
+        remembered = doc0.get("placement") or {}
+        if not isinstance(remembered, dict) or not remembered.get("strategy") \
+                or not remembered.get("auto", True):
+            return {"ok": True, "revision": doc0.get("revision"), "skipped": True,
+                    "reason": "placement auto désactivé"}
+        op = dict(remembered)
+        op["op"] = "autoplace"
+        kind = "autoplace"
 
     registry = load_registry()
     doc = _read()
@@ -642,6 +676,15 @@ def apply(op):
             raise OpError("champ `value` manquant")
         instance["options"] = _options(entry, {key: op["value"]}, ref=instance.get("options"))
 
+    elif kind == "setplacement":
+        # Interrupteur « Suivre le fond d'écran » du Studio : on n'écrit QUE le
+        # drapeau, sans replacer les widgets (un toggle ne déplace rien).
+        remembered = doc.get("placement")
+        if not isinstance(remembered, dict) or not remembered.get("strategy"):
+            raise OpError("aucun placement mémorisé — lancez « Placer les widgets » une fois")
+        remembered["auto"] = bool(op.get("auto", True))
+        extra = {"placement": remembered}
+
     elif kind == "reorder":
         index, instance = _find(doc, op.get("id"))
         target = _int(op.get("to"), "to", 0, max(0, len(doc["instances"]) - 1))
@@ -664,9 +707,13 @@ def apply(op):
                           % (strategy, ", ".join(autoplace.STRATEGIES)))
         screen = _screen(op)
         wallpaper_path, lumgrid = _wallpaper_context()
+        # Bornes d'entrée (brief encre §C.1) : margin / gap viennent d'un champ
+        # du Studio → nombre fini, 0..512, sinon OpError lisible.
+        margin = _px(op.get("margin", 24), "margin")
+        gap = _px(op.get("gap", 12), "gap")
         computed = autoplace.place(
             doc["instances"], host=host, strategy=strategy,
-            margin=op.get("margin", 24), gap=op.get("gap", 12),
+            margin=margin, gap=gap,
             corner=op.get("corner") or "tr", ids=op.get("ids"),
             screen=screen, wallpaper=wallpaper_path, lumgrid=lumgrid)
         if not computed.get("ok"):
@@ -683,8 +730,20 @@ def apply(op):
             entry = {"id": item["id"]}
             entry.update(inst["geo"])
             placed.append(entry)
+        # Mémorisé : c'est ce bloc qui fait « suivre » le placement quand le
+        # papier peint change (op `reapply`, appelée par apply-wallpaper.sh).
+        # `auto` = l'interrupteur « Suivre le fond d'écran » du Studio.
+        doc["placement"] = {
+            "strategy": strategy,
+            "margin": margin,
+            "gap": gap,
+            "corner": op.get("corner") or "tr",
+            "host": host,
+            "auto": bool(op.get("auto", True)),
+        }
         extra = {"placed": placed, "unplaced": [], "strategy": strategy,
-                 "note": computed.get("note", "")}
+                 "note": computed.get("note", ""),
+                 "placement": doc["placement"]}
 
     doc["version"] = 1
     doc["revision"] = int(doc.get("revision") or 0) + 1

@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "revision": 138,
+    "revision": 262,
     "instances": [
         {
             "id": "clock-cc",
@@ -157,15 +157,15 @@
             }
         },
         {
-            "id": "workspaces-1",
-            "type": "workspaces",
+            "id": "clock-4",
+            "type": "clock",
             "host": "background",
-            "variant": "normal",
+            "variant": "hero",
             "geo": {
-                "x": 0.0114,
-                "y": 0.8026,
-                "w": 360,
-                "h": 180
+                "x": 0.3072,
+                "y": 0.4351,
+                "w": 560,
+                "h": 260
             },
             "style": {
                 "alpha": 0.08,
@@ -174,39 +174,21 @@
                 "radius": 16
             },
             "options": {
-                "count": 10,
-                "showCount": true
+                "mode": "kana",
+                "showSeconds": true,
+                "hour24": true
             }
         },
         {
-            "id": "toggles-1",
-            "type": "toggles",
+            "id": "resources-6",
+            "type": "resources",
             "host": "background",
-            "variant": "normal",
+            "variant": "hero",
             "geo": {
-                "x": 0.0115,
-                "y": 0.0379,
-                "w": 360,
-                "h": 180
-            },
-            "style": {
-                "alpha": 0.08,
-                "accent": "auto",
-                "blur": 9,
-                "radius": 16
-            },
-            "options": {}
-        },
-        {
-            "id": "clock-2",
-            "type": "clock",
-            "host": "background",
-            "variant": "normal",
-            "geo": {
-                "x": 0.3512,
-                "y": 0.4937,
-                "w": 360,
-                "h": 180
+                "x": 0.6197,
+                "y": 0.4351,
+                "w": 560,
+                "h": 260
             },
             "style": {
                 "alpha": 0.08,
@@ -215,18 +197,30 @@
                 "radius": 16
             },
             "options": {
-                "mode": "analog",
-                "showSeconds": true,
-                "hour24": true
+                "showSparkline": true,
+                "showTemp": true
             }
         }
     ],
     "seq": {
-        "notes": 2,
-        "clock": 2,
-        "calendar": 3,
-        "resources": 1,
+        "notes": 4,
+        "clock": 4,
+        "calendar": 4,
+        "resources": 6,
         "workspaces": 1,
-        "toggles": 1
+        "toggles": 3,
+        "tasks": 3,
+        "media": 3,
+        "weather": 2,
+        "volume": 2,
+        "apps": 1
+    },
+    "placement": {
+        "strategy": "auto",
+        "margin": 24,
+        "gap": 12,
+        "corner": "tr",
+        "host": "background",
+        "auto": true
     }
 }

@@ -129,6 +129,23 @@ def _mpd_send(f, cmd):
     f.write((cmd + "\n").encode("utf-8"))
 
 
+def _mpd_quote(s):
+    """Échappe une valeur destinée à être insérée entre guillemets MPD.
+
+    Pourquoi : le protocole MPD termine une commande au saut de ligne. Une
+    valeur non échappée qui contient « \\n » injecte donc une commande
+    supplémentaire (add/delete/clear sur la file, par exemple via un nom de
+    fichier forgé). On refuse tout caractère de contrôle, puis on échappe
+    les deux seuls caractères spéciaux admis dans une chaîne MPD : \\ et ".
+
+    Lève ValueError → l'appelant doit répondre proprement (jamais envoyer).
+    """
+    s = "" if s is None else str(s)
+    if any(ord(c) < 0x20 or ord(c) == 0x7F for c in s):
+        raise ValueError("caractère de contrôle interdit")
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _mpd_read_kv(f):
     out = {}
     while True:
@@ -214,7 +231,7 @@ def mpd_albumart(uri):
         data = b""
         total = None
         while True:
-            _mpd_send(f, 'albumart "%s" %d' % (uri, offset))
+            _mpd_send(f, 'albumart "%s" %d' % (_mpd_quote(uri), offset))
             size = None
             binsize = None
             while True:

@@ -1,7 +1,8 @@
 // ClockWidget.qml — horloge (widget `clock`, brief §7 v1a).
 //
 // Variantes : compact = HH:mm seul · normal = + date · hero = + secondes,
-// et mode analogique (Canvas, aucune dépendance externe).
+// modes : `digital` (défaut), `analog` (Canvas, aucune dépendance externe),
+// `kana` (heure en hiragana, ex-horloge du fond d'écran).
 // Aucun timer ici : le temps vient de Env (une seule horloge pour tout le
 // shell) — un widget LIT, il ne sonde pas.
 import QtQuick
@@ -17,6 +18,82 @@ WidgetBase {
     readonly property bool showSecondsOption: !!(root.options && root.options.showSeconds)
     readonly property bool showSeconds: root.hero && root.showSecondsOption
     readonly property bool hour24: !(root.options && root.options.hour24 === false)
+
+    // ── Mode `kana` : heure en hiragana ──────────────────────────────────
+    // Tables portées de l'ex-horloge du fond d'écran (waybar/scripts/
+    // wallclock-ja.py) — même découpage que là-bas : le suffixe じ / ぷん /
+    // ふん est teinté accent, le nombre reste en couleur de texte.
+    readonly property bool kanaMode: !!(root.options && root.options.mode === "kana")
+
+    readonly property var kanaHours: [
+        "れい", "いち", "に", "さん", "よ", "ご", "ろく", "しち", "はち", "く",
+        "じゅう", "じゅういち", "じゅうに", "じゅうさん", "じゅうよ", "じゅうご",
+        "じゅうろく", "じゅうしち", "じゅうはち", "じゅうく", "にじゅう",
+        "にじゅういち", "にじゅうに", "にじゅうさん"
+    ]
+    readonly property var kanaTens: ["", "じゅう", "にじゅう", "さんじゅう", "よんじゅう", "ごじゅう"]
+    readonly property var kanaUnits: ["", "いっ", "に", "さん", "よん", "ご", "ろっ", "なな", "はっ", "きゅう"]
+    // Suffixe par chiffre des unités : 1 いっぷん · 3 さんぷん · 6 ろっぷん …
+    readonly property var kanaSuffix: ["ぷん", "ふん", "ぷん", "ぷん", "ふん", "ぷん", "ふん", "ぷん", "ふん"]
+    readonly property var kanaMonths: [
+        "いちがつ", "にがつ", "さんがつ", "しがつ", "ごがつ", "ろくがつ",
+        "しちがつ", "はちがつ", "くがつ", "じゅうがつ", "じゅういちがつ", "じゅうにがつ"
+    ]
+    readonly property var kanaDays: [
+        "ついたち", "ふつか", "みっか", "よっか", "いつか", "むいか", "なのか",
+        "ようか", "ここのか", "とおか", "じゅういちにち", "じゅうににち",
+        "じゅうさんにち", "じゅうよっか", "じゅうごにち", "じゅうろくにち",
+        "じゅうしちにち", "じゅうはちにち", "じゅうくにち", "はつか",
+        "にじゅういちにち", "にじゅうににち", "にじゅうさんにち", "にじゅうよっか",
+        "にじゅうごにち", "にじゅうろくにち", "にじゅうしちにち", "にじゅうはちにち",
+        "にじゅうくにち", "さんじゅうにち", "さんじゅういちにち"
+    ]
+    readonly property var kanaWeekdays: ["日", "月", "火", "水", "木", "金", "土"]
+
+    // Minutes : 0 → rien (on dit juste ろくじ), dizaine exacte → じゅっぷん.
+    function kanaMinuteOf(m) {
+        if (!m)
+            return { num: "", suffix: "" };
+        var t = Math.floor(m / 10);
+        var u = m % 10;
+        if (u === 0)
+            return { num: root.kanaTens[t].replace("じゅう", "じゅっ"), suffix: "ぷん" };
+        return { num: root.kanaTens[t] + root.kanaUnits[u], suffix: root.kanaSuffix[u - 1] };
+    }
+
+    readonly property string kanaHour: root.kanaHours[Env.now.getHours()]
+    readonly property var kanaMinute: root.kanaMinuteOf(Env.now.getMinutes())
+    readonly property string kanaDate: root.kanaMonths[Env.now.getMonth()] + " " + root.kanaDays[Env.now.getDate() - 1]
+    readonly property string kanaDay: root.kanaWeekdays[Env.now.getDay()]
+
+    // Les hiragana sont pleine chasse, mais l'avance réelle dépend de la
+    // police : on la MESURE (TextMetrics à 100 px) au lieu de la supposer.
+    // La taille est alors celle qui fait tenir la ligne entière, espace entre
+    // groupes compris (0.42 em) — aucune découpe, aucun Fit par morceau.
+    readonly property string kanaFull: root.kanaHour + "じ"
+        + (root.kanaMinute.num.length > 0
+           ? " " + root.kanaMinute.num + root.kanaMinute.suffix : "")
+
+    TextMetrics {
+        id: kanaMetrics
+        font.pixelSize: 100
+        font.family: "Noto Sans CJK JP"
+        font.weight: Font.Black
+        text: root.kanaFull
+    }
+
+    readonly property real kanaAdvEm: kanaMetrics.advanceWidth / 100
+    readonly property real kanaSize: Math.max(10, Math.min(root.height * 0.30,
+        (root.width - 2 * root.pad) / (root.kanaAdvEm + 0.42)))
+    readonly property real kanaDateSize: Math.max(8, Math.min(root.height * 0.10,
+        (root.width - 2 * root.pad) / (kanaDateMetrics.advanceWidth / 100)))
+
+    TextMetrics {
+        id: kanaDateMetrics
+        font.pixelSize: 100
+        font.family: "Noto Sans CJK JP"
+        text: root.kanaDate + "  " + root.kanaDay
+    }
 
     readonly property string timeFormat: root.hour24
         ? (root.showSeconds ? "HH:mm:ss" : "HH:mm")
@@ -37,7 +114,7 @@ WidgetBase {
     // ── Digital ───────────────────────────────────────────────────────────
     Column {
         id: digital
-        visible: !root.analog
+        visible: !root.analog && !root.kanaMode
         anchors.fill: parent
         anchors.margins: root.pad
         spacing: root.compact ? 0 : Math.round(root.height * 0.02)
@@ -66,6 +143,81 @@ WidgetBase {
             text: root.dateText
             color: root.inkDim
             font.pixelSize: root.dateSize
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
+            wrapMode: Text.NoWrap
+        }
+    }
+
+    // ── Kana (mode `kana`) ────────────────────────────────────────────────
+    // Deux groupes collés (« ろく » + じ, « ごじゅう » + ご + ふん) séparés par
+    // un espace : les suffixes portent l'accent, comme sur l'ancienne horloge.
+    Column {
+        id: kana
+        visible: root.kanaMode
+        anchors.fill: parent
+        anchors.margins: root.pad
+        spacing: Math.round(root.height * 0.02)
+
+        Item {
+            id: kanaTimeBox
+            width: parent.width
+            height: parent.height - (kanaDate.visible ? kanaDate.height + kana.spacing : 0)
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 0
+
+                Text {
+                    text: root.kanaHour
+                    color: root.ink
+                    font.pixelSize: root.kanaSize
+                    font.weight: Font.Black
+                    font.family: "Noto Sans CJK JP"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text {
+                    text: "じ"
+                    color: root.accentInk
+                    font.pixelSize: root.kanaSize
+                    font.weight: Font.Black
+                    font.family: "Noto Sans CJK JP"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                // Espace entre les deux groupes (même avance qu'un hiragana).
+                Item {
+                    width: Math.round(root.kanaSize * 0.42)
+                    height: 1
+                }
+                Text {
+                    text: root.kanaMinute.num
+                    visible: text.length > 0
+                    color: root.ink
+                    font.pixelSize: root.kanaSize
+                    font.weight: Font.Black
+                    font.family: "Noto Sans CJK JP"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text {
+                    text: root.kanaMinute.suffix
+                    visible: text.length > 0
+                    color: root.accentInk
+                    font.pixelSize: root.kanaSize
+                    font.weight: Font.Black
+                    font.family: "Noto Sans CJK JP"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+        }
+
+        Text {
+            id: kanaDate
+            width: parent.width
+            visible: !root.compact
+            text: root.kanaDate + "  " + root.kanaDay
+            color: root.inkDim
+            font.pixelSize: root.kanaDateSize
+            font.family: "Noto Sans CJK JP"
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
             wrapMode: Text.NoWrap

@@ -34,7 +34,10 @@ EOF
 
 # Toggle OFF : si la fenêtre CC est déjà ouverte, la fermer.
 if window_open; then
-    hyprctl dispatch closewindow "title:^($WIN_TITLE)$" >/dev/null 2>&1
+    # Hyprland >= 0.57 : `hyprctl dispatch closewindow` (syntaxe hyprlang) a
+    # disparu — le dispatcher est désormais du Lua (hl.dsp.window.close).
+    printf -v __code 'hl.dispatch(hl.dsp.window.close({window = "title:^(%s)$"}))' "$WIN_TITLE"
+    hyprctl eval "$__code" >/dev/null 2>&1
     exit 0
 fi
 

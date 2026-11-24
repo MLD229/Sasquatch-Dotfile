@@ -19,7 +19,7 @@
                 "accent": ["auto", "primary", "secondary", "text"]
             },
             "options": {
-                "mode": { "type": "enum", "values": ["digital", "analog"], "default": "digital" },
+                "mode": { "type": "enum", "values": ["digital", "analog", "kana"], "default": "digital" },
                 "showSeconds": { "type": "bool", "default": true },
                 "hour24": { "type": "bool", "default": true }
             }
