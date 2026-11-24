@@ -1,10 +1,10 @@
 #!/bin/bash
 # apply-lang.sh — applique la langue mémorisée (settings.json → lang.mode) à l'UI.
 #
-#   Waybar     : copie la config de la langue (config = FR, config.ja = 日本語)
-#                puis redémarre waybar. Si le service systemd user waybar est
-#                installé, c'est LUI le lanceur (un `waybar &` direct donnerait
-#                2 barres) — restart/start via systemctl, fallback direct sinon.
+#   Waybar     : copie la config de la langue (config = FR, config.ja = 日本語).
+#                Waybar est MORTE (remplacée par la barre verticale cc/bar) :
+#                ce script ne la DÉMARRE plus jamais — il l'arrête seulement si
+#                elle traîne. Les anciennes branches de lancement sont retirées.
 #   Workspaces : hyprctl eval hl.dsp.workspace.rename 1..10 (noms JA ou numéros FR),
 #                sans déplacer les fenêtres.
 #   wallclock / hyprlock / clock-ja : NON redémarrés — ils relisent
@@ -79,23 +79,13 @@ else
 fi
 
 if [ "$CHANGED" = "1" ]; then
-    if [ -e "$HOME/.config/systemd/user/sasquatch-bar.service" ]; then
-        # 2026-10-31 : waybar remplacée par la barre verticale (cc/bar).
-        # La config de langue ne concerne plus l'affichage : on ne relance
-        # pas waybar (et on l'arrête si elle traîne).
-        systemctl --user is-active --quiet waybar \
-            && systemctl --user stop waybar >/dev/null 2>&1 || true
-    elif systemctl --user is-active --quiet waybar; then
-        # Config changée (labels) : un simple `reload` (SIGUSR2) ne recharge que le
-        # CSS → restart complet (relit aussi les noms de workspaces renommés).
-        systemctl --user restart waybar >/dev/null 2>&1 || true
-    elif systemctl --user list-unit-files waybar.service >/dev/null 2>&1; then
-        systemctl --user start waybar >/dev/null 2>&1 || true
-    else
-        # Service non installé → fallback direct (ancien comportement).
-        pkill -x waybar 2>/dev/null
-        sleep 0.2
-        waybar >/dev/null 2>&1 &
+    # Waybar est MORTE (remplacée par la barre verticale cc/bar) : la config de
+    # langue ne la concerne plus. 2026-11-24 : les branches qui la DÉMARRAIENT
+    # (`systemctl --user start waybar`, `waybar &` de repli) sont supprimées —
+    # elles ressuscitaient une 2e barre dès que le lien sasquatch-bar.service
+    # manquait. On l'arrête seulement si elle traîne.
+    if systemctl --user is-active --quiet waybar 2>/dev/null; then
+        systemctl --user stop waybar >/dev/null 2>&1 || true
     fi
     if [ "$LANG_MODE" = "ja" ]; then
         notify-send "Sasquatch" "Langue : 日本語" 2>/dev/null || true

@@ -182,6 +182,16 @@ ShellRoot {
                                           : Math.round((stack.width - Config.block) / 2)
 
             Component.onCompleted: {
+                // mainLen (= hauteur de la surface) vaut 0 tant que le
+                // compositeur n'a pas configuré la fenêtre layer : le premier
+                // passage sert de mesure, pas de diagnostic. Sans ce garde,
+                // chaque démarrage d'une installation neuve affichait
+                // « 594 px > place utile -8 px » alors que l'écran est sain
+                // (mesuré deux fois : session réelle + Hyprland imbriqué).
+                // On ne juge donc que sur une longueur réelle (> 0), et une
+                // seule fois par configuration.
+                if (stack.mainLen <= 0)
+                    return
                 if (stack.freeSpace < 0 && !Config.horizontal)
                     console.warn("bar: contenu " + Math.round(stack.used)
                                  + " px > place utile " + Math.round(stack.mainLen)

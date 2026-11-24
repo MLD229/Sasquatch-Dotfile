@@ -80,36 +80,17 @@ fi
 # Hyprland (bordures)
 hyprctl reload >/dev/null 2>&1
 
-# Waybar (CSS) — démarre ou relance systématiquement (nouveau thème = nouveau CSS)
-# 9>&- : ne pas laisser waybar hériter du fd de verrou (flock serait tenu à vie)
-# Supervision : si le service waybar (waybar/waybar.service) est INSTALLÉ, c'est
-# LUI le seul lanceur — `systemctl --user start` est idempotent et ne crée PAS de
-# doublon, même pendant la course du login (service encore en retry
-# Restart=on-failure ; un `waybar &` direct donnerait 2 barres). Fallback direct
-# uniquement si le service n'existe pas du tout (install.sh pas relancé).
-if [ -e "$HOME/.config/systemd/user/sasquatch-bar.service" ]; then
-    # 2026-10-31 : waybar est REMPLACÉE par la barre verticale Quickshell
-    # (cc/bar). Le paquet, le dossier waybar/ et son unité restent dans le
-    # dotfile (retour arrière possible), mais PLUS RIEN ne doit la lancer :
-    # ce bloc était justement le lanceur de waybar au login et après chaque
-    # changement de wallpaper — c'est ce qui la faisait « revenir ».
-    if systemctl --user is-active --quiet waybar; then
-        systemctl --user stop waybar >/dev/null 2>&1 || true
-    fi
-elif systemctl --user is-active --quiet waybar; then
-    systemctl --user reload waybar >/dev/null 2>&1 || true
-elif systemctl --user list-unit-files waybar.service >/dev/null 2>&1; then
-    systemctl --user start waybar >/dev/null 2>&1 || true
-    for _ in 1 2 3 4 5; do
-        systemctl --user is-active --quiet waybar && break
-        sleep 0.3
-    done
-    systemctl --user reload waybar >/dev/null 2>&1 || true
-else
-    # Service non installé → fallback direct (ancien comportement).
-    pkill -x waybar 2>/dev/null
-    sleep 0.2
-    waybar >/dev/null 2>&1 9>&- &
+# Waybar — DÉFINITIVEMENT MORTE : la barre verticale Quickshell (cc/bar) la
+# remplace. 2026-11-24 (lot « installation neutre ») : les DEUX branches qui
+# pouvaient (re)démarrer waybar ont été supprimées ici. Elles se déclenchaient
+# dès que le lien ~/.config/systemd/user/sasquatch-bar.service manquait
+# (installation interrompue, --no-packages, install antérieure à la migration)
+# et faisaient `systemctl --user start waybar` ou `waybar &` : deux barres à
+# l'écran, dont une que plus rien ne thème et dont les modules ne répondent pas.
+# Ce script ne fait plus qu'ARRÊTER waybar si elle traîne. Le retour arrière
+# reste documenté (cc/bar/README §8 : `systemctl --user enable --now waybar`).
+if systemctl --user is-active --quiet waybar 2>/dev/null; then
+    systemctl --user stop waybar >/dev/null 2>&1 || true
 fi
 
 # Mako (notifications)

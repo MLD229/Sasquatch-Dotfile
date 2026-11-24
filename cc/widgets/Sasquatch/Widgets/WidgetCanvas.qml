@@ -20,6 +20,47 @@ Item {
     property bool editing: false
     property var instances: []
 
+    // ── Instances RÉELLEMENT dessinables (anti « widget fantôme ») ─────────
+    // Un type absent du registre, ou dont le fichier composant n'est pas livré,
+    // n'est JAMAIS dessiné : c'était jusqu'ici un rectangle d'attente permanent
+    // (« des widgets inexistants sont montrés »). Le calcul est fait HORS
+    // liaison (`resolveState()` lit un singleton : ses dépendances ne sont pas
+    // tracées par une binding), puis rafraîchi sur les événements utiles.
+    property var renderable: []
+    property var loggedIds: ({})
+
+    function refreshRenderable() {
+        var out = [];
+        var list = canvas.instances || [];
+        var logged = canvas.loggedIds || ({});
+        for (var i = 0; i < list.length; ++i) {
+            var it = list[i];
+            if (!it)
+                continue;
+            var st = WidgetRegistry.resolveState(it.type);
+            if (st.ok) {
+                out.push(it);
+                continue;
+            }
+            // Une seule ligne par instance, jamais un silence : c'est la trace
+            // qui explique pourquoi un widget du fichier n'est pas à l'écran.
+            if (!logged[it.id]) {
+                logged[it.id] = true;
+                console.warn("widgets: " + canvas.host + " — instance ignorée "
+                             + it.id + " (type " + it.type + ") : " + st.reason);
+            }
+        }
+        canvas.loggedIds = logged;
+        canvas.renderable = out;
+    }
+
+    onInstancesChanged: canvas.refreshRenderable()
+
+    Connections {
+        target: WidgetRegistry
+        function onAvailabilityChanged() { canvas.refreshRenderable() }
+    }
+
     // Studio (v1c-2) : id de l'instance sélectionnée (posé par la page) et
     // deux signaux remontés au parent — le canvas ne décide jamais du sort
     // d'une instance, il signale (la page poste).
@@ -37,8 +78,8 @@ Item {
     // la moitié basse vide.
     readonly property int usedRows: {
         var r = 0;
-        for (var i = 0; i < canvas.instances.length; ++i) {
-            var g = canvas.instances[i].geo || {};
+        for (var i = 0; i < canvas.renderable.length; ++i) {
+            var g = canvas.renderable[i].geo || {};
             r = Math.max(r, Math.round(g.row || 0) + Math.round(g.h || 1));
         }
         return Math.max(1, r);
@@ -52,7 +93,7 @@ Item {
     // passer le clic au lieu de l'avaler. Aucun rectangle vide n'est émis.
     readonly property var inputRects: {
         var out = [];
-        var list = canvas.instances || [];
+        var list = canvas.renderable || [];
         for (var i = 0; i < list.length; ++i) {
             var inst = list[i];
             if (!inst)
@@ -96,7 +137,10 @@ Item {
     // processus ne s'annulent pas.
     property string surfaceKey: canvas.host
     onVisibleChanged: Music.setSurface(canvas.surfaceKey, canvas.visible)
-    Component.onCompleted: Music.setSurface(canvas.surfaceKey, canvas.visible)
+    Component.onCompleted: {
+        Music.setSurface(canvas.surfaceKey, canvas.visible)
+        canvas.refreshRenderable()
+    }
     Component.onDestruction: Music.setSurface(canvas.surfaceKey, false)
 
     // ── Géométrie ─────────────────────────────────────────────────────────
@@ -169,7 +213,7 @@ Item {
         // Dépend de loadStates ET de la liste : un ajout non encore chargé
         // compte, et un retrait disparaît.
         var n = 0;
-        var list = canvas.instances || [];
+        var list = canvas.renderable || [];
         var seen = canvas.loadStates || {};
         for (var i = 0; i < list.length; ++i) {
             var it = list[i];
@@ -184,7 +228,7 @@ Item {
 
     function countStatus(status) {
         var n = 0;
-        var list = canvas.instances || [];
+        var list = canvas.renderable || [];
         var seen = canvas.loadStates || {};
         for (var i = 0; i < list.length; ++i) {
             var it = list[i];
@@ -260,7 +304,7 @@ Item {
 
     // ── Instances ─────────────────────────────────────────────────────────
     Repeater {
-        model: canvas.instances
+        model: canvas.renderable
 
         delegate: Item {
             id: wrapper

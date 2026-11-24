@@ -446,6 +446,20 @@ link "$DOTDIR/fastfetch"                "$CONFIG/fastfetch"
 link "$DOTDIR/starship.toml"            "$CONFIG/starship.toml"
 link "$DOTDIR/scripts"                  "$CONFIG/scripts"
 link "$DOTDIR/cc"                       "$CONFIG/cc"             # Control Center (Quickshell, Super+G)
+# État neutre des widgets (2026-11-24) : `cc/widgets.json` n'est PLUS versionné
+# — c'est le placement de l'UTILISATEUR, réécrit à chaque drag par
+# POST /api/widgets. Le dépôt livre un modèle neutre (`cc/widgets.default.json`,
+# zéro instance) et ce bloc le copie UNE fois, s'il est absent. Jamais
+# d'écrasement : une réinstall ne doit pas effacer le bureau de l'utilisateur.
+if [ ! -e "$CONFIG/cc/widgets.json" ]; then
+    if cp "$DOTDIR/cc/widgets.default.json" "$CONFIG/cc/widgets.json" 2>/dev/null; then
+        success "widgets.json créé (canevas vide — aucun widget pré-placé)"
+    else
+        warning "widgets.json non créé (modèle illisible ?) — le CC démarrera sans widget"
+    fi
+else
+    info "widgets.json existant conservé (placement de l'utilisateur)"
+fi
 link "$DOTDIR/wp"                       "$CONFIG/wp"             # Sélecteur de fonds d'écran (Quickshell, Super+Y)
 link "$DOTDIR/pl"                       "$CONFIG/pl"             # Playlist MPD (Quickshell, Super+P)
 link "$DOTDIR/aiko"                     "$CONFIG/aiko"           # Sidebar 愛子 Aiko (Quickshell chat IA, Super+N)

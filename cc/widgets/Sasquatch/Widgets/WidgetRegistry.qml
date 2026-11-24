@@ -58,6 +58,8 @@ QtObject {
     }
 
     // Un widget déclaré mais non livré (media en v1a) a `component: ""`.
+    // NB : champ du registre SEULEMENT — la preuve « fichier sur disque » est
+    // `resolveState()` plus bas, seule source de vérité pour l'UI.
     function isAvailable(id) {
         var e = reg.entry(id);
         return e !== null && typeof e.component === "string" && e.component.length > 0;
@@ -69,6 +71,125 @@ QtObject {
         if (!e || typeof e.component !== "string" || e.component.length === 0)
             return "";
         return Qt.resolvedUrl("widgets/" + e.component);
+    }
+
+    // ── Composant RÉELLEMENT livré (anti « widget fantôme ») ──────────────
+    // `isAvailable()` ne lit qu'un champ du registre : une entrée qui nomme un
+    // fichier ABSENT passait pour livrée → le Studio proposait la tuile et
+    // l'hôte dessinait un rectangle vide (« des widgets inexistants sont
+    // montrés »). La vérité est le disque : UNE lecture du dossier `widgets/`
+    // au démarrage, puis comparaison du nom de fichier — exactement la règle
+    // de `component()` (chemin = `<module>/widgets/<component>`).
+    //   delivered      : table { "ClockWidget.qml": true, … }, null = sonde
+    //                    pas encore revenue (on ne cache rien entre-temps)
+    //   deliveredError : dit pourquoi la sonde n'a pas conclu
+    property var delivered: null
+    property string deliveredError: ""
+    property int deliveredCount: -1
+    property bool probeStarted: false
+    signal availabilityChanged()
+
+    // Sonde PARESSEUSE : la barre importe le même module mais ne dessine
+    // aucun widget — elle ne doit pas payer un processus. Le premier appel à
+    // `resolveState()` (Studio, canevas) démarre la lecture, une seule fois.
+    function ensureDelivered() {
+        if (!reg.probeStarted && reg.widgetsDirPath.length > 0)
+            reg.probeStarted = true;
+        return reg.delivered;
+    }
+
+    readonly property string widgetsDirPath: reg.filePath(Qt.resolvedUrl("widgets/"))
+
+    // file://… → chemin absolu (le shell ne reçoit pas de QUrl).
+    function filePath(u) {
+        var s = "" + u;
+        if (s.indexOf("file://") !== 0)
+            return "";
+        s = s.substring(7);
+        try {
+            s = decodeURIComponent(s);
+        } catch (e) {
+            // chemin déjà littéral : on garde tel quel
+        }
+        return s;
+    }
+
+    function applyDelivered(text) {
+        var lines = ("" + text).split("\n");
+        var base = reg.widgetsDirPath;
+        if (base.length > 0 && base.charAt(base.length - 1) !== "/")
+            base += "/";
+        var map = {};
+        var n = 0;
+        for (var i = 0; i < lines.length; ++i) {
+            var line = lines[i].trim();
+            if (line.length === 0)
+                continue;
+            var rel = line;
+            if (base.length > 0 && rel.indexOf(base) === 0)
+                rel = rel.substring(base.length);
+            if (rel.length === 0 || rel.charAt(0) === "/")
+                continue;
+            map[rel] = true;
+            n += 1;
+        }
+        reg.delivered = map;
+        reg.deliveredCount = n;
+        reg.deliveredError = "";
+        reg.availabilityChanged();
+    }
+
+    // État de résolution d'un type : { ok, url, reason }.
+    // `reason` est affichée TELLE QUELLE dans la tuile « indisponible ».
+    function resolveState(id) {
+        reg.ensureDelivered();
+        var e = reg.entry(id);
+        if (!e)
+            return { ok: false, url: "", reason: "type absent du registre" };
+        var comp = (typeof e.component === "string") ? e.component.trim() : "";
+        if (comp.length === 0)
+            return { ok: false, url: "", reason: "composant non livré (registre)" };
+        var key = comp;
+        if (key.indexOf("./") === 0)
+            key = key.substring(2);
+        var url = reg.component(id);
+        if (reg.delivered === null)
+            return { ok: true, url: url, reason: "" };       // sonde en cours
+        if (!reg.delivered[key])
+            return { ok: false, url: url, reason: "fichier manquant : widgets/" + key };
+        return { ok: true, url: url, reason: "" };
+    }
+
+    function isResolved(id) {
+        return reg.resolveState(id).ok;
+    }
+
+    // Sonde : une seule commande, chemin passé en $1 (aucune interpolation de
+    // shell). Les deux marqueurs distinguent « dossier absent » de « dossier
+    // vide » ; sans marqueur, `delivered` reste null (état « inconnu », on ne
+    // grise rien et on ne promet rien).
+    property Process deliveredProbe: Process {
+        command: ["/bin/sh", "-c",
+                  "d=$1; [ -d \"$d\" ] || { printf '%s\\n' __NO_DIR__; exit 3; }; " +
+                  "find \"$d\" -name '*.qml' -type f -print; printf '%s\\n' __END__",
+                  "sh", reg.widgetsDirPath]
+        running: reg.probeStarted
+        stdout: StdioCollector {
+            onStreamFinished: reg.readProbe(this.text || "")
+        }
+    }
+
+    function readProbe(text) {
+        var t = "" + text;
+        if (t.indexOf("__NO_DIR__") >= 0) {
+            reg.deliveredError = "dossier widgets introuvable : " + reg.widgetsDirPath;
+            return;
+        }
+        if (t.indexOf("__END__") < 0) {
+            reg.deliveredError = "sonde incomplète (find indisponible ?)";
+            return;
+        }
+        reg.applyDelivered(t.substring(0, t.indexOf("__END__")));
     }
 
     function variantNames(id) {

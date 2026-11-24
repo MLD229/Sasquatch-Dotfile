@@ -195,8 +195,22 @@ def _entry(registry, widget_type):
 
 
 def _require_component(entry):
-    if not (entry.get("component") or "").strip():
+    """Refuse une entrée dont le composant n'est pas RÉELLEMENT livré.
+
+    2026-11-24 (lot « installation neutre ») : deux niveaux de vérification —
+    le champ `component` du registre, puis le FICHIER sur le disque, avec la
+    MÊME règle que `WidgetRegistry.component()` (chemin =
+    `<dossier du registre>/widgets/<component>`). Sans le second, `add`
+    acceptait une instance que l'hôte ne savait pas dessiner : le Studio
+    proposait un widget inexistant et le canevas laissait un rectangle vide.
+    """
+    comp = (entry.get("component") or "").strip()
+    if not comp:
         raise OpError("widget %r non livré (composant vide)" % entry.get("id"))
+    path = os.path.normpath(os.path.join(os.path.dirname(REGISTRY_FILE), "widgets", comp))
+    if not os.path.isfile(path):
+        raise OpError("widget %r : composant %r absent du disque"
+                      % (entry.get("id"), "widgets/" + comp))
 
 
 def _host(entry, host):

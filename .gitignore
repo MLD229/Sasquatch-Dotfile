@@ -33,6 +33,11 @@ cc/music.json
 
 # widgets : état runtime / artefacts de test (jamais commités)
 cc/notes.json
+# Placement des widgets = état de l'UTILISATEUR (réécrit par chaque drag via
+# POST /api/widgets). Livré comme modèle neutre `cc/widgets.default.json` et
+# créé par install.sh s'il est absent : un nouveau clone démarre sur un canevas
+# vide, et un `git pull` ne peut plus écraser le bureau de personne.
+cc/widgets.json
 docs/*.png
 docs/*.log
 

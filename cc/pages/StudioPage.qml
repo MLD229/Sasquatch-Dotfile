@@ -37,6 +37,8 @@ Item {
     property string selId: ""
     property var sel: null              // copie de l'instance sélectionnée
     property string lastError: ""
+    property int rawCount: 0            // instances LUES (fantômes compris)
+    property var ignored: []            // instances ignorées : { id, type, reason }
     property string wpPath: ""
     property string wpFolder: ""
     property bool wpFailed: false
@@ -159,19 +161,37 @@ Item {
         return out;
     }
 
-    // ── Catalogue (registre, filtré par hôte, sans composant vide) ─────────
-    readonly property var catalog: {
+    // ── Catalogue du registre, filtré par hôte, AVEC l'état de livraison ───
+    // Chaque ligne : { entry, ok, reason }. `ok` ne vient pas du champ
+    // `component` du registre mais du DISQUE (`WidgetRegistry.resolveState`,
+    // seule source de vérité) : une entrée non résolue reste visible, grisée,
+    // non plaçable, avec sa raison — elle ne devient jamais une tuile vide sur
+    // le canevas, et elle ne disparaît pas en silence non plus.
+    // Calcul HORS liaison (`resolveState` lit un singleton : une binding ne
+    // suivrait pas ses dépendances) → rafraîchi sur les événements utiles.
+    property var catalog: []
+
+    function refreshCatalog() {
         var out = [];
-        var es = WidgetRegistry.entries;
+        var es = WidgetRegistry.entries || [];
         for (var i = 0; i < es.length; ++i) {
             var e = es[i];
-            if (!e || !WidgetRegistry.isAvailable(e.id))
+            if (!e || typeof e.id !== "string")
                 continue;
             if (!WidgetRegistry.hostAllowed(e.id, studio.hostFilter))
                 continue;
-            out.push(e);
+            var st = WidgetRegistry.resolveState(e.id);
+            out.push({ entry: e, ok: st.ok, reason: st.reason });
         }
-        return out;
+        studio.catalog = out;
+    }
+
+    onHostFilterChanged: studio.refreshCatalog()
+
+    Connections {
+        target: WidgetRegistry
+        function onRevisionChanged() { studio.refreshCatalog() }
+        function onAvailabilityChanged() { studio.refreshCatalog() }
     }
 
     // ── Accès sûrs pour les bindings du panneau (sel peut être null) ───────
@@ -230,15 +250,30 @@ Item {
         // Même révision ET même nombre d'instances = rien de neuf à relire.
         // Sinon on relit : sans ça, un fichier modifié par un AUTRE hôte (le
         // fond d'écran, un drag sur le board) restait ignoré par l'aperçu.
-        if (rev === studio.revision && studio.instances.length > 0
-                && studio.instances.length === parsed.instances.length)
+        if (rev === studio.revision && studio.rawCount > 0
+                && studio.rawCount === parsed.instances.length)
             return;
         var kept = [];
+        var ignored = [];
         for (var i = 0; i < parsed.instances.length; ++i) {
             var it = parsed.instances[i];
-            if (it && typeof it.id === "string" && typeof it.type === "string")
-                kept.push(it);
+            if (!it || typeof it.id !== "string" || typeof it.type !== "string")
+                continue;
+            // Instance sans composant résolvable : jamais affichée (ni ici, ni
+            // sur le canevas), mais DITE — une ligne de journal + le compteur
+            // en pied de page. Le fichier n'est pas réécrit pour autant : la
+            // seule écriture passe par POST /api/widgets.
+            var st = WidgetRegistry.resolveState(it.type);
+            if (!st.ok) {
+                ignored.push({ id: it.id, type: it.type, reason: st.reason });
+                console.warn("widgets: instance ignorée " + it.id + " (type "
+                             + it.type + ") : " + st.reason);
+                continue;
+            }
+            kept.push(it);
         }
+        studio.rawCount = parsed.instances.length;
+        studio.ignored = ignored;
         studio.revision = rev;
         studio.instances = kept;
         // Placement mémorisé par le serveur : le panneau s'initialise dessus
@@ -502,6 +537,14 @@ Item {
         var e = WidgetRegistry.entry(type);
         if (!e)
             return;
+        // Composant absent du disque : on refuse AVANT le POST — le serveur
+        // refuserait aussi (`_require_component`), mais un clic qui ne fait
+        // rien sans explication est exactement le défaut qu'on corrige.
+        var st = WidgetRegistry.resolveState(type);
+        if (!st.ok) {
+            studio.lastError = "ajout refusé · " + type + " : " + st.reason;
+            return;
+        }
         var variant = WidgetRegistry.variantOrDefault(type);
         var nat = WidgetRegistry.variantSize(type, variant);
         var host = studio.hostFilter;
@@ -543,7 +586,10 @@ Item {
         }, 6000);
     }
 
-    Component.onCompleted: studio.loadWallpaper()
+    Component.onCompleted: {
+        studio.refreshCatalog()
+        studio.loadWallpaper()
+    }
 
     property FileView file: FileView {
         path: studio.widgetsPath
@@ -1019,11 +1065,18 @@ Item {
 
             delegate: Rectangle {
                 id: catRow
+                // { entry, ok, reason } — calculé par studio.refreshCatalog().
                 required property var modelData
+                readonly property var entry: modelData.entry
+                readonly property bool available: modelData.ok === true
                 width: ListView.view.width
                 height: 48
                 radius: Theme.radiusBtn
-                color: catHover.hovered ? Theme.a(Theme.text, 0.09) : Theme.a(Theme.text, 0.05)
+                // Non livré = grisé : la tuile reste lisible (on voit QUEL
+                // widget manque) mais elle n'appelle ni le survol ni le clic.
+                opacity: catRow.available ? 1 : 0.55
+                color: (catRow.available && catHover.hovered)
+                       ? Theme.a(Theme.text, 0.09) : Theme.a(Theme.text, 0.05)
                 Behavior on color { ColorAnimation { duration: 90 } }
 
                 HoverHandler {
@@ -1036,7 +1089,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 26
                     height: 26
-                    kind: catRow.modelData.id
+                    kind: catRow.entry.id
                     tint: Theme.textDim
                 }
 
@@ -1048,7 +1101,7 @@ Item {
                     anchors.rightMargin: 6
                     anchors.top: parent.top
                     anchors.topMargin: 7
-                    text: catRow.modelData.name || catRow.modelData.id
+                    text: catRow.entry.name || catRow.entry.id
                     font.pixelSize: 11
                     color: Theme.text
                     elide: Text.ElideRight
@@ -1060,9 +1113,13 @@ Item {
                     anchors.right: catName.right
                     anchors.top: catName.bottom
                     anchors.topMargin: 2
-                    text: WidgetRegistry.variantNames(catRow.modelData.id).join(" · ")
+                    // Composant absent : la RAISON est affichée telle quelle
+                    // (« fichier manquant : widgets/X.qml »), pas un silence.
+                    text: catRow.available
+                          ? WidgetRegistry.variantNames(catRow.entry.id).join(" · ")
+                          : "indisponible · " + catRow.modelData.reason
                     font.pixelSize: 9
-                    color: Theme.textDim
+                    color: catRow.available ? Theme.textDim : Theme.warn
                     elide: Text.ElideRight
                     wrapMode: Text.NoWrap
                 }
@@ -1075,21 +1132,26 @@ Item {
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
                     radius: Theme.radiusBtn
-                    color: catAddHover.containsMouse ? Theme.a(Theme.accent, 0.8) : Theme.a(Theme.text, 0.08)
+                    // Non plaçable : teinte neutre, pas de « + » trompeur.
+                    color: !catRow.available ? Theme.a(Theme.text, 0.04)
+                           : (catAddHover.containsMouse ? Theme.a(Theme.accent, 0.8)
+                                                        : Theme.a(Theme.text, 0.08))
 
                     Text {
                         anchors.centerIn: parent
-                        text: "+"
+                        text: catRow.available ? "+" : "—"
                         font.pixelSize: 16
-                        color: catAddHover.containsMouse ? Theme.ink : Theme.text
+                        color: !catRow.available ? Theme.textDim
+                               : (catAddHover.containsMouse ? Theme.ink : Theme.text)
                     }
 
                     MouseArea {
                         id: catAddHover
                         anchors.fill: parent
+                        enabled: catRow.available
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: studio.addWidget(catRow.modelData.id)
+                        cursorShape: catRow.available ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: studio.addWidget(catRow.entry.id)
                     }
                 }
             }
@@ -1145,6 +1207,7 @@ Item {
             text: "révision relue " + studio.revision + " · POST " + studio.postCount
                   + " · rendu " + studio.previewReady + "/" + studio.bgInstances.length
                   + (studio.previewPending > 0 ? " (" + studio.previewPending + " en attente)" : "")
+                  + (studio.ignored.length > 0 ? " · " + studio.ignored.length + " ignorée(s)" : "")
                   + (studio.lastError.length > 0 ? " · ⚠ " + studio.lastError : "")
             font.pixelSize: 10
             color: studio.lastError.length > 0 ? Theme.hot : Theme.textDim
